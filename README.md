@@ -44,8 +44,9 @@ between three places:
 - **Clouds**: standing water and soil water evaporate into one shared cloud
   pool. Clouds are drawn as white translucent Perlin-noise shapes drifting
   slowly across the map, and cover more of it the more water they hold. When
-  the clouds hold more than 20% of all water it starts raining where they
-  are, until they fall to 14%. Clouds look greyer while it rains.
+  the clouds hold more than 20% of all water, a shower starts: the water
+  above 14% falls over 1,000 ticks (about 5 seconds at the default speed),
+  where the clouds are. Clouds look greyer while it rains.
 
 The world starts with 17% of its water in the clouds, so lakes begin at the
 level-6 shoreline and don't shrink much to fill the sky.

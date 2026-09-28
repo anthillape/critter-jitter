@@ -7,7 +7,7 @@ import type { Terrain } from "./terrain";
 export const CLOUD_CELL = 4;
 export const CLOUD_W = GRID_W / CLOUD_CELL;
 export const CLOUD_H = GRID_H / CLOUD_CELL;
-const CLOUD_UPDATE_EVERY = 4; // ticks between cloud-pattern updates
+const CLOUD_UPDATE_EVERY = 8; // ticks between cloud-pattern updates
 
 /**
  * The water cycle. Water lives in three places and the sum never changes:
@@ -15,8 +15,8 @@ const CLOUD_UPDATE_EVERY = 4; // ticks between cloud-pattern updates
  *  - soil:    water held in the ground, 0..soilCap per square
  *  - cloud:   a single pool, drawn as a drifting Perlin-noise pattern
  * Water evaporates from the surface and soil into the clouds. Once the clouds
- * hold more than `rainStart` of all water it rains where the clouds are, until
- * they fall below `rainStop`. Surface water flows downhill toward the lowest
+ * hold more than `rainStart` of all water a shower starts: the excess above
+ * `rainStop` falls evenly over `rainDuration` ticks, where the clouds are. Surface water flows downhill toward the lowest
  * level. Soil water drains downhill quickly and wicks uphill slowly.
  */
 export class Hydrology {
@@ -24,6 +24,9 @@ export class Hydrology {
   readonly soil = new Float64Array(CELL_COUNT);
   cloud = 0;
   raining = false;
+  /** Ticks left in the current shower, and how much falls per tick. */
+  private rainTicksLeft = 0;
+  private rainPerTick = 0;
   /** Cloud density 0..1 on the coarse cloud grid. */
   readonly cloudDensity = new Float32Array(CLOUD_W * CLOUD_H);
   /** Total water in the world (surface + soil + cloud); constant. */
@@ -164,13 +167,18 @@ export class Hydrology {
 
   /** Rain falls in proportion to cloud density, so it follows the clouds. */
   private rain(): void {
-    const frac = this.cloud / this.total;
-    if (!this.raining && frac > this.p.rainStart) this.raining = true;
-    else if (this.raining && frac < this.p.rainStop) this.raining = false;
+    const { rainStart, rainStop, rainDuration } = this.p;
+    if (this.rainTicksLeft === 0 && this.cloud > rainStart * this.total) {
+      this.rainTicksLeft = rainDuration;
+      this.rainPerTick = (this.cloud - rainStop * this.total) / rainDuration;
+    }
+    this.raining = this.rainTicksLeft > 0;
     this.lastRain = 0;
-    if (!this.raining || this.cloudWeight <= 0) return;
+    if (!this.raining) return;
+    this.rainTicksLeft--;
+    if (this.cloudWeight <= 0) return;
 
-    const amount = this.cloud * this.p.rainRate;
+    const amount = Math.min(this.rainPerTick, this.cloud);
     const perCell = amount / (this.cloudWeight * CLOUD_CELL * CLOUD_CELL);
     let fallen = 0;
     for (let cy = 0; cy < CLOUD_H; cy++) {

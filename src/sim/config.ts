@@ -36,15 +36,15 @@ export const PARAMS = {
   soilWick: 0.2, // soil water spreading between squares (any direction; slow uphill pull)
   soilDrain: 0.15, // extra soil drainage downhill per level of height difference
   surfaceFlow: 0.2, // standing water flow rate toward lower water surfaces
-  evapSurface: 0.00005, // standing water evaporating per square per tick
-  evapSoil: 0.001, // fraction of soil water evaporating per tick
+  evapSurface: 0.0000025, // standing water evaporating per square per tick
+  evapSoil: 0.00005, // fraction of soil water evaporating per tick
   initialCloud: 0.17, // share of all water that starts in the clouds
   rainStart: 0.2, // rain starts when clouds hold more than this share of all water
-  rainStop: 0.14, // ...and stops when they fall below this
-  rainRate: 0.004, // fraction of cloud water falling per tick while raining
+  rainStop: 0.14, // a shower brings the clouds back down to this share...
+  rainDuration: 1000, // ...spread evenly over this many ticks (~5 s at the default 4x speed)
   cloudScale: 1 / 70, // size of cloud patterns (smaller = bigger clouds)
-  windX: 0.03, // cloud drift, squares per tick
-  windY: 0.012,
+  windX: 0.003, // cloud drift, squares per tick
+  windY: 0.0012,
 
   // --- Grass ---
   grassMaxN: 0.6, // nutrients held by a fully grown grass plant
