@@ -17,7 +17,13 @@ export const NOISE_SCALE = 1 / 120; // larger denominator = bigger landmasses
 export const NOISE_OCTAVES = 5;
 
 /**
- * All simulation tunables. "Per tick" everywhere. Energy is not conserved
+ * Simulation ticks per second of game time. The main loop runs the
+ * simulation against the wall clock at this rate times the chosen speed.
+ */
+export const TICKS_PER_SECOND = 60;
+
+/**
+ * All simulation tunables. "Per tick" everywhere (see TICKS_PER_SECOND). Energy is not conserved
  * (it arrives every tick, like sunlight); nutrients are strictly conserved.
  */
 export const PARAMS = {
@@ -36,15 +42,16 @@ export const PARAMS = {
   soilWick: 0.2, // soil water spreading between squares (any direction; slow uphill pull)
   soilDrain: 0.15, // extra soil drainage downhill per level of height difference
   surfaceFlow: 0.2, // standing water flow rate toward lower water surfaces
-  evapSurface: 0.00005, // standing water evaporating per square per tick
-  evapSoil: 0.001, // fraction of soil water evaporating per tick
+  evapSurface: 0.0000025, // standing water evaporating per square per tick
+  evapSoil: 0.00005, // fraction of soil water evaporating per tick
   initialCloud: 0.17, // share of all water that starts in the clouds
   rainStart: 0.2, // rain starts when clouds hold more than this share of all water
-  rainStop: 0.14, // ...and stops when they fall below this
-  rainRate: 0.004, // fraction of cloud water falling per tick while raining
+  rainRate: 0.0001, // share of all water falling per tick while it rains (steady rate)
+  rainMinShare: 0.15, // each rain event drops at least this share of the cloud water (up to all of it)
+  rainMaxPerSquare: 0.004, // thin clouds can't drop more than this per square per tick
   cloudScale: 1 / 70, // size of cloud patterns (smaller = bigger clouds)
-  windX: 0.03, // cloud drift, squares per tick
-  windY: 0.012,
+  windX: 0.003, // cloud drift, squares per tick
+  windY: 0.0012,
 
   // --- Grass ---
   grassMaxN: 0.6, // nutrients held by a fully grown grass plant

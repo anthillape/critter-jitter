@@ -10,6 +10,14 @@ npm run build      # typecheck + production build into dist/
 npm run sim -- [seed] [ticks] [reportEvery]   # headless run for tuning
 ```
 
+## Time
+
+The simulation runs on a real-time clock at 60 ticks per second of game time
+(`TICKS_PER_SECOND`), times the chosen speed (½× to 8×). It doesn't run as
+fast as the machine can go. If the machine can't keep up, the world slows
+down rather than stuttering, and the panel shows the achieved speed with
+"can't keep up". All rates in `PARAMS` are per tick.
+
 ## Layers
 
 1. **Ground**: every square has a height of 1–16 from seeded Perlin fBm noise,
@@ -45,7 +53,10 @@ between three places:
   pool. Clouds are drawn as white translucent Perlin-noise shapes drifting
   slowly across the map, and cover more of it the more water they hold. When
   the clouds hold more than 20% of all water it starts raining where they
-  are, until they fall to 14%. Clouds look greyer while it rains.
+  are, at a roughly steady rate. How much falls varies each time: usually
+  15–40% of the cloud water, but about one rain in twelve empties the clouds
+  completely. Rain tapers off as the clouds thin out. Clouds look greyer
+  while it rains.
 
 The world starts with 17% of its water in the clouds, so lakes begin at the
 level-6 shoreline and don't shrink much to fill the sky.

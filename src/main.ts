@@ -1,4 +1,4 @@
-import { CELL_PX, GRID_H, GRID_W, PARAMS } from "./sim/config";
+import { CELL_PX, GRID_H, GRID_W, PARAMS, TICKS_PER_SECOND } from "./sim/config";
 import { ALGAE_UNUSED_GENES, GENE_COUNT, GENE_NAMES } from "./sim/genes";
 import { ALGAE, GRASS, SEED, World, type GroupStats, type RegionStats } from "./sim/world";
 import { Renderer, type View } from "./render";
@@ -62,20 +62,53 @@ function draw(): void {
   }
 }
 
-function loop(): void {
+const FRAME_BUDGET_MS = 35; // max time spent simulating per frame
+
+// Real-time clock: ticks are owed at TICKS_PER_SECOND x speed per second of
+// wall time, however fast the machine is. If it can't keep up, the owed
+// ticks are dropped (the world runs slower) and the panel says so.
+let lastFrame = performance.now();
+let owed = 0;
+let rateWindow = { start: performance.now(), ticks: 0, behind: false };
+let measuredRate = 0;
+let fallingBehind = false;
+
+function loop(now: number): void {
+  const dt = Math.min(0.25, (now - lastFrame) / 1000); // cap after tab switches
+  lastFrame = now;
   if (running) {
-    // Run up to `speed` ticks, but keep frames responsive on slow machines.
-    const speed = Number(speedSel.value);
+    const target = TICKS_PER_SECOND * Number(speedSel.value);
+    owed += dt * target;
     const start = performance.now();
-    for (let k = 0; k < speed; k++) {
+    while (owed >= 1) {
       world.step();
-      if (performance.now() - start > 30) break;
+      owed--;
+      rateWindow.ticks++;
+      if (performance.now() - start > FRAME_BUDGET_MS) {
+        rateWindow.behind = true;
+        owed = Math.min(owed, 1); // drop the backlog rather than spiral
+        break;
+      }
     }
+  } else {
+    owed = 0;
   }
   draw();
-  if (++frame % STATS_EVERY === 0) refreshStats();
+  if (++frame % STATS_EVERY === 0) {
+    const elapsed = (performance.now() - rateWindow.start) / 1000;
+    measuredRate = running ? rateWindow.ticks / elapsed : 0;
+    fallingBehind = running && rateWindow.behind;
+    rateWindow = { start: performance.now(), ticks: 0, behind: false };
+    refreshStats();
+  }
   if (hover >= 0) showInspect();
   requestAnimationFrame(loop);
+}
+
+function formatGameTime(tick: number): string {
+  const secs = Math.floor(tick / TICKS_PER_SECOND);
+  const m = Math.floor(secs / 60);
+  return `${m}:${String(secs % 60).padStart(2, "0")}`;
 }
 
 function refreshStats(): void {
@@ -84,7 +117,10 @@ function refreshStats(): void {
   if (history.length > HISTORY) history.shift();
 
   const rows: Array<[string, string]> = [
-    ["Tick", s.tick.toLocaleString()],
+    ["Game time", `${formatGameTime(s.tick)} (tick ${s.tick.toLocaleString()})`],
+    ["Speed", running
+      ? `${(measuredRate / TICKS_PER_SECOND).toFixed(1)}× of ${speedSel.value}×${fallingBehind ? " · can't keep up" : ""}`
+      : "paused"],
     ["Grass", s.grass.toLocaleString()],
     ["Seeds waiting", s.seeds.toLocaleString()],
     ["Algae", s.algae.toLocaleString()],
@@ -298,4 +334,7 @@ window.addEventListener("keydown", (e) => {
 });
 
 newWorld(1337);
-requestAnimationFrame(loop);
+requestAnimationFrame((t) => {
+  lastFrame = t;
+  requestAnimationFrame(loop);
+});
