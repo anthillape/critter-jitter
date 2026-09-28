@@ -1,6 +1,6 @@
 import { CELL_COUNT, GRID_H, GRID_W, WATER_LEVEL, type Params } from "./config";
 import { Perlin } from "./perlin";
-import { mulberry32 } from "./rng";
+import { mulberry32, type Rng } from "./rng";
 import type { Terrain } from "./terrain";
 
 /** Clouds are simulated on a coarse grid of CLOUD_CELL x CLOUD_CELL squares. */
@@ -15,18 +15,20 @@ const CLOUD_UPDATE_EVERY = 8; // ticks between cloud-pattern updates
  *  - soil:    water held in the ground, 0..soilCap per square
  *  - cloud:   a single pool, drawn as a drifting Perlin-noise pattern
  * Water evaporates from the surface and soil into the clouds. Once the clouds
- * hold more than `rainStart` of all water a shower starts: the excess above
- * `rainStop` falls evenly over `rainDuration` ticks, where the clouds are. Surface water flows downhill toward the lowest
- * level. Soil water drains downhill quickly and wicks uphill slowly.
+ * hold more than `rainStart` of all water it starts raining where the clouds
+ * are, at a roughly steady rate. How much falls varies from event to event:
+ * usually a shower, sometimes until the clouds are empty. Surface water flows
+ * downhill toward the lowest level. Soil water drains downhill quickly and
+ * wicks uphill slowly.
  */
 export class Hydrology {
   readonly surface = new Float64Array(CELL_COUNT);
   readonly soil = new Float64Array(CELL_COUNT);
   cloud = 0;
   raining = false;
-  /** Ticks left in the current shower, and how much falls per tick. */
-  private rainTicksLeft = 0;
-  private rainPerTick = 0;
+  /** Cloud level at which the current rain event ends. */
+  private rainTarget = 0;
+  private readonly rng: Rng;
   /** Cloud density 0..1 on the coarse cloud grid. */
   readonly cloudDensity = new Float32Array(CLOUD_W * CLOUD_H);
   /** Total water in the world (surface + soil + cloud); constant. */
@@ -47,6 +49,7 @@ export class Hydrology {
 
   constructor(private terrain: Terrain, private p: Params) {
     this.perlin = new Perlin(mulberry32(terrain.seed + 2));
+    this.rng = mulberry32(terrain.seed + 3);
     const { height, moisture } = terrain;
     let ground = 0;
     for (let i = 0; i < CELL_COUNT; i++) {
@@ -165,27 +168,34 @@ export class Hydrology {
     this.cloudWeight = weight;
   }
 
-  /** Rain falls in proportion to cloud density, so it follows the clouds. */
+  /**
+   * Rain falls in proportion to cloud density, so it follows the clouds. The
+   * rate is steady (rainRate of all water per tick) but each event drops a
+   * random share of the cloud water: mostly showers, occasionally a deluge
+   * that empties the sky. Thin clouds can only drop so much per square, so
+   * rain tapers off as they vanish.
+   */
   private rain(): void {
-    const { rainStart, rainStop, rainDuration } = this.p;
-    if (this.rainTicksLeft === 0 && this.cloud > rainStart * this.total) {
-      this.rainTicksLeft = rainDuration;
-      this.rainPerTick = (this.cloud - rainStop * this.total) / rainDuration;
+    const p = this.p;
+    if (!this.raining && this.cloud > p.rainStart * this.total) {
+      const u = this.rng();
+      // Skewed: typically 15-40% of the clouds, about 1 in 12 empties them.
+      const share = Math.min(1, p.rainMinShare + u * u);
+      this.rainTarget = this.cloud * (1 - share);
+      this.raining = true;
     }
-    this.raining = this.rainTicksLeft > 0;
     this.lastRain = 0;
     if (!this.raining) return;
-    this.rainTicksLeft--;
-    if (this.cloudWeight <= 0) return;
 
-    const amount = Math.min(this.rainPerTick, this.cloud);
-    const perCell = amount / (this.cloudWeight * CLOUD_CELL * CLOUD_CELL);
+    const amount = Math.min(p.rainRate * this.total, this.cloud - this.rainTarget);
+    const perCell = this.cloudWeight > 0 ? amount / (this.cloudWeight * CLOUD_CELL * CLOUD_CELL) : 0;
+    const cap = p.rainMaxPerSquare;
     let fallen = 0;
     for (let cy = 0; cy < CLOUD_H; cy++) {
       for (let cx = 0; cx < CLOUD_W; cx++) {
         const d = this.cloudDensity[cy * CLOUD_W + cx];
         if (d <= 0) continue;
-        const r = perCell * d;
+        const r = Math.min(perCell, cap) * d;
         for (let dy = 0; dy < CLOUD_CELL; dy++) {
           const row = (cy * CLOUD_CELL + dy) * GRID_W + cx * CLOUD_CELL;
           for (let dx = 0; dx < CLOUD_CELL; dx++) this.surface[row + dx] += r;
@@ -195,6 +205,10 @@ export class Hydrology {
     }
     this.cloud -= fallen;
     this.lastRain = fallen;
+    // Stop at the target, or once the clouds are too thin to rain properly.
+    if (this.cloud <= this.rainTarget + 1e-9 || fallen < 0.1 * p.rainRate * this.total) {
+      this.raining = false;
+    }
   }
 
   /**
