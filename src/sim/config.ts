@@ -58,7 +58,6 @@ export const PARAMS = {
   algaeBreedReserve: 0.2,
 
   // --- Genetics ---
-  mutationStep: 0.08, // a mutating gene changes by up to +/- this fraction
   fullGrowth: 0.98, // fraction of max nutrients considered "fully grown"
 
   // --- Initial population ---

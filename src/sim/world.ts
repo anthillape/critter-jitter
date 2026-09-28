@@ -264,7 +264,7 @@ export class World {
     this.floraN[t] = p.seedN;
     this.floraE[t] = p.seedE;
     this.bornTick[t] = this.tick;
-    inheritGenes(this.genes, parent, t, this.rng, p.mutationStep);
+    inheritGenes(this.genes, parent, t, this.rng);
     this.age[t] = Math.max(1, Math.round(this.genes[t * GENE_COUNT + G_GERM]));
   }
 
@@ -324,7 +324,7 @@ export class World {
         this.floraE[t] = p.algaeChildE;
         this.age[t] = 0;
         this.bornTick[t] = this.tick;
-        inheritGenes(genes, i, t, this.rng, p.mutationStep);
+        inheritGenes(genes, i, t, this.rng);
         this.births[1]++;
       }
     }
@@ -393,16 +393,109 @@ export class World {
     return s;
   }
 
-  /** Mean of each gene across all living organisms of a kind. */
-  meanGenes(k: number): number[] | null {
-    const sum = new Array<number>(GENE_COUNT).fill(0);
-    let count = 0;
-    for (let i = 0; i < CELL_COUNT; i++) {
-      if (this.kind[i] !== k) continue;
-      const g = i * GENE_COUNT;
-      for (let j = 0; j < GENE_COUNT; j++) sum[j] += this.genes[g + j];
-      count++;
+  /**
+   * Aggregates everything inside the inclusive rectangle (x0,y0)-(x1,y1):
+   * terrain, nutrients, energy, and per-kind organism stats with gene spread.
+   */
+  regionStats(x0: number, y0: number, x1: number, y1: number): RegionStats {
+    const { water, height, moisture } = this.terrain;
+    const r: RegionStats = {
+      squares: 0, land: 0, water: 0,
+      meanHeight: 0, meanLandMoisture: 0,
+      groundNutrients: 0, waterNutrients: 0, floraNutrients: 0, meanEnergy: 0,
+      grass: emptyGroup(), seeds: emptyGroup(), algae: emptyGroup(),
+    };
+    const sq = new Array<number>(GENE_COUNT);
+    const groups = [null, r.seeds, r.grass, r.algae];
+    const sums = [null, sq.slice().fill(0), sq.slice().fill(0), sq.slice().fill(0)] as Array<number[] | null>;
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        const i = y * GRID_W + x;
+        r.squares++;
+        r.meanHeight += height[i];
+        r.meanEnergy += this.energy[i];
+        if (water[i]) {
+          r.water++;
+          r.waterNutrients += this.nutrients[i];
+        } else {
+          r.land++;
+          r.meanLandMoisture += moisture[i];
+          r.groundNutrients += this.nutrients[i];
+        }
+        const k = this.kind[i];
+        if (k === EMPTY) continue;
+        r.floraNutrients += this.floraN[i];
+        const grp = groups[k]!;
+        const sumSq = sums[k]!;
+        grp.count++;
+        grp.meanNutrients += this.floraN[i];
+        grp.meanEnergy += this.floraE[i];
+        grp.meanAge += this.age[i];
+        const g = i * GENE_COUNT;
+        for (let j = 0; j < GENE_COUNT; j++) {
+          const v = this.genes[g + j];
+          const gs = grp.genes[j];
+          gs.mean += v;
+          sumSq[j] += v * v;
+          if (v < gs.min) gs.min = v;
+          if (v > gs.max) gs.max = v;
+        }
+      }
     }
-    return count ? sum.map((v) => v / count) : null;
+    r.meanHeight /= r.squares || 1;
+    r.meanEnergy /= r.squares || 1;
+    r.meanLandMoisture /= r.land || 1;
+    for (let k = SEED; k <= ALGAE; k++) {
+      const grp = groups[k]!;
+      const n = grp.count;
+      if (!n) continue;
+      grp.meanNutrients /= n;
+      grp.meanEnergy /= n;
+      grp.meanAge /= n;
+      for (let j = 0; j < GENE_COUNT; j++) {
+        const gs = grp.genes[j];
+        gs.mean /= n;
+        gs.sd = Math.sqrt(Math.max(0, sums[k]![j] / n - gs.mean * gs.mean));
+      }
+    }
+    return r;
   }
+}
+
+export interface GeneStats {
+  mean: number;
+  sd: number;
+  min: number;
+  max: number;
+}
+
+export interface GroupStats {
+  count: number;
+  meanNutrients: number;
+  meanEnergy: number;
+  /** For seeds: mean ticks left until germination. */
+  meanAge: number;
+  genes: GeneStats[];
+}
+
+export interface RegionStats {
+  squares: number;
+  land: number;
+  water: number;
+  meanHeight: number;
+  meanLandMoisture: number;
+  groundNutrients: number;
+  waterNutrients: number;
+  floraNutrients: number;
+  meanEnergy: number;
+  grass: GroupStats;
+  seeds: GroupStats;
+  algae: GroupStats;
+}
+
+function emptyGroup(): GroupStats {
+  return {
+    count: 0, meanNutrients: 0, meanEnergy: 0, meanAge: 0,
+    genes: Array.from({ length: GENE_COUNT }, () => ({ mean: 0, sd: 0, min: Infinity, max: -Infinity })),
+  };
 }

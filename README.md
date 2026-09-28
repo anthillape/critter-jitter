@@ -44,11 +44,17 @@ npm run sim -- [seed] [ticks] [reportEvery]   # headless run for tuning
 ## Genes
 
 Each organism carries `growth`, `breed`, `range` (grass), `germ` (grass),
-`mutation` and `lifespan`. Each child copies its parent's genes. Each gene
-mutates by up to ±8% with probability equal to the parent's `mutation` gene,
-so the mutation rate evolves too. Faster growth and a longer lifespan both
-raise metabolic cost, and a longer seed range raises seed cost, so evolution
-has trade-offs.
+`mutation` and `lifespan`. Every gene mutates on every birth: the child's
+value is the parent's scaled by a random factor in `[1 − m, 1 + m]`, where `m`
+is the parent's `mutation` gene (default 0.05). The mutation gene mutates the
+same way, so the mutation rate evolves too. Faster growth and a longer
+lifespan both raise metabolic cost, and a longer seed range raises seed cost,
+so evolution has trade-offs.
+
+The panel shows each gene's mean ± standard deviation across the world.
+Drag a rectangle on the map to get terrain, nutrient, population and gene
+statistics (mean ± sd, min–max) for that area. They update live. Click or
+press Esc to clear it.
 
 All tunables live in `src/sim/config.ts` (`PARAMS`) and `src/sim/genes.ts`
 (defaults and limits).

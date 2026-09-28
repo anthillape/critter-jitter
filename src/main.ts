@@ -1,6 +1,6 @@
 import { CELL_PX, GRID_H, GRID_W, PARAMS } from "./sim/config";
 import { GENE_COUNT, GENE_NAMES } from "./sim/genes";
-import { ALGAE, GRASS, SEED, World } from "./sim/world";
+import { ALGAE, GRASS, SEED, World, type GroupStats, type RegionStats } from "./sim/world";
 import { Renderer, type View } from "./render";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -17,6 +17,7 @@ const seedInput = $<HTMLInputElement>("seed");
 const statsTable = $<HTMLTableElement>("stats");
 const genesTable = $<HTMLTableElement>("genes");
 const inspectEl = $<HTMLDivElement>("inspect");
+const selectionEl = $<HTMLDivElement>("selection");
 
 const STATS_EVERY = 20; // frames between stats refreshes
 const HISTORY = 320;
@@ -26,6 +27,9 @@ let renderer: Renderer;
 let running = true;
 let frame = 0;
 let hover = -1;
+/** Selected rectangle in grid squares (inclusive corners), or null. */
+let selection: { x0: number; y0: number; x1: number; y1: number } | null = null;
+let dragStart: { x: number; y: number } | null = null;
 let history: Array<{ grass: number; seeds: number; algae: number }> = [];
 
 function newWorld(seed: number): void {
@@ -33,6 +37,7 @@ function newWorld(seed: number): void {
   renderer = new Renderer(world);
   seedInput.value = String(seed);
   history = [];
+  selection = null;
   draw();
   refreshStats();
 }
@@ -45,6 +50,15 @@ function draw(): void {
     const x = (hover % GRID_W) * CELL_PX;
     const y = Math.floor(hover / GRID_W) * CELL_PX;
     ctx.strokeRect(x - 2.5, y - 2.5, CELL_PX + 5, CELL_PX + 5);
+  }
+  if (selection) {
+    const { x0, y0, x1, y1 } = selection;
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.fillRect(x0 * CELL_PX, y0 * CELL_PX, (x1 - x0 + 1) * CELL_PX, (y1 - y0 + 1) * CELL_PX);
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(x0 * CELL_PX + 0.5, y0 * CELL_PX + 0.5, (x1 - x0 + 1) * CELL_PX - 1, (y1 - y0 + 1) * CELL_PX - 1);
+    ctx.setLineDash([]);
   }
 }
 
@@ -83,16 +97,68 @@ function refreshStats(): void {
   ];
   statsTable.innerHTML = rows.map(([k, v]) => `<tr><td class="muted">${k}</td><td>${v}</td></tr>`).join("");
 
-  const grass = world.meanGenes(GRASS);
-  const algae = world.meanGenes(ALGAE);
-  const fmt = (g: number[] | null, j: number) => (g ? g[j].toPrecision(3) : "–");
-  genesTable.innerHTML =
-    `<tr><td class="muted">gene</td><td class="muted">grass</td><td class="muted">algae</td></tr>` +
-    GENE_NAMES.map((name, j) => {
-      const algaeCell = j === 2 || j === 3 ? "n/a" : fmt(algae, j);
-      return `<tr><td class="muted">${name}</td><td>${fmt(grass, j)}</td><td>${algaeCell}</td></tr>`;
-    }).join("");
+  const all = world.regionStats(0, 0, GRID_W - 1, GRID_H - 1);
+  genesTable.innerHTML = geneRows(all.grass, all.algae);
+  refreshSelection();
   drawChart();
+}
+
+const ALGAE_UNUSED = new Set([2, 3]); // range and germ only matter for grass
+
+function fmtNum(v: number): string {
+  const a = Math.abs(v);
+  return a !== 0 && (a < 0.01 || a >= 10000) ? v.toExponential(2) : v.toPrecision(3);
+}
+
+function geneCell(g: GroupStats, j: number, spread: boolean): string {
+  if (!g.count) return "–";
+  const s = g.genes[j];
+  let out = `${fmtNum(s.mean)} <span class="muted">±${fmtNum(s.sd)}</span>`;
+  if (spread) out += `<br><span class="muted small">${fmtNum(s.min)} – ${fmtNum(s.max)}</span>`;
+  return out;
+}
+
+/** Gene table rows: mean ± standard deviation (and min–max when `spread`). */
+function geneRows(grass: GroupStats, algae: GroupStats, spread = false): string {
+  return `<tr><td class="muted">gene</td><td class="muted">grass</td><td class="muted">algae</td></tr>` +
+    GENE_NAMES.map((name, j) => {
+      const a = ALGAE_UNUSED.has(j) ? "n/a" : geneCell(algae, j, spread);
+      return `<tr><td class="muted">${name}</td><td>${geneCell(grass, j, spread)}</td><td>${a}</td></tr>`;
+    }).join("");
+}
+
+function refreshSelection(): void {
+  if (!selection) {
+    selectionEl.innerHTML = `<p class="hint">Drag on the map to select an area. Click or press Esc to clear.</p>`;
+    return;
+  }
+  const { x0, y0, x1, y1 } = selection;
+  const r: RegionStats = world.regionStats(x0, y0, x1, y1);
+  const pct = (n: number) => `${((n / r.squares) * 100).toFixed(0)}%`;
+  const group = (label: string, g: GroupStats, maxN: number, ageLabel: string): Array<[string, string]> => {
+    if (!g.count) return [[label, "0"]];
+    const rows: Array<[string, string]> = [[label, `${g.count} (${pct(g.count)} of squares)`]];
+    if (maxN > 0) rows.push(["&nbsp;&nbsp;mean size", `${((g.meanNutrients / maxN) * 100).toFixed(0)}%`]);
+    rows.push(["&nbsp;&nbsp;mean energy", g.meanEnergy.toFixed(2)], [`&nbsp;&nbsp;${ageLabel}`, g.meanAge.toFixed(0)]);
+    return rows;
+  };
+  const rows: Array<[string, string]> = [
+    ["Area", `${x1 - x0 + 1}×${y1 - y0 + 1} at (${x0},${y0}) · ${r.squares} squares`],
+    ["Land / water", `${r.land} / ${r.water}`],
+    ["Mean height", r.meanHeight.toFixed(2)],
+    ["Mean land saturation", r.land ? `${(r.meanLandMoisture * 100).toFixed(0)}%` : "–"],
+    ["Mean square energy", r.meanEnergy.toFixed(2)],
+    ["Nutrients: ground", `${r.groundNutrients.toFixed(2)}${r.land ? ` (${(r.groundNutrients / r.land).toFixed(3)}/sq)` : ""}`],
+    ["Nutrients: water", `${r.waterNutrients.toFixed(2)}${r.water ? ` (${(r.waterNutrients / r.water).toFixed(3)}/sq)` : ""}`],
+    ["Nutrients: in flora", r.floraNutrients.toFixed(2)],
+    ...group("Grass", r.grass, PARAMS.grassMaxN, "mean age"),
+    ...group("Seeds", r.seeds, 0, "mean ticks to germinate"),
+    ...group("Algae", r.algae, PARAMS.algaeMaxN, "mean age"),
+  ];
+  selectionEl.innerHTML =
+    `<table>${rows.map(([k, v]) => `<tr><td class="muted">${k}</td><td>${v}</td></tr>`).join("")}</table>` +
+    `<h2>Genes in selection <span class="small">(mean ±sd, min – max)</span></h2>` +
+    `<table>${geneRows(r.grass, r.algae, true)}</table>`;
 }
 
 function drawChart(): void {
@@ -161,12 +227,45 @@ $<HTMLButtonElement>("regen").addEventListener("click", () => {
   newWorld(seed);
 });
 viewSel.addEventListener("change", draw);
-canvas.addEventListener("mousemove", (e) => {
+function eventCell(e: MouseEvent): { x: number; y: number } {
   const r = canvas.getBoundingClientRect();
   const x = Math.floor(((e.clientX - r.left) / r.width) * GRID_W);
   const y = Math.floor(((e.clientY - r.top) / r.height) * GRID_H);
-  hover = x >= 0 && y >= 0 && x < GRID_W && y < GRID_H ? y * GRID_W + x : -1;
-  if (hover >= 0) showInspect();
+  return { x: Math.max(0, Math.min(GRID_W - 1, x)), y: Math.max(0, Math.min(GRID_H - 1, y)) };
+}
+
+function setSelection(sel: typeof selection): void {
+  selection = sel;
+  refreshSelection();
+  draw();
+}
+
+canvas.addEventListener("mousedown", (e) => {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  dragStart = eventCell(e);
+});
+window.addEventListener("mousemove", (e) => {
+  if (!dragStart) return;
+  const c = eventCell(e);
+  selection = {
+    x0: Math.min(dragStart.x, c.x), y0: Math.min(dragStart.y, c.y),
+    x1: Math.max(dragStart.x, c.x), y1: Math.max(dragStart.y, c.y),
+  };
+  draw();
+});
+window.addEventListener("mouseup", (e) => {
+  if (!dragStart) return;
+  const c = eventCell(e);
+  // A click without a drag clears the selection.
+  const clicked = c.x === dragStart.x && c.y === dragStart.y;
+  dragStart = null;
+  setSelection(clicked ? null : selection);
+});
+canvas.addEventListener("mousemove", (e) => {
+  const { x, y } = eventCell(e);
+  hover = y * GRID_W + x;
+  showInspect();
 });
 canvas.addEventListener("mouseleave", () => {
   hover = -1;
@@ -174,7 +273,9 @@ canvas.addEventListener("mouseleave", () => {
 });
 window.addEventListener("keydown", (e) => {
   if (e.target instanceof HTMLInputElement) return;
-  if (e.key === " ") {
+  if (e.key === "Escape") {
+    setSelection(null);
+  } else if (e.key === " ") {
     e.preventDefault();
     setRunning(!running);
   } else if (e.key === ".") {
