@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Critter Jitter</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 fill=%22%236fbf3a%22/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main class="layout">
+      <div class="stage">
+        <canvas id="world" width="800" height="600"></canvas>
+        <div id="inspect" class="inspect">Hover the map to inspect a square</div>
+      </div>
+      <aside class="panel">
+        <h1>Critter Jitter</h1>
+        <div class="controls">
+          <button id="play">Pause</button>
+          <button id="step">Step</button>
+          <label>Speed
+            <select id="speed">
+              <option value="1">1×</option>
+              <option value="2">2×</option>
+              <option value="4" selected>4×</option>
+              <option value="8">8×</option>
+              <option value="16">16×</option>
+            </select>
+          </label>
+        </div>
+        <div class="controls">
+          <label>View
+            <select id="view">
+              <option value="normal">Normal</option>
+              <option value="nutrients">Nutrients</option>
+              <option value="energy">Energy</option>
+              <option value="moisture">Moisture</option>
+              <option value="height">Height</option>
+            </select>
+          </label>
+          <label>Seed <input id="seed" type="number" /></label>
+          <button id="regen">New world</button>
+        </div>
+        <canvas id="chart" width="320" height="110"></canvas>
+        <div class="legend">
+          <span class="sw grass"></span>grass <span class="sw seeds"></span>seeds <span class="sw algae"></span>algae
+        </div>
+        <table id="stats"></table>
+        <h2>Mean genes</h2>
+        <table id="genes"></table>
+        <p class="hint">Keys: space = pause, . = step, 1–5 = views</p>
+      </aside>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

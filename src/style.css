@@ -1,0 +1,74 @@
+:root {
+  --bg: #16130f;
+  --panel: #221d17;
+  --text: #e9e1d3;
+  --muted: #a39683;
+  --line: #3a3128;
+  --accent: #7fb04a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 system-ui, sans-serif;
+}
+.layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 16px;
+  align-items: flex-start;
+}
+.stage { max-width: 800px; width: 100%; }
+#world {
+  display: block;
+  width: 100%;
+  max-width: 800px;
+  aspect-ratio: 4 / 3;
+  image-rendering: pixelated;
+  border: 1px solid var(--line);
+  cursor: crosshair;
+}
+.inspect {
+  margin-top: 6px;
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  min-height: 2.8em;
+  white-space: pre-wrap;
+}
+.panel {
+  width: 352px;
+  max-width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px 16px;
+}
+h1 { font-size: 18px; margin: 0 0 10px; }
+h2 { font-size: 13px; margin: 14px 0 4px; color: var(--muted); font-weight: 600; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+button, select, input {
+  background: #2f281f;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font: inherit;
+}
+button { cursor: pointer; }
+button:hover { border-color: var(--accent); }
+input[type="number"] { width: 90px; }
+#chart { width: 100%; background: #1a1611; border: 1px solid var(--line); border-radius: 4px; margin-top: 4px; }
+.legend { color: var(--muted); font-size: 12px; margin: 2px 0 8px; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 4px 0 8px; vertical-align: -1px; }
+.sw.grass { background: #6fbf3a; margin-left: 0; }
+.sw.seeds { background: #e3cf7a; }
+.sw.algae { background: #3fa7a0; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+td { padding: 2px 0; }
+td:last-child { text-align: right; }
+td.muted { color: var(--muted); }
+.hint { color: var(--muted); font-size: 12px; margin: 12px 0 0; }
