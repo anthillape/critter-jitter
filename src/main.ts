@@ -1,5 +1,5 @@
 import { CELL_PX, GRID_H, GRID_W, PARAMS } from "./sim/config";
-import { GENE_COUNT, GENE_NAMES } from "./sim/genes";
+import { ALGAE_UNUSED_GENES, GENE_COUNT, GENE_NAMES } from "./sim/genes";
 import { ALGAE, GRASS, SEED, World, type GroupStats, type RegionStats } from "./sim/world";
 import { Renderer, type View } from "./render";
 
@@ -89,11 +89,15 @@ function refreshStats(): void {
     ["Seeds waiting", s.seeds.toLocaleString()],
     ["Algae", s.algae.toLocaleString()],
     ["Births / deaths (last 20 frames)", `${s.grassBirths + s.algaeBirths} / ${s.grassDeaths + s.algaeDeaths}`],
-    ["Deaths: starved / old age (same)", `${s.starved} / ${s.oldAge}`],
+    ["Deaths: starved / old age / drowned or stranded", `${s.starved} / ${s.oldAge} / ${s.habitatLost}`],
     ["Nutrients: ground", s.nutrientsGround.toFixed(1)],
     ["Nutrients: water", s.nutrientsWater.toFixed(1)],
     ["Nutrients: in flora", s.nutrientsFlora.toFixed(1)],
     ["Nutrients: total (conserved)", s.nutrientsTotal.toFixed(3)],
+    ["Water: lakes & puddles", `${s.waterSurface.toFixed(0)} (${s.waterSquares.toLocaleString()} squares)`],
+    ["Water: in soil", s.waterSoil.toFixed(0)],
+    ["Water: in clouds", `${s.waterCloud.toFixed(0)} (${((100 * s.waterCloud) / s.waterTotal).toFixed(1)}%)${s.raining ? " · raining" : ""}`],
+    ["Water: total (conserved)", s.waterTotal.toFixed(3)],
   ];
   statsTable.innerHTML = rows.map(([k, v]) => `<tr><td class="muted">${k}</td><td>${v}</td></tr>`).join("");
 
@@ -102,8 +106,6 @@ function refreshStats(): void {
   refreshSelection();
   drawChart();
 }
-
-const ALGAE_UNUSED = new Set([2, 3]); // range and germ only matter for grass
 
 function fmtNum(v: number): string {
   const a = Math.abs(v);
@@ -122,7 +124,7 @@ function geneCell(g: GroupStats, j: number, spread: boolean): string {
 function geneRows(grass: GroupStats, algae: GroupStats, spread = false): string {
   return `<tr><td class="muted">gene</td><td class="muted">grass</td><td class="muted">algae</td></tr>` +
     GENE_NAMES.map((name, j) => {
-      const a = ALGAE_UNUSED.has(j) ? "n/a" : geneCell(algae, j, spread);
+      const a = ALGAE_UNUSED_GENES.has(j) ? "n/a" : geneCell(algae, j, spread);
       return `<tr><td class="muted">${name}</td><td>${geneCell(grass, j, spread)}</td><td>${a}</td></tr>`;
     }).join("");
 }
@@ -147,6 +149,9 @@ function refreshSelection(): void {
     ["Land / water", `${r.land} / ${r.water}`],
     ["Mean height", r.meanHeight.toFixed(2)],
     ["Mean land saturation", r.land ? `${(r.meanLandMoisture * 100).toFixed(0)}%` : "–"],
+    ["Mean water depth", r.water ? r.meanWaterDepth.toFixed(2) : "–"],
+    ["Water (surface + soil)", r.waterVolume.toFixed(1)],
+    ["Mean cloud cover", `${(r.meanCloud * 100).toFixed(0)}%`],
     ["Mean square energy", r.meanEnergy.toFixed(2)],
     ["Nutrients: ground", `${r.groundNutrients.toFixed(2)}${r.land ? ` (${(r.groundNutrients / r.land).toFixed(3)}/sq)` : ""}`],
     ["Nutrients: water", `${r.waterNutrients.toFixed(2)}${r.water ? ` (${(r.waterNutrients / r.water).toFixed(3)}/sq)` : ""}`],
@@ -193,7 +198,11 @@ function showInspect(): void {
   const x = i % GRID_W;
   const y = Math.floor(i / GRID_W);
   let line1 = `(${x},${y}) height ${t.height[i]}`;
-  line1 += t.water[i] ? ` · water depth ${t.depth[i]}` : ` · saturation ${(t.moisture[i] * 100).toFixed(0)}%`;
+  const wtr = world.water;
+  line1 += wtr.isWater(i)
+    ? ` · water depth ${wtr.surface[i].toFixed(2)}`
+    : ` · saturation ${(wtr.saturation(i) * 100).toFixed(0)}%` + (wtr.surface[i] > 0.005 ? ` · puddle ${wtr.surface[i].toFixed(2)}` : "");
+  line1 += ` · cloud ${(wtr.cloudAt(x, y) * 100).toFixed(0)}%`;
   line1 += ` · nutrients ${world.nutrients[i].toFixed(3)} · energy ${world.energy[i].toFixed(2)}`;
   const k = world.kind[i];
   let line2 = "";
@@ -282,7 +291,7 @@ window.addEventListener("keydown", (e) => {
     setRunning(false);
     world.step();
     refreshStats();
-  } else if (e.key >= "1" && e.key <= "5") {
+  } else if (e.key >= "1" && e.key <= "6") {
     viewSel.selectedIndex = Number(e.key) - 1;
     draw();
   }

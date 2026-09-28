@@ -10,13 +10,10 @@ export interface Terrain {
   seed: number;
   /** Ground height 1..16 per square. */
   height: Uint8Array;
-  /** 1 where the square is under water. */
-  water: Uint8Array;
-  /** Water depth in levels (0 on land, 1 = shallow .. 6 = deepest). */
-  depth: Uint8Array;
-  /** Distance (in squares) to the nearest water square. */
-  waterDist: Float32Array;
-  /** Saturation 0..1: 1 in water, falling off to 0 at IRRIGATION_RANGE. */
+  /**
+   * Starting soil saturation 0..1: 1 in the initial lakes, falling off to 0
+   * at IRRIGATION_RANGE. After that the water cycle (hydrology.ts) takes over.
+   */
   moisture: Float32Array;
   /** Relative starting fertility (~0.2..1.8), used only to seed initial nutrients. */
   fertility: Float32Array;
@@ -38,16 +35,12 @@ export function generateTerrain(seed: number): Terrain {
 
   const height = new Uint8Array(CELL_COUNT);
   const water = new Uint8Array(CELL_COUNT);
-  const depth = new Uint8Array(CELL_COUNT);
   const span = MAX_HEIGHT - MIN_HEIGHT + 1;
   for (let i = 0; i < CELL_COUNT; i++) {
     const t = (raw[i] - lo) / (hi - lo);
     const h = Math.min(MAX_HEIGHT, MIN_HEIGHT + Math.floor(t * span));
     height[i] = h;
-    if (h <= WATER_LEVEL) {
-      water[i] = 1;
-      depth[i] = WATER_LEVEL + 1 - h;
-    }
+    if (h <= WATER_LEVEL) water[i] = 1;
   }
 
   const waterDist = distanceToWater(water);
@@ -67,7 +60,7 @@ export function generateTerrain(seed: number): Terrain {
     }
   }
 
-  return { seed, height, water, depth, waterDist, moisture, fertility };
+  return { seed, height, moisture, fertility };
 }
 
 /** Two-pass chamfer distance transform (approximately Euclidean). */

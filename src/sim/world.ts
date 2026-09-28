@@ -1,8 +1,9 @@
 import { CELL_COUNT, GRID_H, GRID_W, PARAMS, type Params } from "./config";
 import {
-  ALGAE_DEFAULTS, G_BREED, G_GERM, G_GROWTH, G_LIFESPAN, G_RANGE, GENE_COUNT,
-  GRASS_DEFAULTS, inheritGenes, setGenes,
+  ALGAE_DEFAULTS, G_BREED, G_GERM, G_GROWTH, G_LIFESPAN, G_RANGE, G_WATER_PREF, G_WATER_TOL,
+  GENE_COUNT, GRASS_DEFAULTS, inheritGenes, setGenes,
 } from "./genes";
+import { Hydrology } from "./hydrology";
 import { mulberry32, type Rng } from "./rng";
 import { generateTerrain, type Terrain } from "./terrain";
 
@@ -26,14 +27,24 @@ export interface Stats {
   algaeDeaths: number;
   starved: number;
   oldAge: number;
+  /** Grass drowned by rising water, algae stranded by falling water, seeds washed away. */
+  habitatLost: number;
   nutrientsGround: number;
   nutrientsWater: number;
   nutrientsFlora: number;
   nutrientsTotal: number;
+  waterSurface: number;
+  waterSoil: number;
+  waterCloud: number;
+  waterTotal: number;
+  raining: boolean;
+  /** Squares currently under water. */
+  waterSquares: number;
 }
 
 export class World {
   readonly terrain: Terrain;
+  readonly water: Hydrology;
   readonly p: Params;
   readonly rng: Rng;
   tick = 0;
@@ -51,9 +62,6 @@ export class World {
   readonly bornTick = new Int32Array(CELL_COUNT);
   readonly genes = new Float32Array(CELL_COUNT * GENE_COUNT);
 
-  // Precomputed nutrient conductance to the right / down neighbour.
-  private readonly condR = new Float32Array(CELL_COUNT);
-  private readonly condD = new Float32Array(CELL_COUNT);
   private readonly fluxR = new Float64Array(CELL_COUNT);
   private readonly fluxD = new Float64Array(CELL_COUNT);
 
@@ -62,38 +70,22 @@ export class World {
   private deaths = [0, 0];
   private starved = 0;
   private oldAge = 0;
+  private habitatLost = 0;
 
   constructor(seed: number, params: Params = PARAMS) {
     this.p = params;
     this.terrain = generateTerrain(seed);
+    this.water = new Hydrology(this.terrain, params);
     this.rng = mulberry32(seed ^ 0x9e3779b9);
-    this.buildConductance();
     this.seedInitialState();
   }
 
-  private buildConductance(): void {
-    const { water, moisture } = this.terrain;
-    const { waterDiffusion, wetDiffusion } = this.p;
-    for (let y = 0; y < GRID_H; y++) {
-      for (let x = 0; x < GRID_W; x++) {
-        const i = y * GRID_W + x;
-        if (x < GRID_W - 1) this.condR[i] = conductance(i, i + 1);
-        if (y < GRID_H - 1) this.condD[i] = conductance(i, i + GRID_W);
-      }
-    }
-    // Water squares mix freely; any edge touching land only exchanges
-    // through wet ground, more slowly the drier it is. Dry land never moves.
-    function conductance(a: number, b: number): number {
-      if (water[a] && water[b]) return waterDiffusion;
-      return wetDiffusion * Math.min(moisture[a], moisture[b]);
-    }
-  }
-
   private seedInitialState(): void {
-    const { water, fertility } = this.terrain;
+    const { fertility } = this.terrain;
+    const water = this.water;
     const rng = this.rng;
     for (let i = 0; i < CELL_COUNT; i++) {
-      this.nutrients[i] = water[i]
+      this.nutrients[i] = water.isWater(i)
         ? this.p.waterNutrients
         : this.p.landNutrients * fertility[i] * (0.8 + 0.4 * rng());
       this.energy[i] = this.p.energyCap * rng();
@@ -101,19 +93,22 @@ export class World {
     let placed = 0;
     for (let tries = 0; placed < this.p.initialSeeds && tries < 1e6; tries++) {
       const i = Math.floor(rng() * CELL_COUNT);
-      if (water[i] || this.kind[i] !== EMPTY || this.nutrients[i] < this.p.seedN) continue;
+      if (water.isWater(i) || this.kind[i] !== EMPTY || this.nutrients[i] < this.p.seedN) continue;
       this.nutrients[i] -= this.p.seedN;
       this.kind[i] = SEED;
       this.floraN[i] = this.p.seedN;
       this.floraE[i] = this.p.seedE;
       this.age[i] = 1 + Math.floor(rng() * GRASS_DEFAULTS[G_GERM]);
       setGenes(this.genes, i, GRASS_DEFAULTS);
+      // Start with a spread of water preferences so every moisture niche has
+      // a chance from the outset; evolution then refines them.
+      this.genes[i * GENE_COUNT + G_WATER_PREF] = 0.1 + 0.85 * rng();
       placed++;
     }
     placed = 0;
     for (let tries = 0; placed < this.p.initialAlgae && tries < 1e6; tries++) {
       const i = Math.floor(rng() * CELL_COUNT);
-      if (!water[i] || this.kind[i] !== EMPTY || this.nutrients[i] < this.p.algaeChildN) continue;
+      if (!water.isWater(i) || this.kind[i] !== EMPTY || this.nutrients[i] < this.p.algaeChildN) continue;
       this.nutrients[i] -= this.p.algaeChildN;
       this.kind[i] = ALGAE;
       this.floraN[i] = this.p.algaeChildN;
@@ -126,7 +121,9 @@ export class World {
   step(): void {
     this.tick++;
     this.addEnergy();
-    this.diffuseNutrients();
+    this.water.step(this.tick);
+    // Nutrients spread slowly; every other tick is plenty.
+    if (this.tick & 1) this.diffuseNutrients();
     // Alternate sweep direction so low-index squares don't always act first.
     if (this.tick & 1) {
       for (let i = 0; i < CELL_COUNT; i++) this.updateSquare(i);
@@ -145,20 +142,38 @@ export class World {
     }
   }
 
-  /** Conservative diffusion: every unit leaving one square arrives in its neighbour. */
+  /**
+   * Conservative diffusion: every unit leaving one square arrives in its
+   * neighbour. Water squares mix freely; any edge touching land only
+   * exchanges through wet ground, more slowly the drier it is.
+   */
   private diffuseNutrients(): void {
     const n = this.nutrients;
-    const { condR, condD, fluxR, fluxD } = this;
+    const { fluxR, fluxD } = this;
+    const { waterDiffusion, wetDiffusion } = this.p;
     const W = GRID_W;
+    const { wet, sat, notLastCol, notFirstCol } = this.water;
     for (let i = 0; i < CELL_COUNT; i++) {
-      const cr = condR[i];
-      fluxR[i] = cr > 0 ? cr * (n[i] - n[i + 1]) : 0;
-      const cd = condD[i];
-      fluxD[i] = cd > 0 ? cd * (n[i] - n[i + W]) : 0;
+      const ni = n[i];
+      const sa = sat[i];
+      let f = 0;
+      if (notLastCol[i]) {
+        const j = i + 1;
+        const c = wet[i] & wet[j] ? waterDiffusion : wetDiffusion * (sa < sat[j] ? sa : sat[j]);
+        f = c * (ni - n[j]);
+      }
+      fluxR[i] = f;
+      f = 0;
+      if (i + W < CELL_COUNT) {
+        const j = i + W;
+        const c = wet[i] & wet[j] ? waterDiffusion : wetDiffusion * (sa < sat[j] ? sa : sat[j]);
+        f = c * (ni - n[j]);
+      }
+      fluxD[i] = f;
     }
     for (let i = 0; i < CELL_COUNT; i++) {
       let v = n[i] - fluxR[i] - fluxD[i];
-      if (i % W > 0) v += fluxR[i - 1];
+      if (notFirstCol[i]) v += fluxR[i - 1];
       if (i >= W) v += fluxD[i - W];
       n[i] = v;
     }
@@ -167,6 +182,12 @@ export class World {
   private updateSquare(i: number): void {
     const k = this.kind[i];
     if (k === EMPTY || this.bornTick[i] === this.tick) return;
+    // Water levels move: land flora drowns, algae gets stranded.
+    if (this.water.isWater(i) === (k !== ALGAE)) {
+      this.habitatLost++;
+      this.kill(i, k === ALGAE ? 1 : 0);
+      return;
+    }
     if (k === GRASS) this.updateGrass(i);
     else if (k === SEED) this.updateSeed(i);
     else this.updateAlgae(i);
@@ -185,10 +206,12 @@ export class World {
     const g = i * GENE_COUNT;
     const genes = this.genes;
     const age = ++this.age[i];
-    const moist = this.terrain.moisture[i];
 
-    // Absorb energy from the ground; wetter ground makes this more efficient.
-    const eff = p.grassDryAbsorb + (1 - p.grassDryAbsorb) * moist;
+    // How well the plant can use energy and nutrients peaks at its preferred
+    // soil saturation. Wide tolerance lowers the peak (generalist's cost).
+    const tol = genes[g + G_WATER_TOL];
+    const miss = (this.water.saturation(i) - genes[g + G_WATER_PREF]) / tol;
+    const eff = (1 - p.grassToleranceCost * tol) * Math.exp(-miss * miss);
     let e = this.floraE[i];
     let take = Math.min(p.grassAbsorb * eff, p.grassMaxE - e, this.energy[i]);
     if (take > 0) {
@@ -216,7 +239,7 @@ export class World {
     // Grow: move nutrients from the ground into the plant, paid for with energy.
     let n = this.floraN[i];
     if (n < p.grassMaxN) {
-      let dn = Math.min(genes[g + G_GROWTH], p.grassMaxN - n, this.nutrients[i]);
+      let dn = Math.min(genes[g + G_GROWTH] * eff, p.grassMaxN - n, this.nutrients[i]);
       dn = Math.min(dn, e / p.growEnergyPerN);
       if (dn > 0) {
         this.nutrients[i] -= dn;
@@ -255,7 +278,7 @@ export class World {
       return;
     }
     const t = y * GRID_W + x;
-    if (this.terrain.water[t] || this.kind[t] !== EMPTY) {
+    if (this.water.isWater(t) || this.kind[t] !== EMPTY) {
       // Landed in water or on an occupied square: its nutrients go to that square.
       this.nutrients[t] += p.seedN;
       return;
@@ -275,8 +298,8 @@ export class World {
     const age = ++this.age[i];
 
     // Deeper water gets less light.
-    const depth = this.terrain.depth[i];
-    const light = 1 - p.algaeDepthShade * (depth - 1) / 5;
+    const depth = this.water.surface[i];
+    const light = 1 - p.algaeDepthShade * Math.min(1, (depth - p.waterDepthMin) / 5.5);
     let e = this.floraE[i];
     const take = Math.min(p.algaeAbsorb * light, p.algaeMaxE - e, this.energy[i]);
     if (take > 0) {
@@ -343,7 +366,7 @@ export class World {
       const ny = y + NEIGHBOURS_Y[d];
       if (nx < 0 || ny < 0 || nx >= GRID_W || ny >= GRID_H) continue;
       const t = ny * GRID_W + nx;
-      if (this.terrain.water[t] && this.kind[t] === EMPTY) return t;
+      if (this.water.isWater(t) && this.kind[t] === EMPTY) return t;
     }
     return -1;
   }
@@ -361,15 +384,17 @@ export class World {
   /** Scans the world for population / nutrient totals and resets event counters. */
   stats(): Stats {
     let seeds = 0, grass = 0, algae = 0;
-    let ground = 0, waterN = 0, flora = 0;
-    const water = this.terrain.water;
+    let ground = 0, waterN = 0, flora = 0, waterSquares = 0;
+    const water = this.water;
     for (let i = 0; i < CELL_COUNT; i++) {
       const k = this.kind[i];
       if (k === SEED) seeds++;
       else if (k === GRASS) grass++;
       else if (k === ALGAE) algae++;
-      if (water[i]) waterN += this.nutrients[i];
-      else ground += this.nutrients[i];
+      if (water.isWater(i)) {
+        waterN += this.nutrients[i];
+        waterSquares++;
+      } else ground += this.nutrients[i];
       flora += this.floraN[i];
     }
     const s: Stats = {
@@ -385,11 +410,19 @@ export class World {
       nutrientsWater: waterN,
       nutrientsFlora: flora,
       nutrientsTotal: ground + waterN + flora,
+      habitatLost: this.habitatLost,
+      ...(() => {
+        const m = water.measure();
+        return { waterSurface: m.surface, waterSoil: m.soil, waterCloud: m.cloud, waterTotal: m.total };
+      })(),
+      raining: water.raining,
+      waterSquares,
     };
     this.births = [0, 0];
     this.deaths = [0, 0];
     this.starved = 0;
     this.oldAge = 0;
+    this.habitatLost = 0;
     return s;
   }
 
@@ -398,10 +431,11 @@ export class World {
    * terrain, nutrients, energy, and per-kind organism stats with gene spread.
    */
   regionStats(x0: number, y0: number, x1: number, y1: number): RegionStats {
-    const { water, height, moisture } = this.terrain;
+    const { height } = this.terrain;
+    const water = this.water;
     const r: RegionStats = {
       squares: 0, land: 0, water: 0,
-      meanHeight: 0, meanLandMoisture: 0,
+      meanHeight: 0, meanLandMoisture: 0, meanWaterDepth: 0, waterVolume: 0, meanCloud: 0,
       groundNutrients: 0, waterNutrients: 0, floraNutrients: 0, meanEnergy: 0,
       grass: emptyGroup(), seeds: emptyGroup(), algae: emptyGroup(),
     };
@@ -414,12 +448,15 @@ export class World {
         r.squares++;
         r.meanHeight += height[i];
         r.meanEnergy += this.energy[i];
-        if (water[i]) {
+        r.waterVolume += water.surface[i] + water.soil[i];
+        r.meanCloud += water.cloudAt(x, y);
+        if (water.isWater(i)) {
           r.water++;
+          r.meanWaterDepth += water.surface[i];
           r.waterNutrients += this.nutrients[i];
         } else {
           r.land++;
-          r.meanLandMoisture += moisture[i];
+          r.meanLandMoisture += water.saturation(i);
           r.groundNutrients += this.nutrients[i];
         }
         const k = this.kind[i];
@@ -445,6 +482,8 @@ export class World {
     r.meanHeight /= r.squares || 1;
     r.meanEnergy /= r.squares || 1;
     r.meanLandMoisture /= r.land || 1;
+    r.meanWaterDepth /= r.water || 1;
+    r.meanCloud /= r.squares || 1;
     for (let k = SEED; k <= ALGAE; k++) {
       const grp = groups[k]!;
       const n = grp.count;
@@ -484,6 +523,10 @@ export interface RegionStats {
   water: number;
   meanHeight: number;
   meanLandMoisture: number;
+  meanWaterDepth: number;
+  /** Surface + soil water in the area. */
+  waterVolume: number;
+  meanCloud: number;
   groundNutrients: number;
   waterNutrients: number;
   floraNutrients: number;

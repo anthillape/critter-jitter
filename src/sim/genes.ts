@@ -7,9 +7,13 @@ export const G_RANGE = 2; // max seed throw distance in squares (grass only)
 export const G_GERM = 3; // ticks a seed waits before germinating (grass only)
 export const G_MUTATION = 4; // max fractional change applied to every gene in a child
 export const G_LIFESPAN = 5; // age (ticks) at which the organism dies
-export const GENE_COUNT = 6;
+export const G_WATER_PREF = 6; // soil saturation (0..1) the plant works best at (grass only)
+export const G_WATER_TOL = 7; // how far from its preference it still copes (grass only)
+export const GENE_COUNT = 8;
 
-export const GENE_NAMES = ["growth", "breed", "range", "germ", "mutation", "lifespan"];
+export const GENE_NAMES = ["growth", "breed", "range", "germ", "mutation", "lifespan", "water pref", "water tol"];
+/** Genes that have no effect on algae. */
+export const ALGAE_UNUSED_GENES: ReadonlySet<number> = new Set([G_RANGE, G_GERM, G_WATER_PREF, G_WATER_TOL]);
 
 /** [min, max] clamp for each gene so evolution can't produce nonsense values. */
 export const GENE_LIMITS: ReadonlyArray<readonly [number, number]> = [
@@ -19,10 +23,12 @@ export const GENE_LIMITS: ReadonlyArray<readonly [number, number]> = [
   [1, 800],
   [0.002, 0.5],
   [100, 30000],
+  [0.01, 1],
+  [0.05, 1],
 ];
 
-export const GRASS_DEFAULTS = [0.008, 0.01, 8, 80, 0.05, 3000];
-export const ALGAE_DEFAULTS = [0.006, 0.02, 1, 1, 0.05, 2000];
+export const GRASS_DEFAULTS = [0.008, 0.01, 8, 80, 0.05, 3000, 0.5, 0.35];
+export const ALGAE_DEFAULTS = [0.006, 0.02, 1, 1, 0.05, 2000, 1, 1];
 
 /**
  * Copies genes from parent slot `src` to child slot `dst`. Every gene mutates

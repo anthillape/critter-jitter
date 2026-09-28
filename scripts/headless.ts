@@ -10,13 +10,9 @@ const every = Number(process.argv[4] ?? 1000);
 
 const t0 = performance.now();
 const world = new World(seed);
-const t = world.terrain;
-let waterCells = 0, wet = 0;
-for (let i = 0; i < CELL_COUNT; i++) {
-  if (t.water[i]) waterCells++;
-  else if (t.moisture[i] > 0) wet++;
-}
-console.log(`terrain ${(performance.now() - t0).toFixed(0)}ms  water ${(100 * waterCells / CELL_COUNT).toFixed(1)}%  wet land ${(100 * wet / CELL_COUNT).toFixed(1)}%`);
+let waterCells = 0;
+for (let i = 0; i < CELL_COUNT; i++) if (world.water.isWater(i)) waterCells++;
+console.log(`init ${(performance.now() - t0).toFixed(0)}ms  water ${(100 * waterCells / CELL_COUNT).toFixed(1)}%  total water ${world.water.total.toFixed(0)}`);
 const start = world.stats();
 console.log(`nutrients total ${start.nutrientsTotal.toFixed(6)}`);
 
@@ -34,7 +30,10 @@ for (let k = 1; k <= ticks; k++) {
       `t=${s.tick} seeds=${s.seeds} grass=${s.grass} algae=${s.algae} ` +
       `gB/gD=${s.grassBirths}/${s.grassDeaths} aB/aD=${s.algaeBirths}/${s.algaeDeaths} ` +
       `starved=${s.starved} old=${s.oldAge} N[g/w/f]=${s.nutrientsGround.toFixed(0)}/${s.nutrientsWater.toFixed(0)}/${s.nutrientsFlora.toFixed(0)} ` +
-      `drift=${(s.nutrientsTotal - start.nutrientsTotal).toExponential(1)} ${ms.toFixed(2)}ms/tick`,
+      `drift=${(s.nutrientsTotal - start.nutrientsTotal).toExponential(1)} lost=${s.habitatLost}\n    ` +
+      `water sq=${s.waterSquares} surf/soil/cloud=${s.waterSurface.toFixed(0)}/${s.waterSoil.toFixed(0)}/${s.waterCloud.toFixed(0)} ` +
+      `(${(100 * s.waterCloud / s.waterTotal).toFixed(1)}% cloud${s.raining ? ", RAIN" : ""}) wdrift=${(s.waterTotal - world.water.total).toExponential(1)} ` +
+      `${ms.toFixed(2)}ms/tick`,
     );
   }
 }
