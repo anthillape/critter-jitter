@@ -4,6 +4,7 @@ import {
   GENE_COUNT, GRASS_DEFAULTS, inheritGenes, setGenes,
 } from "./genes";
 import { Hydrology } from "./hydrology";
+import { Wind } from "./wind";
 import { mulberry32, type Rng } from "./rng";
 import { generateTerrain, type Terrain } from "./terrain";
 
@@ -45,6 +46,7 @@ export interface Stats {
 export class World {
   readonly terrain: Terrain;
   readonly water: Hydrology;
+  readonly wind: Wind;
   readonly p: Params;
   readonly rng: Rng;
   tick = 0;
@@ -75,7 +77,8 @@ export class World {
   constructor(seed: number, params: Params = PARAMS) {
     this.p = params;
     this.terrain = generateTerrain(seed);
-    this.water = new Hydrology(this.terrain, params);
+    this.wind = new Wind(seed, params);
+    this.water = new Hydrology(this.terrain, params, this.wind);
     this.rng = mulberry32(seed ^ 0x9e3779b9);
     this.seedInitialState();
   }
@@ -121,6 +124,7 @@ export class World {
   step(): void {
     this.tick++;
     this.addEnergy();
+    this.wind.step(this.tick);
     this.water.step(this.tick);
     // Nutrients spread slowly; every other tick is plenty.
     if (this.tick & 1) this.diffuseNutrients();

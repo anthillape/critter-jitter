@@ -39,7 +39,7 @@ down rather than stuttering, and the panel shows the achieved speed with
 
 ## Water cycle
 
-The total amount of water is constant (the panel shows it). It is split
+The total amount of water is constant apart from the tools (the panel shows it). It is split
 between three places:
 
 - **Standing water** comes in two kinds:
@@ -59,14 +59,17 @@ between three places:
   the height difference. Water over the soil's capacity seeps back out as
   standing water.
 - **Clouds**: standing water and soil water evaporate into one shared cloud
-  pool. Clouds are drawn as white translucent Perlin-noise shapes drifting
-  slowly across the map, and cover more of it the more water they hold. When
-  the clouds hold more than 20% of all water it starts raining where they
-  are, at a roughly steady rate. Rain is shared out by cloud thickness
-  squared, so it is heaviest under the thickest (most opaque) cloud. How
-  much falls varies each time: usually 15–40% of the cloud water, but about
-  one rain in twelve empties the clouds completely. Rain tapers off as the clouds thin out. Clouds look greyer
-  while it rains.
+  pool. Clouds are drawn as white translucent shapes made from 3D Perlin
+  noise: the wind carries them across the map, and time runs along the third
+  axis so their shapes slowly change as they go. They cover more of the map
+  the more water they hold. Rain starts at random, more likely the fuller the
+  clouds are: never below 12% of all water, and at 20% there's a 1-in-600
+  chance per tick, rising with the square of how full they are. Rain falls
+  where the clouds are, at a roughly steady rate, shared out by cloud
+  thickness squared, so it's heaviest under the thickest (most opaque)
+  cloud. How much falls varies each time: usually 15–40% of the cloud
+  water, but about one rain in twelve empties the clouds completely. Rain
+  tapers off as the clouds thin out, and rain clouds fade to grey.
 
 The world starts with 17% of its water in the clouds, so lakes begin at the
 level-6 shoreline and don't shrink much to fill the sky.
@@ -74,6 +77,30 @@ level-6 shoreline and don't shrink much to fill the sky.
 When water levels move, grass on a square that floods drowns and algae on a
 square that dries out is stranded. Either way, its nutrients go back to the
 square.
+
+## Wind
+
+The wind is its own system (`src/sim/wind.ts`). It isn't part of the water
+cycle: clouds read it to drift, and later systems can too. It blows from a
+prevailing direction, but its bearing and speed wander slowly and smoothly
+(Perlin noise over time). Speed varies by up to about ±50%. The bearing
+usually stays within a quarter turn or so of the prevailing wind but can
+swing to any direction. The panel shows where it's blowing from and its
+speed.
+
+## Tools and weather controls
+
+- **Cursor**: *Select* (drag a rectangle for area stats), *Rain* (hold to
+  rain under the cursor, adding new water to the world) and *Dryer* (hold to
+  remove standing water, then soil water, under the cursor). Keys S / R / D
+  switch between them. *Rate* and *Size* sliders set how much water per
+  second at the centre and the brush radius. The effect falls off toward
+  the edge of the circle. The tools work while paused too.
+- **Manual rain**: switches off automatic rain. A button then starts and
+  stops rain from the clouds, until they run dry.
+
+Total water is conserved apart from what the Rain and Dryer tools add and
+remove.
 
 ## Nutrients and energy
 

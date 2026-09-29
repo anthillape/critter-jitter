@@ -2,6 +2,7 @@ import { CELL_COUNT, GRID_H, GRID_W, WATER_LEVEL, type Params } from "./config";
 import { Perlin } from "./perlin";
 import { mulberry32, type Rng } from "./rng";
 import type { Terrain } from "./terrain";
+import type { Wind } from "./wind";
 
 /** Clouds are simulated on a coarse grid of CLOUD_CELL x CLOUD_CELL squares. */
 export const CLOUD_CELL = 4;
@@ -11,13 +12,14 @@ const CLOUD_UPDATE_EVERY = 8; // ticks between cloud-pattern updates
 const CLOUD_RAMP = 0.45; // noise range over which clouds go from wisp to full thickness
 
 /**
- * The water cycle. Water lives in three places and the sum never changes:
+ * The water cycle. Water lives in three places and the sum never changes
+ * (except when the player's rain / dryer tools add or remove water):
  *  - surface: standing water on a square (lakes, puddles), in height units
  *  - soil:    water held in the ground, 0..soilCap per square
  *  - cloud:   a single pool, drawn as a drifting Perlin-noise pattern
- * Water evaporates from the surface and soil into the clouds. Once the clouds
- * hold more than `rainStart` of all water it starts raining where the clouds
- * are, at a roughly steady rate. How much falls varies from event to event:
+ * Water evaporates from the surface and soil into the clouds. Rain starts at
+ * random, more likely the fuller the clouds are, and falls where the clouds
+ * are at a roughly steady rate. How much falls varies from event to event:
  * usually a shower, sometimes until the clouds are empty. Surface water flows
  * downhill toward the lowest level. Soil water drains downhill quickly and
  * wicks uphill slowly.
@@ -37,8 +39,11 @@ export class Hydrology {
   private readonly rng: Rng;
   /** Cloud density 0..1 on the coarse cloud grid. */
   readonly cloudDensity = new Float32Array(CLOUD_W * CLOUD_H);
-  /** Total water in the world (surface + soil + cloud); constant. */
-  readonly total: number;
+  /** Total water in the world (surface + soil + cloud); only the tools change it. */
+  total: number;
+  /** Manual rain mode: automatic rain is off and `manualRain` decides. */
+  manual = false;
+  manualRain = false;
   /** Water rained this tick (for stats). */
   lastRain = 0;
   /** Per-square flags / saturation, refreshed at the end of every step. */
@@ -54,7 +59,7 @@ export class Hydrology {
   readonly notLastCol = new Uint8Array(CELL_COUNT);
   readonly notFirstCol = new Uint8Array(CELL_COUNT);
 
-  constructor(private terrain: Terrain, private p: Params) {
+  constructor(private terrain: Terrain, private p: Params, private wind: Wind) {
     this.perlin = new Perlin(mulberry32(terrain.seed + 2));
     this.rng = mulberry32(terrain.seed + 3);
     const { elevation, moisture } = terrain;
@@ -181,11 +186,15 @@ export class Hydrology {
   }
 
   /**
-   * Two layers of Perlin noise drifting at different speeds give a slowly
-   * moving, slowly changing pattern. More cloud water = more coverage.
+   * Clouds are 3D Perlin noise: carried along by the wind (x, y) and slowly
+   * changing shape as they go (time on the third axis). More cloud water
+   * means more coverage.
    */
   private updateClouds(tick: number): void {
-    const { cloudScale, windX, windY } = this.p;
+    const { cloudScale, cloudMorph } = this.p;
+    const ox = this.wind.offsetX;
+    const oy = this.wind.offsetY;
+    const z = tick * cloudMorph;
     const frac = this.cloud / this.total;
     const threshold = 0.3 - 1.8 * frac;
     let weight = 0;
@@ -193,8 +202,7 @@ export class Hydrology {
       for (let cx = 0; cx < CLOUD_W; cx++) {
         const x = cx * CLOUD_CELL;
         const y = cy * CLOUD_CELL;
-        const n = 0.65 * this.perlin.fbm((x - windX * tick) * cloudScale, (y - windY * tick) * cloudScale, 4)
-          + 0.35 * this.perlin.fbm((x - windX * 1.6 * tick) * cloudScale * 1.9 + 50, (y - windY * 0.4 * tick) * cloudScale * 1.9, 3);
+        const n = this.perlin.fbm3((x - ox) * cloudScale, (y - oy) * cloudScale, z, 4);
         // Wide ramp so only the cores reach full thickness.
         const d = Math.max(0, Math.min(1, (n - threshold) / CLOUD_RAMP));
         this.cloudDensity[cy * CLOUD_W + cx] = d;
@@ -213,12 +221,21 @@ export class Hydrology {
    */
   private rain(): void {
     const p = this.p;
-    if (!this.raining && this.cloud > p.rainStart * this.total) {
-      const u = this.rng();
-      // Skewed: typically 15-40% of the clouds, about 1 in 12 empties them.
-      const share = Math.min(1, p.rainMinShare + u * u);
-      this.rainTarget = this.cloud * (1 - share);
-      this.raining = true;
+    if (this.manual) {
+      // Player-controlled: rain while toggled on, until the clouds are empty.
+      this.raining = this.manualRain && this.cloud > 0;
+      this.rainTarget = 0;
+    } else if (!this.raining) {
+      // The fuller the clouds, the more likely rain is to start this tick.
+      const frac = this.cloud / this.total;
+      const x = (frac - p.rainMinCloud) / (p.rainStart - p.rainMinCloud);
+      if (x > 0 && this.rng() < p.rainChance * x * x) {
+        const u = this.rng();
+        // Skewed: typically 15-40% of the clouds, about 1 in 12 empties them.
+        const share = Math.min(1, p.rainMinShare + u * u);
+        this.rainTarget = this.cloud * (1 - share);
+        this.raining = true;
+      }
     }
     this.lastRain = 0;
     if (!this.raining) return;
@@ -244,7 +261,7 @@ export class Hydrology {
     this.lastRain = fallen;
     // Stop at the target, or once the clouds are too thin to rain properly.
     // (Half the normal rate: otherwise evaporation can sustain an endless drizzle.)
-    if (this.cloud <= this.rainTarget + 1e-9 || fallen < 0.5 * p.rainRate * this.total) {
+    if (!this.manual && (this.cloud <= this.rainTarget + 1e-9 || fallen < 0.5 * p.rainRate * this.total)) {
       this.raining = false;
     }
   }
@@ -348,6 +365,51 @@ export class Hydrology {
       wet[i] = w ? 1 : 0;
       sat[i] = w ? 1 : soil[i] * inv;
     }
+  }
+
+  /**
+   * Rain tool: adds new water to the world, `amount` per square at the
+   * centre of a circle of `radius` squares, falling off toward the edge.
+   */
+  addWater(cx: number, cy: number, radius: number, amount: number): void {
+    this.brush(cx, cy, radius, (i, w) => {
+      const a = amount * w;
+      this.surface[i] += a;
+      return a;
+    }, 1);
+  }
+
+  /**
+   * Dryer tool: removes water from the world under a circle, standing water
+   * first and then soil water, up to `amount` per square at the centre.
+   */
+  removeWater(cx: number, cy: number, radius: number, amount: number): void {
+    this.brush(cx, cy, radius, (i, w) => {
+      let want = amount * w;
+      const fromSurface = Math.min(this.surface[i], want);
+      this.surface[i] -= fromSurface;
+      want -= fromSurface;
+      const fromSoil = Math.min(this.soil[i], want);
+      this.soil[i] -= fromSoil;
+      return fromSurface + fromSoil;
+    }, -1);
+  }
+
+  private brush(cx: number, cy: number, radius: number, f: (i: number, weight: number) => number, sign: 1 | -1): void {
+    const r = Math.max(1, radius);
+    let changed = 0;
+    for (let y = Math.max(0, Math.floor(cy - r)); y <= Math.min(GRID_H - 1, Math.ceil(cy + r)); y++) {
+      for (let x = Math.max(0, Math.floor(cx - r)); x <= Math.min(GRID_W - 1, Math.ceil(cx + r)); x++) {
+        const d2 = ((x - cx) ** 2 + (y - cy) ** 2) / (r * r);
+        if (d2 >= 1) continue;
+        const i = y * GRID_W + x;
+        changed += f(i, 1 - d2);
+        const w = this.surface[i] >= this.p.waterDepthMin;
+        this.wet[i] = w ? 1 : 0;
+        this.sat[i] = w ? 1 : this.soil[i] / this.p.soilCap;
+      }
+    }
+    this.total += sign * changed;
   }
 
   /** Sum of surface, soil and cloud water (should always equal `total`). */

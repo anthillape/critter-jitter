@@ -75,3 +75,8 @@ td.muted { color: var(--muted); }
 .muted { color: var(--muted); }
 .small { font-size: 11px; font-weight: normal; }
 #selection table td { vertical-align: top; }
+.tool[aria-pressed="true"] { border-color: var(--accent); background: #3a4a2a; }
+.brush label { display: flex; align-items: center; gap: 6px; }
+.brush input[type="range"] { width: 110px; }
+.brush.disabled { opacity: 0.45; }
+.arrow { display: inline-block; }

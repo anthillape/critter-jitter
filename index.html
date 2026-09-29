@@ -42,6 +42,21 @@
           <label>Seed <input id="seed" type="number" /></label>
           <button id="regen">New world</button>
         </div>
+        <h2>Cursor</h2>
+        <div class="controls" role="group" aria-label="Cursor tool">
+          <button class="tool" data-tool="select" aria-pressed="true" title="Drag to select an area and see its stats (S)">Select</button>
+          <button class="tool" data-tool="rain" aria-pressed="false" title="Hold to rain under the cursor, adding water to the world (R)">Rain</button>
+          <button class="tool" data-tool="dryer" aria-pressed="false" title="Hold to dry the ground under the cursor, removing water from the world (D)">Dryer</button>
+        </div>
+        <div class="controls brush" id="brush">
+          <label>Rate <input id="rate" type="range" min="0" max="100" value="60" /> <span id="rateVal" class="muted small"></span></label>
+          <label>Size <input id="size" type="range" min="2" max="80" value="15" /> <span id="sizeVal" class="muted small"></span></label>
+        </div>
+        <h2>Weather</h2>
+        <div class="controls">
+          <label title="Turn off automatic rain and control it yourself"><input id="manualRain" type="checkbox" /> Manual rain</label>
+          <button id="rainToggle" disabled>Start rain</button>
+        </div>
         <canvas id="chart" width="320" height="110"></canvas>
         <div class="legend">
           <span class="sw grass"></span>grass <span class="sw seeds"></span>seeds <span class="sw algae"></span>algae
@@ -51,7 +66,7 @@
         <table id="genes"></table>
         <h2>Selection</h2>
         <div id="selection"></div>
-        <p class="hint">Keys: space = pause, . = step, 1–6 = views, Esc = clear selection</p>
+        <p class="hint">Keys: space = pause, . = step, 1–6 = views, S / R / D = cursor, Esc = clear selection</p>
       </aside>
     </main>
     <script type="module" src="/src/main.ts"></script>

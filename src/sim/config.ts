@@ -46,13 +46,21 @@ export const PARAMS = {
   evapSurface: 0.0000025, // standing water evaporating per square per tick
   evapSoil: 0.00005, // fraction of soil water evaporating per tick
   initialCloud: 0.17, // share of all water that starts in the clouds
-  rainStart: 0.2, // rain starts when clouds hold more than this share of all water
+  rainMinCloud: 0.12, // no rain until the clouds hold at least this share of all water
+  rainStart: 0.2, // at this share, rain has a rainChance chance of starting each tick...
+  rainChance: 1 / 600, // ...rising with the square of how far the clouds are above rainMinCloud
   rainRate: 0.0001, // share of all water falling per tick while it rains (steady rate)
   rainMinShare: 0.15, // each rain event drops at least this share of the cloud water (up to all of it)
   rainMaxPerSquare: 0.004, // thin clouds can't drop more than this per square per tick
   cloudScale: 1 / 70, // size of cloud patterns (smaller = bigger clouds)
-  windX: 0.003, // cloud drift, squares per tick
-  windY: 0.0012,
+  cloudMorph: 1 / 6000, // how fast cloud shapes change (noise time axis per tick)
+
+  // --- Wind ---
+  windSpeed: 0.0032, // mean speed, squares per tick
+  windSpeedVariation: 0.5, // speed wanders by up to this fraction either way
+  windPrevailing: 0.38, // prevailing direction the wind blows toward, radians (0 = east, +y = south)
+  windSwing: Math.PI * 1.6, // how far the bearing can wander (usually well under a quarter of this)
+  windChangeRate: 1 / 20000, // how quickly direction and speed drift (noise time per tick)
 
   // --- Grass ---
   grassMaxN: 0.6, // nutrients held by a fully grown grass plant

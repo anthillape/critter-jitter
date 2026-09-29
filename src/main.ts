@@ -18,6 +18,14 @@ const statsTable = $<HTMLTableElement>("stats");
 const genesTable = $<HTMLTableElement>("genes");
 const inspectEl = $<HTMLDivElement>("inspect");
 const selectionEl = $<HTMLDivElement>("selection");
+const rateInput = $<HTMLInputElement>("rate");
+const sizeInput = $<HTMLInputElement>("size");
+const rateVal = $<HTMLSpanElement>("rateVal");
+const sizeVal = $<HTMLSpanElement>("sizeVal");
+const brushEl = $<HTMLDivElement>("brush");
+const manualRainBox = $<HTMLInputElement>("manualRain");
+const rainToggle = $<HTMLButtonElement>("rainToggle");
+const toolButtons = Array.from(document.querySelectorAll<HTMLButtonElement>(".tool"));
 
 const STATS_EVERY = 20; // frames between stats refreshes
 const HISTORY = 320;
@@ -32,12 +40,58 @@ let selection: { x0: number; y0: number; x1: number; y1: number } | null = null;
 let dragStart: { x: number; y: number } | null = null;
 let history: Array<{ grass: number; seeds: number; algae: number }> = [];
 
+type Tool = "select" | "rain" | "dryer";
+let tool: Tool = "select";
+/** Mouse position over the map in (fractional) grid squares, or null. */
+let mouse: { x: number; y: number } | null = null;
+/** True while the mouse button is held with the rain or dryer tool. */
+let painting = false;
+
+/** Brush rate slider (0..100) -> water per square per tick at the centre, log scale. */
+function brushRate(): number {
+  return 1e-4 * 10 ** (Number(rateInput.value) / 40);
+}
+
+function brushSize(): number {
+  return Number(sizeInput.value);
+}
+
+/** Applies the rain / dryer brush for `ticks` ticks' worth of time. */
+function applyBrush(ticks: number): void {
+  if (!painting || !mouse || tool === "select") return;
+  const amount = brushRate() * ticks;
+  if (tool === "rain") world.water.addWater(mouse.x, mouse.y, brushSize(), amount);
+  else world.water.removeWater(mouse.x, mouse.y, brushSize(), amount);
+}
+
+function setTool(t: Tool): void {
+  tool = t;
+  painting = false;
+  dragStart = null;
+  for (const b of toolButtons) b.setAttribute("aria-pressed", String(b.dataset.tool === t));
+  brushEl.classList.toggle("disabled", t === "select");
+  rateInput.disabled = sizeInput.disabled = t === "select";
+  draw();
+}
+
+function refreshBrushLabels(): void {
+  rateVal.textContent = `${(brushRate() * TICKS_PER_SECOND).toFixed(3)}/s`;
+  sizeVal.textContent = `${brushSize()} sq`;
+}
+function applyWeatherSettings(): void {
+  world.water.manual = manualRainBox.checked;
+  world.water.manualRain = false;
+  rainToggle.disabled = !manualRainBox.checked;
+  rainToggle.textContent = "Start rain";
+}
+
 function newWorld(seed: number): void {
   world = new World(seed);
   renderer = new Renderer(world);
   seedInput.value = String(seed);
   history = [];
   selection = null;
+  applyWeatherSettings();
   draw();
   refreshStats();
 }
@@ -60,6 +114,17 @@ function draw(): void {
     ctx.strokeRect(x0 * CELL_PX + 0.5, y0 * CELL_PX + 0.5, (x1 - x0 + 1) * CELL_PX - 1, (y1 - y0 + 1) * CELL_PX - 1);
     ctx.setLineDash([]);
   }
+  if (mouse && tool !== "select") {
+    // Brush outline: blue for rain, orange for the dryer.
+    ctx.strokeStyle = tool === "rain" ? "rgba(120,180,255,0.9)" : "rgba(255,170,80,0.9)";
+    ctx.lineWidth = painting ? 2 : 1;
+    ctx.setLineDash(painting ? [] : [5, 4]);
+    ctx.beginPath();
+    ctx.arc((mouse.x + 0.5) * CELL_PX, (mouse.y + 0.5) * CELL_PX, brushSize() * CELL_PX, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineWidth = 1;
+  }
 }
 
 const FRAME_BUDGET_MS = 35; // max time spent simulating per frame
@@ -81,6 +146,7 @@ function loop(now: number): void {
     owed += dt * target;
     const start = performance.now();
     while (owed >= 1) {
+      applyBrush(1);
       world.step();
       owed--;
       rateWindow.ticks++;
@@ -92,6 +158,8 @@ function loop(now: number): void {
     }
   } else {
     owed = 0;
+    // Tools still work while paused, at the 1x game rate.
+    applyBrush(dt * TICKS_PER_SECOND);
   }
   draw();
   if (++frame % STATS_EVERY === 0) {
@@ -132,8 +200,9 @@ function refreshStats(): void {
     ["Nutrients: total (conserved)", s.nutrientsTotal.toFixed(3)],
     ["Water: lakes & puddles", `${s.waterSurface.toFixed(0)} (${s.waterSquares.toLocaleString()} squares)`],
     ["Water: in soil", s.waterSoil.toFixed(0)],
-    ["Water: in clouds", `${s.waterCloud.toFixed(0)} (${((100 * s.waterCloud) / s.waterTotal).toFixed(1)}%)${s.raining ? " · raining" : ""}`],
-    ["Water: total (conserved)", s.waterTotal.toFixed(3)],
+    ["Water: in clouds", `${s.waterCloud.toFixed(0)} (${((100 * s.waterCloud) / s.waterTotal).toFixed(1)}%)${s.raining ? " · raining" : ""}${world.water.manual ? " · manual" : ""}`],
+    ["Water: total (conserved; tools add / remove)", s.waterTotal.toFixed(3)],
+    ["Wind", windText()],
   ];
   statsTable.innerHTML = rows.map(([k, v]) => `<tr><td class="muted">${k}</td><td>${v}</td></tr>`).join("");
 
@@ -141,6 +210,17 @@ function refreshStats(): void {
   genesTable.innerHTML = geneRows(all.grass, all.algae);
   refreshSelection();
   drawChart();
+}
+
+const COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+
+function windText(): string {
+  const w = world.wind;
+  const from = w.fromBearing;
+  const name = COMPASS[Math.round(from / 45) % 8];
+  // Arrow points the way the wind is blowing.
+  const arrow = `<span class="arrow" style="transform: rotate(${w.angle}rad)">→</span>`;
+  return `${arrow} from ${name} (${from.toFixed(0)}°) · ${(w.speed / PARAMS.windSpeed).toFixed(2)}× mean speed`;
 }
 
 function fmtNum(v: number): string {
@@ -288,7 +368,8 @@ function setSelection(sel: typeof selection): void {
 canvas.addEventListener("mousedown", (e) => {
   if (e.button !== 0) return;
   e.preventDefault();
-  dragStart = eventCell(e);
+  if (tool === "select") dragStart = eventCell(e);
+  else painting = true;
 });
 window.addEventListener("mousemove", (e) => {
   if (!dragStart) return;
@@ -300,6 +381,7 @@ window.addEventListener("mousemove", (e) => {
   draw();
 });
 window.addEventListener("mouseup", (e) => {
+  painting = false;
   if (!dragStart) return;
   const c = eventCell(e);
   // A click without a drag clears the selection.
@@ -310,10 +392,13 @@ window.addEventListener("mouseup", (e) => {
 canvas.addEventListener("mousemove", (e) => {
   const { x, y } = eventCell(e);
   hover = y * GRID_W + x;
+  const r = canvas.getBoundingClientRect();
+  mouse = { x: ((e.clientX - r.left) / r.width) * GRID_W - 0.5, y: ((e.clientY - r.top) / r.height) * GRID_H - 0.5 };
   showInspect();
 });
 canvas.addEventListener("mouseleave", () => {
   hover = -1;
+  mouse = null;
   inspectEl.textContent = "Hover the map to inspect a square";
 });
 window.addEventListener("keydown", (e) => {
@@ -327,13 +412,29 @@ window.addEventListener("keydown", (e) => {
     setRunning(false);
     world.step();
     refreshStats();
+  } else if (e.key === "s" || e.key === "r" || e.key === "d") {
+    setTool(e.key === "s" ? "select" : e.key === "r" ? "rain" : "dryer");
   } else if (e.key >= "1" && e.key <= "6") {
     viewSel.selectedIndex = Number(e.key) - 1;
     draw();
   }
 });
 
+for (const b of toolButtons) b.addEventListener("click", () => setTool(b.dataset.tool as Tool));
+rateInput.addEventListener("input", refreshBrushLabels);
+sizeInput.addEventListener("input", () => {
+  refreshBrushLabels();
+  draw();
+});
+manualRainBox.addEventListener("change", applyWeatherSettings);
+rainToggle.addEventListener("click", () => {
+  world.water.manualRain = !world.water.manualRain;
+  rainToggle.textContent = world.water.manualRain ? "Stop rain" : "Start rain";
+});
+
+refreshBrushLabels();
 newWorld(1337);
+setTool("select");
 requestAnimationFrame((t) => {
   lastFrame = t;
   requestAnimationFrame(loop);
