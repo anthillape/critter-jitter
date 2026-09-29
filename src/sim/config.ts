@@ -1,7 +1,7 @@
-// World dimensions: an 800x600 canvas where every grid square is 2x2 pixels.
-export const CANVAS_W = 800;
-export const CANVAS_H = 600;
-export const CELL_PX = 2;
+// World dimensions: a 400x300 grid of squares, drawn 3x3 pixels each on a 1200x900 canvas.
+export const CANVAS_W = 1200;
+export const CANVAS_H = 900;
+export const CELL_PX = 3;
 export const GRID_W = CANVAS_W / CELL_PX; // 400
 export const GRID_H = CANVAS_H / CELL_PX; // 300
 export const CELL_COUNT = GRID_W * GRID_H;

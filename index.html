@@ -8,72 +8,126 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <main class="layout">
-      <div class="stage">
-        <canvas id="world" width="800" height="600"></canvas>
+    <main class="app">
+      <section class="main-col">
+        <canvas id="world" width="1200" height="900"></canvas>
         <div id="inspect" class="inspect">Hover the map to inspect a square</div>
-      </div>
-      <aside class="panel">
-        <h1>Critter Jitter</h1>
-        <div class="controls">
-          <button id="play">Pause</button>
-          <button id="step">Step</button>
-          <label title="Game seconds per real second (1× = 60 ticks per second)">Speed
-            <select id="speed">
-              <option value="0.5">½×</option>
-              <option value="1" selected>1×</option>
-              <option value="2">2×</option>
-              <option value="4">4×</option>
-              <option value="8">8×</option>
-            </select>
-          </label>
+        <div class="cards">
+          <section class="card">
+            <h2>Population</h2>
+            <canvas id="chart" width="360" height="130"></canvas>
+            <div class="legend">
+              <span class="sw grass"></span>grass <span class="sw seeds"></span>seeds <span class="sw algae"></span>algae
+            </div>
+            <table id="statsLife"></table>
+          </section>
+          <section class="card">
+            <h2>World</h2>
+            <table id="statsWorld"></table>
+            <h2>Water</h2>
+            <table id="statsWater"></table>
+          </section>
+          <section class="card">
+            <h2>Nutrients</h2>
+            <table id="statsNutrients"></table>
+            <h2>Genes, whole world <span class="small">(mean ±sd)</span></h2>
+            <table id="genes"></table>
+          </section>
+          <section class="card">
+            <h2>Selection</h2>
+            <div id="selection"></div>
+          </section>
         </div>
-        <div class="controls">
-          <label>View
-            <select id="view">
-              <option value="normal">Normal</option>
-              <option value="nutrients">Nutrients</option>
-              <option value="energy">Energy</option>
-              <option value="moisture">Water &amp; soil moisture</option>
-              <option value="height">Height</option>
-              <option value="waterpref">Grass water preference</option>
-            </select>
-          </label>
-          <label>Seed <input id="seed" type="number" /></label>
-          <button id="restart" title="Rebuild this same world (same seed) from scratch, using the current settings">Restart</button>
-          <button id="regen" title="Generate a different world: the seed you typed, or a random one">New world</button>
-        </div>
-        <h2>Cursor</h2>
-        <div class="controls" role="group" aria-label="Cursor tool">
-          <button class="tool" data-tool="select" aria-pressed="true" title="Drag to select an area and see its stats (S)">Select</button>
-          <button class="tool" data-tool="rain" aria-pressed="false" title="Hold to rain under the cursor, adding water to the world (R)">Rain</button>
-          <button class="tool" data-tool="dryer" aria-pressed="false" title="Hold to dry the ground under the cursor, removing water from the world (D)">Dryer</button>
-        </div>
-        <div class="controls brush" id="brush">
-          <label>Rate <input id="rate" type="range" min="0" max="100" value="60" /> <span id="rateVal" class="muted small"></span></label>
-          <label>Size <input id="size" type="range" min="2" max="80" value="15" /> <span id="sizeVal" class="muted small"></span></label>
-        </div>
-        <h2>Weather</h2>
-        <div class="controls">
-          <label title="Turn off automatic rain and control it yourself"><input id="manualRain" type="checkbox" /> Manual rain</label>
-          <button id="rainToggle" disabled>Start rain</button>
-        </div>
+      </section>
 
-        <canvas id="chart" width="320" height="110"></canvas>
-        <div class="legend">
-          <span class="sw grass"></span>grass <span class="sw seeds"></span>seeds <span class="sw algae"></span>algae
+      <aside class="sidebar">
+        <header class="sidebar-head">
+          <h1>Critter Jitter</h1>
+          <div class="controls">
+            <button id="play">Pause</button>
+            <button id="step">Step</button>
+            <label title="Game seconds per real second (1× = 60 ticks per second)">Speed
+              <select id="speed">
+                <option value="0.5">½×</option>
+                <option value="1" selected>1×</option>
+                <option value="2">2×</option>
+                <option value="4">4×</option>
+                <option value="8">8×</option>
+              </select>
+            </label>
+          </div>
+          <nav class="tabs" role="tablist">
+            <button role="tab" id="tab-world" aria-controls="panel-world" aria-selected="true">World</button>
+            <button role="tab" id="tab-tools" aria-controls="panel-tools" aria-selected="false">Tools &amp; weather</button>
+            <button role="tab" id="tab-settings" aria-controls="panel-settings" aria-selected="false">Settings</button>
+            <button role="tab" id="tab-help" aria-controls="panel-help" aria-selected="false">Help</button>
+          </nav>
+        </header>
+
+        <div class="tab-panels">
+          <section role="tabpanel" id="panel-world" aria-labelledby="tab-world">
+            <h2>View</h2>
+            <div class="controls">
+              <select id="view" aria-label="View">
+                <option value="normal">Normal</option>
+                <option value="nutrients">Nutrients</option>
+                <option value="energy">Energy</option>
+                <option value="moisture">Water &amp; soil moisture</option>
+                <option value="height">Height</option>
+                <option value="waterpref">Grass water preference</option>
+              </select>
+            </div>
+            <h2>World</h2>
+            <div class="controls">
+              <label>Seed <input id="seed" type="number" /></label>
+              <button id="restart" title="Rebuild this same world (same seed) from scratch, using the current settings">Restart</button>
+              <button id="regen" title="Generate a different world: the seed you typed, or a random one">New world</button>
+            </div>
+          </section>
+
+          <section role="tabpanel" id="panel-tools" aria-labelledby="tab-tools" hidden>
+            <h2>Cursor</h2>
+            <div class="controls" role="group" aria-label="Cursor tool">
+              <button class="tool" data-tool="select" aria-pressed="true" title="Drag to select an area and see its stats (S)">Select</button>
+              <button class="tool" data-tool="rain" aria-pressed="false" title="Hold to rain under the cursor, adding water to the world (R)">Rain</button>
+              <button class="tool" data-tool="dryer" aria-pressed="false" title="Hold to dry the ground under the cursor, removing water from the world (D)">Dryer</button>
+            </div>
+            <div class="brush" id="brush">
+              <label class="setting" title="How much water per second the brush adds or removes at its centre">
+                <span class="setting-name">Rate</span><input id="rate" type="range" min="0" max="100" value="60" /><span id="rateVal" class="setting-value"></span>
+              </label>
+              <label class="setting" title="Radius of the brush, in squares">
+                <span class="setting-name">Size</span><input id="size" type="range" min="2" max="80" value="15" /><span id="sizeVal" class="setting-value"></span>
+              </label>
+            </div>
+            <h2>Weather</h2>
+            <div class="controls">
+              <label title="Turn off automatic rain and control it yourself"><input id="manualRain" type="checkbox" /> Manual rain</label>
+              <button id="rainToggle" disabled>Start rain</button>
+            </div>
+          </section>
+
+          <section role="tabpanel" id="panel-settings" aria-labelledby="tab-settings" hidden>
+            <p class="hint">Hover a name for what it does. Changed settings are highlighted.</p>
+            <div id="settings"></div>
+            <div class="controls settings-actions">
+              <button id="resetSettings" title="Put every setting back to its starting value">Reset all to defaults</button>
+            </div>
+          </section>
+
+          <section role="tabpanel" id="panel-help" aria-labelledby="tab-help" hidden>
+            <h2>Keys</h2>
+            <table class="keys">
+              <tr><td>Space</td><td>Pause / play</td></tr>
+              <tr><td>.</td><td>Step one tick</td></tr>
+              <tr><td>1 – 6</td><td>Switch view</td></tr>
+              <tr><td>S / R / D</td><td>Select / Rain / Dryer cursor</td></tr>
+              <tr><td>Esc</td><td>Clear selection</td></tr>
+            </table>
+            <h2>Map</h2>
+            <p class="hint">Brown ground is lighter on higher ground and darker when wet. Green is grass, pale specks are seeds, blue is water (deeper is more opaque), bright blue lines are streams, a green tint in water is algae, and white patches are clouds, which turn grey while raining.</p>
+          </section>
         </div>
-        <table id="stats"></table>
-        <h2>Genes, whole world <span class="small">(mean ±sd)</span></h2>
-        <table id="genes"></table>
-        <h2>Settings <span class="small">(hover a name for what it does)</span></h2>
-        <div id="settings"></div>
-        <div class="controls settings-actions">
-          <button id="resetSettings" title="Put every setting back to its starting value">Reset all to defaults</button>
-        </div>
-        <h2>Selection</h2>
-        <div id="selection"></div>
-        <p class="hint">Keys: space = pause, . = step, 1–6 = views, S / R / D = cursor, Esc = clear selection</p>
       </aside>
     </main>
     <script type="module" src="/src/main.ts"></script>

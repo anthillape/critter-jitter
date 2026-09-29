@@ -15,7 +15,10 @@ const playBtn = $<HTMLButtonElement>("play");
 const speedSel = $<HTMLSelectElement>("speed");
 const viewSel = $<HTMLSelectElement>("view");
 const seedInput = $<HTMLInputElement>("seed");
-const statsTable = $<HTMLTableElement>("stats");
+const statsLife = $<HTMLTableElement>("statsLife");
+const statsWorld = $<HTMLTableElement>("statsWorld");
+const statsWater = $<HTMLTableElement>("statsWater");
+const statsNutrients = $<HTMLTableElement>("statsNutrients");
 const genesTable = $<HTMLTableElement>("genes");
 const inspectEl = $<HTMLDivElement>("inspect");
 const selectionEl = $<HTMLDivElement>("selection");
@@ -243,27 +246,34 @@ function refreshStats(): void {
   history.push({ grass: s.grass, seeds: s.seeds, algae: s.algae });
   if (history.length > HISTORY) history.shift();
 
-  const rows: Array<[string, string]> = [
-    ["Game time", `${formatGameTime(s.tick)} (tick ${s.tick.toLocaleString()})`],
-    ["Speed", running
-      ? `${(measuredRate / TICKS_PER_SECOND).toFixed(1)}× of ${speedSel.value}×${fallingBehind ? " · can't keep up" : ""}`
-      : "paused"],
+  const table = (rows: Array<[string, string]>) =>
+    rows.map(([k, v]) => `<tr><td class="muted">${k}</td><td>${v}</td></tr>`).join("");
+  statsLife.innerHTML = table([
     ["Grass", s.grass.toLocaleString()],
     ["Seeds waiting", s.seeds.toLocaleString()],
     ["Algae", s.algae.toLocaleString()],
     ["Births / deaths (last 20 frames)", `${s.grassBirths + s.algaeBirths} / ${s.grassDeaths + s.algaeDeaths}`],
     ["Deaths: starved / old age / drowned or stranded", `${s.starved} / ${s.oldAge} / ${s.habitatLost}`],
-    ["Nutrients: ground", s.nutrientsGround.toFixed(1)],
-    ["Nutrients: water", s.nutrientsWater.toFixed(1)],
-    ["Nutrients: in flora", s.nutrientsFlora.toFixed(1)],
-    ["Nutrients: total (conserved)", s.nutrientsTotal.toFixed(3)],
-    ["Water: lakes & puddles", `${s.waterSurface.toFixed(0)} (${s.waterSquares.toLocaleString()} squares)`],
-    ["Water: in soil", s.waterSoil.toFixed(0)],
-    ["Water: in clouds", `${s.waterCloud.toFixed(0)} (${((100 * s.waterCloud) / s.waterTotal).toFixed(1)}%)${s.raining ? " · raining" : ""}${world.water.manual ? " · manual" : ""}`],
-    ["Water: total (conserved; tools add / remove)", s.waterTotal.toFixed(3)],
+  ]);
+  statsWorld.innerHTML = table([
+    ["Game time", `${formatGameTime(s.tick)} (tick ${s.tick.toLocaleString()})`],
+    ["Speed", running
+      ? `${(measuredRate / TICKS_PER_SECOND).toFixed(1)}× of ${speedSel.value}×${fallingBehind ? " · can't keep up" : ""}`
+      : "paused"],
     ["Wind", windText()],
-  ];
-  statsTable.innerHTML = rows.map(([k, v]) => `<tr><td class="muted">${k}</td><td>${v}</td></tr>`).join("");
+  ]);
+  statsWater.innerHTML = table([
+    ["Lakes & puddles", `${s.waterSurface.toFixed(0)} (${s.waterSquares.toLocaleString()} squares)`],
+    ["In soil", s.waterSoil.toFixed(0)],
+    ["In clouds", `${s.waterCloud.toFixed(0)} (${((100 * s.waterCloud) / s.waterTotal).toFixed(1)}%)${s.raining ? " · raining" : ""}${world.water.manual ? " · manual" : ""}`],
+    ["Total (conserved; tools add / remove)", s.waterTotal.toFixed(3)],
+  ]);
+  statsNutrients.innerHTML = table([
+    ["In the ground", s.nutrientsGround.toFixed(1)],
+    ["In the water", s.nutrientsWater.toFixed(1)],
+    ["In grass & algae", s.nutrientsFlora.toFixed(1)],
+    ["Total (conserved)", s.nutrientsTotal.toFixed(3)],
+  ]);
 
   const all = world.regionStats(0, 0, GRID_W - 1, GRID_H - 1);
   genesTable.innerHTML = geneRows(all.grass, all.algae);
@@ -491,6 +501,29 @@ rainToggle.addEventListener("click", () => {
   world.water.manualRain = !world.water.manualRain;
   rainToggle.textContent = world.water.manualRain ? "Stop rain" : "Start rain";
 });
+
+// Sidebar tabs (the chosen tab is remembered in this browser).
+const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+function selectTab(tab: HTMLButtonElement): void {
+  for (const t of tabs) {
+    const selected = t === tab;
+    t.setAttribute("aria-selected", String(selected));
+    $<HTMLElement>(t.getAttribute("aria-controls")!).hidden = !selected;
+  }
+  try {
+    localStorage.setItem("critter-jitter-tab", tab.id);
+  } catch {
+    // storage unavailable: just don't remember
+  }
+}
+for (const t of tabs) t.addEventListener("click", () => selectTab(t));
+try {
+  const saved = localStorage.getItem("critter-jitter-tab");
+  const t = tabs.find((x) => x.id === saved);
+  if (t) selectTab(t);
+} catch {
+  // storage unavailable
+}
 
 const refreshSettings = buildSettings();
 $<HTMLButtonElement>("resetSettings").addEventListener("click", () => {

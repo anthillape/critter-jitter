@@ -1,7 +1,10 @@
 # Critter Jitter
 
-A grid ecosystem simulation in HTML / CSS / TypeScript. The world is an
-800×600 canvas of 2×2-pixel squares (400×300 = 120,000 squares).
+A grid ecosystem simulation in HTML / CSS / TypeScript. The world is a
+400×300 grid of squares (120,000 squares), drawn 3×3 pixels each on a
+1200×900 map. Stats and graphs sit in cards under the map, and a tabbed
+sidebar (World, Tools & weather, Settings, Help) fills the rest of the
+window.
 
 ```sh
 npm install
