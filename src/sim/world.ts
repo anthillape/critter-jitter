@@ -404,9 +404,7 @@ export class World {
     // worth eating, so grazed waters can recover.
     if (n >= p.algaeMaxN * p.algaeBreedSize && this.rng() < genes[g + G_BREED]
       && e >= p.algaeChildE + p.algaeBreedReserve && this.nutrients[i] >= p.algaeChildN) {
-      // Usually buds next door; sometimes a spore drifts further off, so
-      // algae can recolonise water where it has been wiped out.
-      const t = this.rng() < p.algaeSporeChance ? this.sporeTarget(i) : this.freeWaterNeighbour(i);
+      const t = this.freeWaterNeighbour(i);
       if (t >= 0) {
         e -= p.algaeChildE;
         this.nutrients[i] -= p.algaeChildN;
@@ -422,18 +420,6 @@ export class World {
 
     this.floraN[i] = n;
     this.floraE[i] = e;
-  }
-
-  /** A random empty water square within algaeSporeRange of square i, or -1. */
-  private sporeTarget(i: number): number {
-    const r = this.p.algaeSporeRange;
-    const angle = this.rng() * Math.PI * 2;
-    const d = 1 + this.rng() * (r - 1);
-    const x = Math.round((i % GRID_W) + Math.cos(angle) * d);
-    const y = Math.round(Math.floor(i / GRID_W) + Math.sin(angle) * d);
-    if (x < 0 || y < 0 || x >= GRID_W || y >= GRID_H) return -1;
-    const t = y * GRID_W + x;
-    return this.water.isWater(t) && this.kind[t] === EMPTY ? t : -1;
   }
 
   private freeWaterNeighbour(i: number): number {
