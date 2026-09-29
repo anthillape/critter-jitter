@@ -67,13 +67,14 @@ let history: Sample[] = [];
 /** Set whenever a tick rains; cleared each time a sample is taken. */
 let rainedSinceSample = false;
 
-type Tool = "select" | "rain" | "dryer" | "seeds" | "algae";
-const TOOL_KEYS: Record<string, Tool> = { s: "select", r: "rain", d: "dryer", g: "seeds", a: "algae" };
+type Tool = "select" | "rain" | "dryer" | "seeds" | "algae" | "swimmers";
+const TOOL_KEYS: Record<string, Tool> = { s: "select", r: "rain", d: "dryer", g: "seeds", a: "algae", f: "swimmers" };
 const BRUSH_COLOURS: Record<Exclude<Tool, "select">, string> = {
   rain: "rgba(120,180,255,0.9)",
   dryer: "rgba(255,170,80,0.9)",
   seeds: "rgba(235,215,110,0.9)",
   algae: "rgba(90,210,190,0.9)",
+  swimmers: "rgba(240,130,100,0.9)",
 };
 /** Fractional sprays owed but not yet placed (so low rates still spray). */
 let sprayOwed = 0;
@@ -117,7 +118,8 @@ function applyBrush(ticks: number): void {
     if (x < 0 || y < 0 || x >= GRID_W || y >= GRID_H) continue;
     const i = y * GRID_W + x;
     if (tool === "seeds") world.addSeed(i);
-    else world.addAlgae(i);
+    else if (tool === "algae") world.addAlgae(i);
+    else world.swimmers.spawnRandom(x + Math.random(), y + Math.random());
   }
 }
 
@@ -134,7 +136,7 @@ function setTool(t: Tool): void {
 }
 
 function refreshBrushLabels(): void {
-  rateVal.textContent = tool === "seeds" || tool === "algae"
+  rateVal.textContent = tool === "seeds" || tool === "algae" || tool === "swimmers"
     ? `${Math.round(sprayPerSecond())} per s`
     : `${(brushRate() * TICKS_PER_SECOND).toFixed(3)}/s`;
   sizeVal.textContent = `${brushSize()} sq`;

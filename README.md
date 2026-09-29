@@ -152,12 +152,14 @@ speed.
 
 - **Cursor**: *Select* (drag a rectangle for area stats), *Rain* (hold to
   rain under the cursor, adding new water to the world) and *Dryer* (hold to
-  remove standing water, then soil water, under the cursor), *Seeds* and
-  *Algae*. The last two spray at random points inside the brush circle.
+  remove standing water, then soil water, under the cursor), *Seeds*,
+  *Algae* and *Swimmers*. The last three spray at random points inside the
+  brush circle. Swimmers are released with random genomes, in water only,
+  and take their body nutrients from the water they land in.
   Seeds only take on empty land and algae only in empty water. Each takes
   its nutrients from the square it lands on, so nutrients stay conserved,
   and squares too poor to supply them are skipped. Sprayed life gets the
-  starting genes. Keys S / R / D / G / A switch between the tools.
+  starting genes. Keys S / R / D / G / A / F switch between the tools.
   *Rate* and *Size* set the brush strength (water per second at the
   centre, or particles sprayed per second) and its radius. Rain and Dryer
   fade toward the edge of the circle. The tools work while paused too.
