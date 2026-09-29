@@ -27,6 +27,11 @@ export class Hydrology {
   readonly soil = new Float64Array(CELL_COUNT);
   cloud = 0;
   raining = false;
+  /**
+   * 0..1, eases toward 1 while raining and back to 0 afterwards (over ~2 s
+   * at 1x), so the look of rain fades in and out rather than switching.
+   */
+  rainFade = 0;
   /** Cloud level at which the current rain event ends. */
   private rainTarget = 0;
   private readonly rng: Rng;
@@ -113,6 +118,7 @@ export class Hydrology {
   step(tick: number): void {
     if (tick % CLOUD_UPDATE_EVERY === 0) this.updateClouds(tick);
     this.rain();
+    this.rainFade += ((this.raining ? 1 : 0) - this.rainFade) * 0.025;
     this.evaporateAndInfiltrate();
     // Soil water moves slowly, so it only needs updating every other tick.
     if ((tick & 1) === 0) this.flowSoil();

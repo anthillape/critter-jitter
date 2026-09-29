@@ -62,7 +62,7 @@ export class Renderer {
     const { surface, sat, wet, cloudDensity } = w.water;
     const p = PARAMS;
     const minDepth = p.waterDepthMin;
-    const cloudShade = w.water.raining ? 175 : 245; // rain clouds are greyer
+    const rainFade = w.water.rainFade;
 
     for (let y = 0; y < GRID_H; y++) {
       for (let x = 0; x < GRID_W; x++) {
@@ -121,9 +121,12 @@ export class Renderer {
             const c = cloudDensity.length ? w.water.cloudAt(x, y) : 0;
             if (c > 0.01) {
               const a = 0.65 * c; // thicker cloud is more opaque (and rains more)
-              r = r * (1 - a) + cloudShade * a;
-              g = g * (1 - a) + cloudShade * a;
-              b = b * (1 - a) + (cloudShade + 8) * a;
+              // Rain clouds grey gradually, most where they are thickest
+              // (where the rain is heaviest).
+              const shade = 245 - 80 * rainFade * c * c;
+              r = r * (1 - a) + shade * a;
+              g = g * (1 - a) + shade * a;
+              b = b * (1 - a) + (shade + 8) * a;
             }
           }
         } else if (view === "nutrients") {
