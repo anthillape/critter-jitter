@@ -3,7 +3,7 @@ import { ALGAE_UNUSED_GENES, GENE_COUNT, GENE_NAMES } from "./sim/genes";
 import { ALGAE, GRASS, SEED, World, type GroupStats, type RegionStats } from "./sim/world";
 import { Renderer, type View } from "./render";
 import { formatSetting, fromSlider, SETTINGS, setCritterTraitsHook, SLIDER_STEPS, toSlider, type Setting } from "./settings";
-import { bodyMass, CritterSystem, MODE_NAMES, T_LITTER, type Critter } from "./sim/critters";
+import { bodyMass, CritterSystem, MODE_NAMES, T_LITTER, type Corpse, type Critter } from "./sim/critters";
 import type { CritterCounts } from "./sim/world";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -327,87 +327,100 @@ function draw(): void {
   }
 }
 
+/** Colour of a dead body: grey, fading out as it decomposes. */
+function corpseColour(c: Corpse): string {
+  const left = c.startNutrients > 0 ? c.nutrients / c.startNutrients : 0;
+  return `rgba(95,95,92,${(0.8 * Math.min(1, left)).toFixed(3)})`;
+}
+
 /**
  * Swimmers are 3-pixel lines pointing the way they swim, wiggling side to
- * side while they move. Rotting bodies are faint grey dots.
+ * side while they move. Dead ones lie still, grey, fading as they rot.
  */
 function drawSwimmers(): void {
   const sw = world.swimmers;
-  ctx.fillStyle = "rgba(170,170,160,0.55)";
-  for (const c of sw.corpses) ctx.fillRect(c.x * CELL_PX - 1, c.y * CELL_PX - 1, 2, 2);
   ctx.lineWidth = 1.3;
   ctx.lineCap = "round";
+  for (const c of sw.corpses) drawSwimmerShape(c.x, c.y, c.heading, 0, corpseColour(c));
   for (const s of sw.critters) {
     if (!s.alive) continue;
-    const hx = s.x * CELL_PX;
-    const hy = s.y * CELL_PX;
-    const dx = Math.cos(s.heading);
-    const dy = Math.sin(s.heading);
     // Side-to-side wiggle, only while moving.
-    const w = s.speed > 0 ? Math.sin(s.phase) * 0.9 : 0;
-    ctx.strokeStyle = s.colour;
-    ctx.beginPath();
-    ctx.moveTo(hx, hy);
-    ctx.lineTo(hx - dx * 1.5 - dy * w, hy - dy * 1.5 + dx * w);
-    ctx.lineTo(hx - dx * 3 + dy * w, hy - dy * 3 - dx * w);
-    ctx.stroke();
+    drawSwimmerShape(s.x, s.y, s.heading, s.speed > 0 ? Math.sin(s.phase) * 0.9 : 0, s.colour);
   }
   ctx.lineWidth = 1;
+}
+
+function drawSwimmerShape(x: number, y: number, heading: number, w: number, colour: string): void {
+  const hx = x * CELL_PX;
+  const hy = y * CELL_PX;
+  const dx = Math.cos(heading);
+  const dy = Math.sin(heading);
+  ctx.strokeStyle = colour;
+  ctx.beginPath();
+  ctx.moveTo(hx, hy);
+  ctx.lineTo(hx - dx * 1.5 - dy * w, hy - dy * 1.5 + dx * w);
+  ctx.lineTo(hx - dx * 3 + dy * w, hy - dy * 3 - dx * w);
+  ctx.stroke();
 }
 
 /**
  * Sharks, seen from above: a tapered body with pectoral fins and a forked
  * tail that sweeps side to side as they swim. Length grows with body size.
- * A pale streak trails behind a boosting shark.
+ * A pale streak trails behind a boosting shark. Dead sharks lie still,
+ * grey, fading as they rot.
  */
 function drawSharks(): void {
   const sh = world.sharks;
-  ctx.fillStyle = "rgba(170,170,160,0.55)";
-  for (const c of sh.corpses) ctx.fillRect(c.x * CELL_PX - 1.5, c.y * CELL_PX - 1.5, 3, 3);
+  for (const c of sh.corpses) drawSharkShape(c.x, c.y, c.heading, c.mass, 0, corpseColour(c), false);
   for (const s of sh.critters) {
     if (!s.alive) continue;
-    const L = 4 + 3 * bodyMass(s); // pixels nose to tail: grows with the shark
-    const W = L * 0.26;
-    const w = s.speed > 0 ? Math.sin(s.phase * 0.7) * W * 0.55 : 0;
-    ctx.save();
-    ctx.translate(s.x * CELL_PX, s.y * CELL_PX);
-    ctx.rotate(s.heading);
-    // Its position is the middle of the body, so it turns about its centre.
-    ctx.translate(0.5 * L, 0);
-    if (s.boostLeft > 0 && s.speed > 0) {
-      ctx.strokeStyle = "rgba(255,255,255,0.35)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(-L, 0);
-      ctx.lineTo(-L * 2, 0);
-      ctx.stroke();
-    }
-    ctx.fillStyle = s.colour;
-    ctx.beginPath();
-    // Body: pointed nose, widest a third of the way back, narrowing to the tail.
-    ctx.moveTo(0, 0);
-    ctx.lineTo(-0.3 * L, 0.5 * W);
-    ctx.lineTo(-0.72 * L, 0.18 * W + w * 0.5);
-    ctx.lineTo(-0.8 * L, w * 0.8);
-    ctx.lineTo(-0.72 * L, -0.18 * W + w * 0.5);
-    ctx.lineTo(-0.3 * L, -0.5 * W);
-    ctx.closePath();
-    // Pectoral fins.
-    ctx.moveTo(-0.28 * L, 0.45 * W);
-    ctx.lineTo(-0.46 * L, 1.05 * W);
-    ctx.lineTo(-0.42 * L, 0.4 * W);
-    ctx.moveTo(-0.28 * L, -0.45 * W);
-    ctx.lineTo(-0.46 * L, -1.05 * W);
-    ctx.lineTo(-0.42 * L, -0.4 * W);
-    // Forked tail, swept by the wiggle.
-    ctx.moveTo(-0.78 * L, w * 0.8);
-    ctx.lineTo(-1.0 * L, w * 1.3 + 0.55 * W);
-    ctx.lineTo(-0.9 * L, w * 1.1);
-    ctx.lineTo(-1.0 * L, w * 1.3 - 0.55 * W);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
+    drawSharkShape(s.x, s.y, s.heading, bodyMass(s), s.speed > 0 ? Math.sin(s.phase * 0.7) : 0, s.colour, s.boostLeft > 0 && s.speed > 0);
   }
+}
+
+/** `wiggle` is -1..1 (tail sweep); the shape is centred on (x, y). */
+function drawSharkShape(x: number, y: number, heading: number, mass: number, wiggle: number, colour: string, boosting: boolean): void {
+  const L = 4 + 3 * mass; // pixels nose to tail: grows with the shark
+  const W = L * 0.26;
+  const w = wiggle * W * 0.55;
+  ctx.save();
+  ctx.translate(x * CELL_PX, y * CELL_PX);
+  ctx.rotate(heading);
+  // Its position is the middle of the body, so it turns about its centre.
+  ctx.translate(0.5 * L, 0);
+  if (boosting) {
+    ctx.strokeStyle = "rgba(255,255,255,0.35)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-L, 0);
+    ctx.lineTo(-L * 2, 0);
+    ctx.stroke();
+  }
+  ctx.fillStyle = colour;
+  ctx.beginPath();
+  // Body: pointed nose, widest a third of the way back, narrowing to the tail.
+  ctx.moveTo(0, 0);
+  ctx.lineTo(-0.3 * L, 0.5 * W);
+  ctx.lineTo(-0.72 * L, 0.18 * W + w * 0.5);
+  ctx.lineTo(-0.8 * L, w * 0.8);
+  ctx.lineTo(-0.72 * L, -0.18 * W + w * 0.5);
+  ctx.lineTo(-0.3 * L, -0.5 * W);
+  ctx.closePath();
+  // Pectoral fins.
+  ctx.moveTo(-0.28 * L, 0.45 * W);
+  ctx.lineTo(-0.46 * L, 1.05 * W);
+  ctx.lineTo(-0.42 * L, 0.4 * W);
+  ctx.moveTo(-0.28 * L, -0.45 * W);
+  ctx.lineTo(-0.46 * L, -1.05 * W);
+  ctx.lineTo(-0.42 * L, -0.4 * W);
+  // Forked tail, swept by the wiggle.
+  ctx.moveTo(-0.78 * L, w * 0.8);
+  ctx.lineTo(-1.0 * L, w * 1.3 + 0.55 * W);
+  ctx.lineTo(-0.9 * L, w * 1.1);
+  ctx.lineTo(-1.0 * L, w * 1.3 - 0.55 * W);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
 }
 
 const FRAME_BUDGET_MS = 35; // max time spent simulating per frame

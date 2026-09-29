@@ -147,10 +147,17 @@ export interface Critter {
   colour: string;
 }
 
+/** A dead critter rotting where it died; it keeps its shape while it decomposes. */
 export interface Corpse {
   x: number;
   y: number;
+  /** Nutrients still in the body; they return to the square as it rots. */
   nutrients: number;
+  /** Nutrients it had when it died (so decay = nutrients / startNutrients). */
+  startNutrients: number;
+  heading: number;
+  /** Body mass when it died (sets how big it's drawn). */
+  mass: number;
 }
 
 /** Accessors critters need from the world (kept narrow on purpose). */
@@ -704,7 +711,9 @@ export class CritterSystem {
   private die(c: Critter): void {
     c.alive = false;
     this.deaths++;
-    this.corpses.push({ x: c.x, y: c.y, nutrients: c.nutrients });
+    this.corpses.push({
+      x: c.x, y: c.y, nutrients: c.nutrients, startNutrients: c.nutrients, heading: c.heading, mass: bodyMass(c),
+    });
     c.nutrients = 0;
   }
 

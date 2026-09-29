@@ -83,7 +83,8 @@ families show up as colour groups.
   rest for a while before mating again.
 - **Death.** Swimmers die of old age (genetic lifespan), starvation, or
   running out of body nutrients. Any remaining energy is lost, and the body
-  rots, returning its nutrients to the square gradually.
+  rots, returning its nutrients to the square gradually. Dead bodies stay
+  where they died, turn grey, and fade out as they decompose.
 - **Genome.** Swimmers have 16 traits (fat store max, fat storing, minimum /
   top / roaming speed, colour hue / saturation / lightness, breeding age,
   fat needed to breed, hunger threshold, lifespan, share given to each
