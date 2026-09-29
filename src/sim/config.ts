@@ -124,6 +124,11 @@ export const PARAMS = {
   swimGeneStrength: 0.35, // how strongly each gene nudges its traits
   swimStartEnergy: 1, // energy each starting swimmer gets
   swimStartNutrients: 0.1, // nutrients each starting swimmer takes from the water
+  swimTurnRate: 0.6, // most a swimmer can turn per tick (radians): nimble
+  swimAccel: 0.05, // most its speed can change per tick
+  swimWanderTurnChance: 1, // chance per tick of changing course while roaming (1 = constant jitter)
+  swimWanderTurnSize: 0.5, // size of those course changes (radians)
+  swimLookAhead: 0, // squares ahead it checks for land (0 = just bumps into the shore)
 
   // --- Sharks (eat swimmers) ---
   sharkMoveCost: 0.3,
@@ -145,6 +150,11 @@ export const PARAMS = {
   sharkStartNutrients: 0.3,
   sharkBoostDuration: 60, // ticks a boost lasts
   sharkBoostMetabolism: 3, // upkeep multiplier while boosting
+  sharkTurnRate: 0.04, // most a shark can turn per tick (radians): smooth, gliding turns
+  sharkAccel: 0.002, // most its speed can change per tick
+  sharkWanderTurnChance: 0.004, // chance per tick of changing course while roaming
+  sharkWanderTurnSize: 1.6, // size of those course changes (radians)
+  sharkLookAhead: 6, // squares ahead it checks for land, turning away before it gets there
   sharkPreyEnergy: 2, // extra energy per unit of a fish's body size when a shark digests it
 
   // --- Genetics ---

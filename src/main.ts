@@ -372,6 +372,8 @@ function drawSharks(): void {
     ctx.save();
     ctx.translate(s.x * CELL_PX, s.y * CELL_PX);
     ctx.rotate(s.heading);
+    // Its position is the middle of the body, so it turns about its centre.
+    ctx.translate(0.5 * L, 0);
     if (s.boostLeft > 0 && s.speed > 0) {
       ctx.strokeStyle = "rgba(255,255,255,0.35)";
       ctx.lineWidth = 1;

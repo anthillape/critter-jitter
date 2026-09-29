@@ -137,6 +137,8 @@ export interface Critter {
   prey: Critter | null;
   /** Ticks of boost left (sharks). */
   boostLeft: number;
+  /** Direction it's turning toward (it turns gradually, at the species' turn rate). */
+  desired: number;
   phase: number;
   alive: boolean;
   /** CSS colour from the hue / saturation / lightness traits. */
@@ -206,6 +208,7 @@ const PARAM_NAMES = [
   "MoveCost", "Metabolism", "FatMass", "EnergyMax", "NutrientLoss", "MinNutrients", "FoodRadius", "MateRadius",
   "FoodInterval", "MateInterval", "BreedCooldown", "MinChildEnergy", "MinChildNutrients", "RotRate",
   "GeneStrength", "StartEnergy", "StartNutrients",
+  "TurnRate", "Accel", "WanderTurnChance", "WanderTurnSize", "LookAhead",
 ] as const;
 type ParamName = (typeof PARAM_NAMES)[number];
 
@@ -295,9 +298,10 @@ export class CritterSystem {
     const c: Critter = {
       id: this.nextId++, x, y, heading: this.host.rng() * Math.PI * 2, speed: 0,
       energy, fat, nutrients, age: 0, cooldown: 0, parents, genes, traits,
-      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0,
+      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, desired: 0,
       phase: this.host.rng() * Math.PI * 2, alive: true, colour: colourOf(traits),
     };
+    c.desired = c.heading;
     this.critters.push(c);
     return c;
   }
@@ -393,11 +397,16 @@ export class CritterSystem {
         }
       }
     }
+    // Work out where it wants to head and how fast; it then turns and
+    // speeds up or slows down gradually (species turn rate / acceleration).
+    let turnRate = this.sp("TurnRate");
     if (c.mode !== Mode.Stranded && c.hasTarget) {
       const dx = c.targetX - c.x;
       const dy = c.targetY - c.y;
       const dist = Math.hypot(dx, dy);
-      c.heading = Math.atan2(dy, dx);
+      c.desired = Math.atan2(dy, dx);
+      // Close in: turn harder so it doesn't circle what it's chasing.
+      if (dist < 3) turnRate *= 3;
       // Heading for something it has spotted: top speed (or boost), easing off at the end.
       let top = t[T_MAX_SPEED];
       if (c.prey && c.boostLeft > 0) {
@@ -408,10 +417,27 @@ export class CritterSystem {
       speed = Math.max(Math.min(t[T_MIN_SPEED], dist), Math.min(top, dist));
       if (dist < (c.prey ? 1 : 0.75)) this.arrive(c);
     } else if (c.mode !== Mode.Stranded) {
-      // Nothing in sight: roam randomly at the genetic roaming speed.
-      c.heading += (h.rng() - 0.5) * 0.5;
+      // Nothing in sight: roam, picking a new course now and then.
+      if (h.rng() < this.sp("WanderTurnChance")) c.desired = c.heading + (h.rng() - 0.5) * this.sp("WanderTurnSize");
       speed = t[T_ROAM_SPEED];
       c.boostLeft = 0;
+    }
+    if (c.mode !== Mode.Stranded) {
+      // Land coming up ahead: pick the nearest clear direction to turn to.
+      const look = this.sp("LookAhead");
+      if (look > 0 && !this.clearAhead(c.x, c.y, c.heading, look)) {
+        for (let k = 1; k <= 6; k++) {
+          const off = (k * Math.PI) / 6;
+          const side = h.rng() < 0.5 ? 1 : -1;
+          if (this.clearAhead(c.x, c.y, c.heading + side * off, look)) { c.desired = c.heading + side * off; break; }
+          if (this.clearAhead(c.x, c.y, c.heading - side * off, look)) { c.desired = c.heading - side * off; break; }
+        }
+      }
+      let delta = c.desired - c.heading;
+      delta = Math.atan2(Math.sin(delta), Math.cos(delta));
+      c.heading += Math.max(-turnRate, Math.min(turnRate, delta));
+      const accel = this.sp("Accel");
+      speed = c.speed + Math.max(-accel, Math.min(accel, speed - c.speed));
     }
 
     // Move, but never onto land or off the map.
@@ -423,7 +449,9 @@ export class CritterSystem {
         c.x = nx;
         c.y = ny;
       } else {
+        // Bumped the shore anyway: stop and turn away.
         c.heading += Math.PI * (0.5 + h.rng());
+        c.desired = c.heading;
         this.dropTarget(c);
         speed = 0;
       }
@@ -459,6 +487,19 @@ export class CritterSystem {
       this.starved++;
       this.die(c);
     }
+  }
+
+  /** Whether the water is clear for `dist` squares ahead along `angle`. */
+  private clearAhead(x: number, y: number, angle: number, dist: number): boolean {
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    for (let d = 1; d <= dist; d++) {
+      const px = x + dx * d;
+      const py = y + dy * d;
+      if (px < 0 || py < 0 || px >= GRID_W || py >= GRID_H) return false;
+      if (!this.host.isWater(Math.floor(py) * GRID_W + Math.floor(px))) return false;
+    }
+    return true;
   }
 
   private dropTarget(c: Critter): void {

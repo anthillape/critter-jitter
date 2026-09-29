@@ -99,6 +99,11 @@ function critterSettings(sp: SpeciesDef, group: string, noun: string, food: stri
     e("MinChildNutrients", "Fewest nutrients for a child", "Parents won't make a child they can't give at least this many nutrients between them.", { min: 0.001, max: 1, log: true }),
     e("RotRate", "Rotting speed", `Share of a dead ${noun}'s remaining nutrients returned to its square each tick.` + PER_SEC, { min: 0.0002, max: 0.1, log: true }),
     e("GeneStrength", "Gene strength", "How strongly each gene pushes its traits away from the defaults (affects new genes and mutations).", { min: 0.02, max: 1, log: true }),
+    e("TurnRate", "Turning speed", `Most a ${noun} can turn each tick, in radians. Low values give smooth, gliding turns.`, { min: 0.005, max: 3.2, log: true }),
+    e("Accel", "Acceleration", `Most a ${noun}'s speed can change each tick. Low values make it glide up to speed and coast to a stop.`, { min: 0.0002, max: 0.5, log: true }),
+    e("WanderTurnChance", "Course changes while roaming", `Chance each tick that a roaming ${noun} picks a new course (1 = constant small jitters).`, { min: 0.0005, max: 1, log: true }),
+    e("WanderTurnSize", "Size of course changes", `How far a roaming ${noun} turns when it changes course, in radians.`, { min: 0.05, max: 6.3 }),
+    e("LookAhead", "Looks ahead for land", `How many squares ahead a ${noun} checks for land, so it turns away before reaching the shore (0 = it just bumps into it).`, { min: 0, max: 20, int: true }),
   ];
 }
 

@@ -112,6 +112,16 @@ shark-shaped (seen from above: tapered body, pectoral fins, and a forked
 tail that sweeps as they swim), with a pale streak behind them while
 boosting. Their colour is genetic too, defaulting to grey-blue.
 
+Sharks glide. They turn gradually (a slow turn rate), speed up and slow down
+smoothly, keep a steady course while roaming and only change course now and
+then. They look ahead for land and turn away before reaching the shore, and
+curve toward prey, turning harder only in the last few squares. They're
+drawn centred on their position, so they rotate about their middle.
+Swimmers use the same steering with nimble settings, so they stay quick and
+twitchy. The turn rate, acceleration, how often and how far they change
+course, and how far ahead they look for land are all in Settings for each
+species.
+
 Swimmers and sharks run on the same code (`src/sim/critters.ts`). Each
 species has its own traits, settings (Settings → *Swimmers* / *Sharks*, and
 their trait defaults) and diet.
