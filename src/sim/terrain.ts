@@ -11,6 +11,14 @@ export interface Terrain {
   /** Ground height 1..16 per square. */
   height: Uint8Array;
   /**
+   * The same height before rounding to whole levels (1 <= e < 17, with
+   * floor(e) = height). Water follows this, so it collects in valleys and
+   * channels instead of spreading across flat terraces.
+   */
+  elevation: Float32Array;
+  /** Neighbour (of 8) that run-off drains toward, or -1 in the starting lakes. */
+  downhill: Int32Array;
+  /**
    * Starting soil saturation 0..1: 1 in the initial lakes, falling off to 0
    * at IRRIGATION_RANGE. After that the water cycle (hydrology.ts) takes over.
    */
@@ -34,11 +42,14 @@ export function generateTerrain(seed: number): Terrain {
   }
 
   const height = new Uint8Array(CELL_COUNT);
+  const elevation = new Float32Array(CELL_COUNT);
   const water = new Uint8Array(CELL_COUNT);
   const span = MAX_HEIGHT - MIN_HEIGHT + 1;
   for (let i = 0; i < CELL_COUNT; i++) {
     const t = (raw[i] - lo) / (hi - lo);
-    const h = Math.min(MAX_HEIGHT, MIN_HEIGHT + Math.floor(t * span));
+    const e = Math.min(MAX_HEIGHT + 0.999, MIN_HEIGHT + t * span);
+    const h = Math.floor(e);
+    elevation[i] = e;
     height[i] = h;
     if (h <= WATER_LEVEL) water[i] = 1;
   }
@@ -60,7 +71,82 @@ export function generateTerrain(seed: number): Terrain {
     }
   }
 
-  return { seed, height, moisture, fertility };
+  return { seed, height, elevation, downhill: drainage(elevation, water), moisture, fertility };
+}
+
+/**
+ * Drainage directions for run-off. A priority flood from the lakes visits
+ * land in order of rising elevation. Each square drains toward the
+ * neighbour it was reached from, so every square has a route to a lake. The
+ * routes merge into a branching network through the valleys, and small
+ * hollows are crossed rather than trapping water.
+ */
+function drainage(elevation: Float32Array, lake: Uint8Array): Int32Array {
+  const down = new Int32Array(CELL_COUNT).fill(-1);
+  const seen = new Uint8Array(CELL_COUNT);
+  const heap = new MinHeap();
+  for (let i = 0; i < CELL_COUNT; i++) {
+    if (lake[i]) {
+      seen[i] = 1;
+      heap.push(i, elevation[i]);
+    }
+  }
+  while (heap.size > 0) {
+    const [c, level] = heap.pop();
+    const cx = c % GRID_W;
+    const cy = (c / GRID_W) | 0;
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = cx + dx;
+        const ny = cy + dy;
+        if ((dx === 0 && dy === 0) || nx < 0 || ny < 0 || nx >= GRID_W || ny >= GRID_H) continue;
+        const n = ny * GRID_W + nx;
+        if (seen[n]) continue;
+        seen[n] = 1;
+        down[n] = c;
+        // Filled level: never below the square it drains into.
+        heap.push(n, Math.max(elevation[n], level + 1e-4));
+      }
+    }
+  }
+  return down;
+}
+
+/** Binary min-heap of square indices keyed by a float level. */
+class MinHeap {
+  private idx = new Int32Array(CELL_COUNT);
+  private key = new Float32Array(CELL_COUNT);
+  size = 0;
+  push(i: number, k: number): void {
+    let n = this.size++;
+    while (n > 0) {
+      const parent = (n - 1) >> 1;
+      if (this.key[parent] <= k) break;
+      this.idx[n] = this.idx[parent];
+      this.key[n] = this.key[parent];
+      n = parent;
+    }
+    this.idx[n] = i;
+    this.key[n] = k;
+  }
+  pop(): [number, number] {
+    const top: [number, number] = [this.idx[0], this.key[0]];
+    const lastI = this.idx[--this.size];
+    const lastK = this.key[this.size];
+    let n = 0;
+    for (;;) {
+      let c = 2 * n + 1;
+      if (c >= this.size) break;
+      if (c + 1 < this.size && this.key[c + 1] < this.key[c]) c++;
+      if (this.key[c] >= lastK) break;
+      this.idx[n] = this.idx[c];
+      this.key[n] = this.key[c];
+      n = c;
+    }
+    this.idx[n] = lastI;
+    this.key[n] = lastK;
+    return top;
+  }
 }
 
 /** Two-pass chamfer distance transform (approximately Euclidean). */

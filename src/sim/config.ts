@@ -14,7 +14,7 @@ export const WATER_LEVEL = 6;
 /** Initial soil moisture reaches this many squares from water (then the water cycle takes over). */
 export const IRRIGATION_RANGE = 60;
 export const NOISE_SCALE = 1 / 120; // larger denominator = bigger landmasses
-export const NOISE_OCTAVES = 5;
+export const NOISE_OCTAVES = 7; // fine octaves give the small valleys streams gather in
 
 /**
  * Simulation ticks per second of game time. The main loop runs the
@@ -38,10 +38,11 @@ export const PARAMS = {
   // --- Water cycle (total water is conserved) ---
   waterDepthMin: 0.3, // standing water at least this deep makes a "water" square
   soilCap: 1.0, // water a square's soil can hold
-  infiltration: 0.02, // max standing water soaking into the soil per tick
+  infiltration: 0.0002, // standing water soaking into dry soil per tick (less as it fills); much slower than run-off
   soilWick: 0.2, // soil water spreading between squares (any direction; slow uphill pull)
   soilDrain: 0.15, // extra soil drainage downhill per level of height difference
-  surfaceFlow: 0.2, // standing water flow rate toward lower water surfaces
+  surfaceFlow: 0.2, // deep water (lakes, ponds, floods) flow toward lower water surfaces
+  runoffRate: 0.5, // share of shallow water running to the steepest downhill square per tick
   evapSurface: 0.0000025, // standing water evaporating per square per tick
   evapSoil: 0.00005, // fraction of soil water evaporating per tick
   initialCloud: 0.17, // share of all water that starts in the clouds

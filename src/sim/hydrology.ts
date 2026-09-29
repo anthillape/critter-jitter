@@ -52,14 +52,14 @@ export class Hydrology {
   constructor(private terrain: Terrain, private p: Params) {
     this.perlin = new Perlin(mulberry32(terrain.seed + 2));
     this.rng = mulberry32(terrain.seed + 3);
-    const { height, moisture } = terrain;
+    const { elevation, moisture } = terrain;
     let ground = 0;
     for (let i = 0; i < CELL_COUNT; i++) {
       const x = i % GRID_W;
       this.notLastCol[i] = x < GRID_W - 1 ? 1 : 0;
       this.notFirstCol[i] = x > 0 ? 1 : 0;
       // Lakes fill everything at or below WATER_LEVEL up to a flat surface.
-      const depth = Math.max(0, WATER_LEVEL + 1 - height[i]);
+      const depth = Math.max(0, WATER_LEVEL + 1 - elevation[i]);
       this.surface[i] = depth;
       // Start the soil near its long-run profile so the world doesn't begin bone dry.
       this.soil[i] = depth > 0 ? p.soilCap : p.soilCap * moisture[i];
@@ -116,7 +116,31 @@ export class Hydrology {
     this.evaporateAndInfiltrate();
     // Soil water moves slowly, so it only needs updating every other tick.
     if ((tick & 1) === 0) this.flowSoil();
+    this.runOff();
     this.flowSurface();
+  }
+
+  /**
+   * Shallow water (below waterDepthMin) runs down the steepest slope. Flows
+   * from many squares merge along the same paths, carving out streams that
+   * run into the lakes. Deeper water is handled by flowSurface.
+   */
+  private runOff(): void {
+    const { surface, fluxR: moved } = this;
+    const down = this.terrain.downhill;
+    const min = this.p.waterDepthMin;
+    const rate = this.p.runoffRate;
+    moved.fill(0);
+    for (let i = 0; i < CELL_COUNT; i++) {
+      const s = surface[i];
+      if (s <= 0 || s >= min) continue;
+      const d = down[i];
+      if (d < 0) continue;
+      const m = s * rate;
+      moved[i] -= m;
+      moved[d] += m;
+    }
+    for (let i = 0; i < CELL_COUNT; i++) surface[i] += moved[i];
   }
 
   /** Evaporation into the clouds, then standing water soaking into the soil. */
@@ -134,9 +158,12 @@ export class Hydrology {
         const e = s < evapSurface ? s : evapSurface;
         s -= e;
         up += e;
+        // Soaking in is slow, and slower still as the soil fills, so most
+        // rain runs off downhill before it can soak away.
         const room = soilCap - g;
         if (room > 0 && s > 0) {
-          const m = s < infiltration ? (s < room ? s : room) : (infiltration < room ? infiltration : room);
+          const rate = infiltration * room / soilCap;
+          const m = s < rate ? s : rate;
           s -= m;
           g += m;
         }
@@ -210,7 +237,8 @@ export class Hydrology {
     this.cloud -= fallen;
     this.lastRain = fallen;
     // Stop at the target, or once the clouds are too thin to rain properly.
-    if (this.cloud <= this.rainTarget + 1e-9 || fallen < 0.1 * p.rainRate * this.total) {
+    // (Half the normal rate: otherwise evaporation can sustain an endless drizzle.)
+    if (this.cloud <= this.rainTarget + 1e-9 || fallen < 0.5 * p.rainRate * this.total) {
       this.raining = false;
     }
   }
@@ -222,7 +250,7 @@ export class Hydrology {
    */
   private flowSoil(): void {
     const { soil, surface, fluxR, fluxD } = this;
-    const h = this.terrain.height;
+    const h = this.terrain.elevation;
     const { soilCap, soilWick, soilDrain } = this.p;
     const inv = 1 / soilCap;
     const W = GRID_W;
@@ -267,11 +295,16 @@ export class Hydrology {
     }
   }
 
-  /** Standing water flows toward neighbours with a lower water surface. */
+  /**
+   * Standing water flows toward neighbours with a lower water surface, so
+   * lakes level out. Only edges touching water at least waterDepthMin deep
+   * take part; thinner run-off follows the slope instead (runOff).
+   */
   private flowSurface(): void {
     const { surface, fluxR, fluxD, notLastCol } = this;
-    const h = this.terrain.height;
+    const h = this.terrain.elevation;
     const k = this.p.surfaceFlow;
+    const min = this.p.waterDepthMin;
     const W = GRID_W;
     for (let i = 0; i < CELL_COUNT; i++) {
       const sa = surface[i];
@@ -279,7 +312,7 @@ export class Hydrology {
       let f = 0;
       if (notLastCol[i]) {
         const sb = surface[i + 1];
-        if (sa > 0 || sb > 0) {
+        if (sa >= min || sb >= min) {
           f = k * (la - h[i + 1] - sb);
           if (f > sa * 0.24) f = sa * 0.24;
           else if (f < -sb * 0.24) f = -sb * 0.24;
@@ -289,7 +322,7 @@ export class Hydrology {
       f = 0;
       if (i + W < CELL_COUNT) {
         const sb = surface[i + W];
-        if (sa > 0 || sb > 0) {
+        if (sa >= min || sb >= min) {
           f = k * (la - h[i + W] - sb);
           if (f > sa * 0.24) f = sa * 0.24;
           else if (f < -sb * 0.24) f = -sb * 0.24;
@@ -299,7 +332,6 @@ export class Hydrology {
     }
     // Apply, and refresh the per-square water flags in the same pass.
     const { wet, sat, soil, notFirstCol } = this;
-    const min = this.p.waterDepthMin;
     const inv = 1 / this.p.soilCap;
     for (let i = 0; i < CELL_COUNT; i++) {
       let v = surface[i] - fluxR[i] - fluxD[i];

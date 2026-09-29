@@ -89,13 +89,6 @@ export class Renderer {
               b = b * (1 - s) + 70 * s;
             }
           } else {
-            if (depth > 0.01) {
-              // A thin film of standing water (puddles, run-off): faint sheen.
-              const a = 0.3 * depth / minDepth;
-              r = r * (1 - a) + 50 * a;
-              g = g * (1 - a) + 100 * a;
-              b = b * (1 - a) + 170 * a;
-            }
             if (k === GRASS) {
               const s = Math.min(1, w.floraN[i] / p.grassMaxN);
               const pref = w.genes[i * GENE_COUNT + G_WATER_PREF];
@@ -114,6 +107,13 @@ export class Renderer {
               r = r * 0.6 + 230 * 0.4;
               g = g * 0.6 + 210 * 0.4;
               b = b * 0.6 + 120 * 0.4;
+            }
+            if (depth > 0.003) {
+              // Shallow running water (streams, run-off, puddles), over grass too.
+              const a = Math.min(0.85, 0.45 + 0.4 * depth / minDepth);
+              r = r * (1 - a) + 55 * a;
+              g = g * (1 - a) + 125 * a;
+              b = b * (1 - a) + 225 * a;
             }
           }
           // Clouds on top: white translucent, bilinear from the coarse cloud grid.

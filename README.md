@@ -42,21 +42,30 @@ down rather than stuttering, and the panel shows the achieved speed with
 The total amount of water is constant (the panel shows it). It is split
 between three places:
 
-- **Standing water** (lakes, puddles, run-off) flows toward neighbours with a
-  lower water surface, so lakes level out and rain runs downhill.
-- **Soil water** (up to 1 per square) soaks in from standing water. It
-  spreads slowly between squares in any direction, which pulls water up and
-  away from lakes. It drains downhill faster, in proportion to the height
-  difference. Water over the soil's capacity seeps back out as standing
-  water.
+- **Standing water** comes in two kinds:
+  - **Run-off** (shallower than 0.3) runs downhill fast, half of it moving
+    one square each tick. It follows a drainage network worked out once from
+    the terrain: a priority flood from the lakes gives every square a route
+    down to a lake. Flows merge into branching streams, drawn as bright blue
+    lines, that swell during rain and dry up afterwards. Water follows the
+    smooth height before rounding to levels 1–16, plus fine detail octaves,
+    so it gathers in small valleys instead of spreading across flat terraces.
+  - **Deep water** (lakes, ponds, a stream in flood) flows toward
+    neighbours with a lower water surface, so lakes stay level.
+- **Soil water** (up to 1 per square) soaks in from standing water slowly,
+  much more slowly than run-off moves, and more slowly still as the soil
+  fills. It spreads slowly between squares in any direction, which pulls
+  water up and away from lakes. It drains downhill faster, in proportion to
+  the height difference. Water over the soil's capacity seeps back out as
+  standing water.
 - **Clouds**: standing water and soil water evaporate into one shared cloud
   pool. Clouds are drawn as white translucent Perlin-noise shapes drifting
   slowly across the map, and cover more of it the more water they hold. When
   the clouds hold more than 20% of all water it starts raining where they
   are, at a roughly steady rate. Rain is shared out by cloud thickness
-  squared, so it is heaviest under the thickest (most opaque) cloud. How much falls varies each time: usually
-  15–40% of the cloud water, but about one rain in twelve empties the clouds
-  completely. Rain tapers off as the clouds thin out. Clouds look greyer
+  squared, so it is heaviest under the thickest (most opaque) cloud. How
+  much falls varies each time: usually 15–40% of the cloud water, but about
+  one rain in twelve empties the clouds completely. Rain tapers off as the clouds thin out. Clouds look greyer
   while it rains.
 
 The world starts with 17% of its water in the clouds, so lakes begin at the
