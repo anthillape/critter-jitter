@@ -53,7 +53,8 @@ between three places:
   pool. Clouds are drawn as white translucent Perlin-noise shapes drifting
   slowly across the map, and cover more of it the more water they hold. When
   the clouds hold more than 20% of all water it starts raining where they
-  are, at a roughly steady rate. How much falls varies each time: usually
+  are, at a roughly steady rate. Rain is shared out by cloud thickness
+  squared, so it is heaviest under the thickest (most opaque) cloud. How much falls varies each time: usually
   15–40% of the cloud water, but about one rain in twelve empties the clouds
   completely. Rain tapers off as the clouds thin out. Clouds look greyer
   while it rains.

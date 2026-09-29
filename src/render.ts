@@ -120,7 +120,7 @@ export class Renderer {
           if (view === "normal") {
             const c = cloudDensity.length ? w.water.cloudAt(x, y) : 0;
             if (c > 0.01) {
-              const a = 0.55 * c;
+              const a = 0.65 * c; // thicker cloud is more opaque (and rains more)
               r = r * (1 - a) + cloudShade * a;
               g = g * (1 - a) + cloudShade * a;
               b = b * (1 - a) + (cloudShade + 8) * a;
