@@ -66,6 +66,14 @@ Fish are small, drawn as 3-pixel lines that wiggle while they move.
 Their colour comes from their hue, saturation and lightness genes, so
 families show up as colour groups.
 
+**Hue is inherited directly** (for every animal): founders take their hue
+from their genes, but a child's hue is the midpoint of its parents' hues
+around the colour wheel (so red-orange and red-purple make red, not green),
+nudged randomly by up to ±6° (*Hue mutation*, Settings → *Animal colours*).
+Lineages therefore keep a family colour that drifts slowly over the
+generations. Changing a species' *Colour hue* default only recolours
+founders.
+
 - **Energy.** Each fish has a short-term energy store and a fat reserve
   (both capped: the fat cap is genetic). Spare energy is turned into fat at
   a genetic rate, and fat is drawn on when energy runs low. Moving costs

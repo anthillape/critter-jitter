@@ -409,6 +409,11 @@ export const SETTINGS: Setting[] = [
   }),
 
   // --- Animals: fish, sharks, sheep and cats ---
+  param("hueMutation", {
+    group: "Animal colours", label: "Hue mutation",
+    tip: "A newborn animal's hue is the midpoint of its parents' hues, nudged randomly by up to this many degrees. Larger values let families drift apart in colour faster.",
+    min: 0, max: 90, fmt: (v) => `±${v.toFixed(0)}°`,
+  }),
   ...critterSettings(FISH, "Fish", "fish", "algae"),
   param("fishMinAlgaeSize", {
     group: "Fish", label: "Smallest algae worth eating",

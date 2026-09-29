@@ -56,7 +56,7 @@ function traitList(o: TraitDefaults, colour: boolean, extras: TraitDef[] = []): 
     { key: "fatTendency", label: "Fat storing", tip: "Share of spare energy turned into fat each tick. High = stores fat eagerly.", def: 0.05, min: 0.002, max: 0.5, mode: "mul", spread: 0.8 },
     { key: "minSpeed", label: "Minimum speed", tip: "Slowest it moves when it's going anywhere, in squares per tick.", def: 0.01, min: 0.001, max: 0.2, mode: "mul", spread: 0.6 },
     { key: "maxSpeed", label: "Top speed", tip: "Speed while chasing food or a mate, in squares per tick.", def: 0.07, min: 0.01, max: 0.5, mode: "mul", spread: 0.6 },
-    { key: "hue", label: "Colour hue", tip: "Hue of its colour, in degrees.", def: 200, min: 0, max: 360, mode: "add", spread: 140, wrap: true },
+    { key: "hue", label: "Colour hue", tip: "Hue of its colour, in degrees. Founders take it from their genes; children inherit the midpoint of their parents' hues, slightly mutated.", def: 200, min: 0, max: 360, mode: "add", spread: 140, wrap: true },
     { key: "breedAge", label: "Breeding age", tip: "Age (ticks) from which it starts prioritising breeding.", def: 900, min: 60, max: 40000, mode: "mul", spread: 0.6 },
     { key: "breedFat", label: "Fat needed to breed", tip: "Fat it needs before it starts looking for a mate.", def: 0.8, min: 0, max: 40, mode: "mul", spread: 0.6 },
     { key: "hungerFat", label: "Hunger threshold", tip: "When fat falls below this, it actively hunts for food.", def: 0.6, min: 0, max: 40, mode: "mul", spread: 0.7 },
@@ -132,7 +132,7 @@ export const SHEEP: SpeciesDef = {
     minSpeed: { def: 0.004 },
     maxSpeed: { def: 0.03, tip: "Speed while heading for a mate, in squares per tick." },
     roamSpeed: { def: 0.012, tip: "Walking speed while meandering (including looking for grass), in squares per tick. Kept between the minimum and top speeds." },
-    hue: { def: 0, spread: 180, tip: "Hue of its (always pastel) fleece, in degrees." },
+    hue: { def: 0, spread: 180, tip: "Hue of its (always pastel) fleece, in degrees. Founders take it from their genes; lambs inherit the midpoint of their parents' hues, slightly mutated." },
     breedAge: { def: 2000 },
     breedFat: { def: 1.5 },
     hungerFat: { def: 1.2, tip: "When fat falls below this, it grazes any grass it walks over, and now and then heads for the grassiest direction it can see." },
@@ -155,7 +155,7 @@ export const CAT: SpeciesDef = {
     minSpeed: { def: 0.004 },
     maxSpeed: { def: 0.02, label: "Stalking speed", tip: "Speed while following the sheep it's locked on to (or heading for a mate), in squares per tick." },
     roamSpeed: { def: 0.01, tip: "Walking speed while meandering, in squares per tick. Kept between the minimum and stalking speeds." },
-    hue: { def: 20, spread: 180, tip: "Hue of its (always dark) fur, in degrees." },
+    hue: { def: 20, spread: 180, tip: "Hue of its (always dark) fur, in degrees. Founders take it from their genes; kittens inherit the midpoint of their parents' hues, slightly mutated." },
     breedAge: { def: 3000 },
     breedFat: { def: 2.5 },
     hungerFat: { def: 2 },
@@ -229,6 +229,12 @@ export interface Critter {
   grown: number;
   phase: number;
   alive: boolean;
+  /**
+   * Hue in degrees. Founders get it from their genes; children inherit the
+   * midpoint of their parents' hues, slightly mutated. It overrides the hue
+   * trait, so families keep drifting colours of their own.
+   */
+  hue: number;
   /** CSS colour from the hue / saturation / lightness traits. */
   colour: string;
 }
@@ -412,9 +418,11 @@ export class CritterSystem {
     return true;
   }
 
-  private add(x: number, y: number, genes: Gene[], parents: [number, number], energy: number, nutrients: number, fat: number): Critter {
+  private add(x: number, y: number, genes: Gene[], parents: [number, number], energy: number, nutrients: number, fat: number, hue?: number): Critter {
     const traits = expressTraits(genes, this.species.traits);
+    if (hue !== undefined) traits[T_HUE] = hue;
     const c: Critter = {
+      hue: traits[T_HUE],
       id: this.nextId++, x, y, heading: this.host.rng() * Math.PI * 2, speed: 0,
       energy, fat, nutrients, age: 0, cooldown: 0, parents, genes, traits,
       mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, boostTried: false, pounceLeft: 0, pounceDir: 0, pounceRest: 0, desired: 0, general: 0, wander: 0, avoid: 0, shore: false, species: this.species, grown: 1,
@@ -947,7 +955,7 @@ export class CritterSystem {
       a.nutrients -= nA;
       b.nutrients -= nB;
       const e = eA + eB;
-      const child = this.add((a.x + b.x) / 2, (a.y + b.y) / 2, this.childGenes(a, b), [a.id, b.id], Math.min(e, eMax), nA + nB, 0);
+      const child = this.add((a.x + b.x) / 2, (a.y + b.y) / 2, this.childGenes(a, b), [a.id, b.id], Math.min(e, eMax), nA + nB, 0, this.childHue(a, b));
       child.grown = Math.min(1, this.sp("BirthSize")); // babies start small and grow
       child.fat = Math.min(Math.max(0, e - eMax), child.traits[T_MAX_FAT]); // any remainder beyond fat is lost
       made++;
@@ -963,6 +971,22 @@ export class CritterSystem {
       c.energy -= fromEnergy;
       c.fat -= amount - fromEnergy;
     }
+  }
+
+  /**
+   * The child's hue: the midpoint of its parents' hues around the colour
+   * wheel (so 350° and 10° give 0°, not 180°), nudged by up to ±hueMutation.
+   */
+  private childHue(a: Critter, b: Critter): number {
+    const h = this.host;
+    const ra = (a.hue * Math.PI) / 180;
+    const rb = (b.hue * Math.PI) / 180;
+    const sx = Math.cos(ra) + Math.cos(rb);
+    const sy = Math.sin(ra) + Math.sin(rb);
+    // Exactly opposite hues have no midpoint: pick either way round.
+    let mid = Math.hypot(sx, sy) < 1e-6 ? a.hue + (h.rng() < 0.5 ? 90 : -90) : (Math.atan2(sy, sx) * 180) / Math.PI;
+    mid += (h.rng() * 2 - 1) * h.p.hueMutation;
+    return ((mid % 360) + 360) % 360;
   }
 
   /** 11 random genes from each parent (each slightly mutated) plus one brand-new gene. */
@@ -1018,6 +1042,7 @@ export class CritterSystem {
   reexpress(): void {
     for (const c of this.critters) {
       c.traits = expressTraits(c.genes, this.species.traits);
+      c.traits[T_HUE] = c.hue; // hue is inherited, not re-derived from genes
       c.colour = colourOf(c.traits, this.species);
     }
   }

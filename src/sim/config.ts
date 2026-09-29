@@ -228,6 +228,7 @@ export const PARAMS = {
 
   // --- Genetics ---
   fullGrowth: 0.98, // fraction of max nutrients considered "fully grown"
+  hueMutation: 6, // animals: a child's hue is its parents' midpoint, nudged by up to this many degrees
 
   // --- Initial population ---
   initialSeeds: 400,
