@@ -52,14 +52,19 @@ body {
   white-space: pre-wrap;
 }
 /* Masonry: cards flow down columns and pack together without gaps. */
-.cards {
-  column-width: 270px;
-  column-gap: 12px;
-  margin-top: 8px;
+/* The scroll box fills the space under the map; the columns inside it are as
+   tall as their content, so they never spill sideways. */
+.cards-scroll {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  margin-top: 8px;
   padding-right: 4px;
+}
+.cards {
+  column-width: 270px;
+  column-gap: 12px;
 }
 .cards .card {
   break-inside: avoid;
@@ -125,7 +130,7 @@ body {
   .sidebar { position: static; height: auto; }
   .main-col { position: static; height: auto; }
   #world { width: 100%; }
-  .cards { overflow: visible; }
+  .cards-scroll { overflow: visible; }
 }
 h1 { font-size: 18px; margin: 0 0 10px; }
 h2 { font-size: 13px; margin: 14px 0 4px; color: var(--muted); font-weight: 600; }

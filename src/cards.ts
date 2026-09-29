@@ -43,6 +43,8 @@ function cardsIn(container: HTMLElement): HTMLElement[] {
 }
 
 export function setupCards(container: HTMLElement): void {
+  /** The box that scrolls (the columns sit inside it at full height). */
+  const scroller = container.parentElement ?? container;
   const cards = cardsIn(container);
   for (const card of cards) {
     const title = card.querySelector<HTMLElement>(":scope > h2");
@@ -158,10 +160,10 @@ export function setupCards(container: HTMLElement): void {
 
     // Near the top or bottom of the card area, keep scrolling it.
     const autoScroll = () => {
-      const cr = container.getBoundingClientRect();
+      const cr = scroller.getBoundingClientRect();
       const dy = lastY < cr.top + EDGE_SCROLL ? -12 : lastY > cr.bottom - EDGE_SCROLL ? 12 : 0;
       if (dy) {
-        container.scrollTop += dy;
+        scroller.scrollTop += dy;
         place(lastX, lastY);
       }
       scrollTimer = requestAnimationFrame(autoScroll);
