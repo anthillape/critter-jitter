@@ -30,6 +30,7 @@ const seedInput = $<HTMLInputElement>("seed");
 const statsLife = $<HTMLTableElement>("statsLife");
 const statsWorld = $<HTMLTableElement>("statsWorld");
 const statsWater = $<HTMLTableElement>("statsWater");
+const speedStatus = $<HTMLSpanElement>("speedStatus");
 const statsNutrients = $<HTMLTableElement>("statsNutrients");
 const genesTable = $<HTMLTableElement>("genes");
 const inspectEl = $<HTMLDivElement>("inspect");
@@ -497,11 +498,13 @@ function refreshStats(): void {
   ]);
   statsWorld.innerHTML = table([
     ["Game time", `${formatGameTime(s.tick)} (tick ${s.tick.toLocaleString()})`],
-    ["Speed", running
-      ? `${(measuredRate / TICKS_PER_SECOND).toFixed(1)}× of ${speedSel.value}×${fallingBehind ? " · can't keep up" : ""}`
-      : "paused"],
     ["Wind", windText()],
   ]);
+  // Achieved speed, shown next to the speed control.
+  speedStatus.textContent = !started ? "" : running
+    ? `running ${(measuredRate / TICKS_PER_SECOND).toFixed(1)}×${fallingBehind ? " · can't keep up" : ""}`
+    : "paused";
+  speedStatus.classList.toggle("behind", running && fallingBehind);
   statsWater.innerHTML = table([
     ["Lakes & puddles", `${s.waterSurface.toFixed(0)} (${s.waterSquares.toLocaleString()} squares)`],
     ["In soil", s.waterSoil.toFixed(0)],

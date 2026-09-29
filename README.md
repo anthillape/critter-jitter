@@ -31,8 +31,8 @@ to a paused preview on the Start tab.
 The simulation runs on a real-time clock at 60 ticks per second of game time
 (`TICKS_PER_SECOND`), times the chosen speed (½× to 8×). It doesn't run as
 fast as the machine can go. If the machine can't keep up, the world slows
-down rather than stuttering, and the panel shows the achieved speed with
-"can't keep up". All rates in `PARAMS` are per tick.
+down rather than stuttering, and the achieved speed (with "can't keep up")
+is shown next to the speed control. All rates in `PARAMS` are per tick.
 
 ## Layers
 

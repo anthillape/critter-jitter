@@ -132,3 +132,5 @@ td.muted { color: var(--muted); }
 button.primary { background: #3a5a22; border-color: var(--accent); font-weight: 600; padding: 6px 18px; }
 button.primary:hover { background: #46702a; }
 .start-actions { margin-top: 10px; }
+.speed-status { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.speed-status.behind { color: #e0a060; }
