@@ -1,6 +1,6 @@
 // Runs the simulation without a browser and prints population / nutrient
 // stats, for tuning parameters: `npm run sim -- [seed] [ticks] [every]`
-import { CELL_COUNT, GRID_H, GRID_W } from "../src/sim/config";
+import { applyWorldSize, CELL_COUNT, GRID_H, GRID_W, WORLD_SIZE } from "../src/sim/config";
 import { World, type GroupStats } from "../src/sim/world";
 import { GENE_NAMES } from "../src/sim/genes";
 
@@ -8,6 +8,10 @@ const seed = Number(process.argv[2] ?? 1337);
 const ticks = Number(process.argv[3] ?? 20000);
 const every = Number(process.argv[4] ?? 1000);
 
+// Optional size: npm run sim -- seed ticks every width height
+if (process.argv[5]) WORLD_SIZE.width = Number(process.argv[5]);
+if (process.argv[6]) WORLD_SIZE.height = Number(process.argv[6]);
+applyWorldSize();
 const t0 = performance.now();
 const world = new World(seed);
 let waterCells = 0;

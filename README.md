@@ -1,22 +1,23 @@
 # Critter Jitter
 
-A grid ecosystem simulation in HTML / CSS / TypeScript. The world is a
-400×300 grid of squares (120,000 squares), drawn 3×3 pixels each on a
-1200×900 map. Stats and graphs sit in cards under the map, and a tabbed
-sidebar (World, Tools & weather, Settings, Help) fills the rest of the
-window.
+A grid ecosystem simulation in HTML / CSS / TypeScript. The world is a grid
+of squares drawn 3×3 pixels each. It starts as a 400×150 strip (1200×450
+pixels), and its width and height can be changed on the Start tab. Stats and
+graphs sit in masonry-style cards under the map, and a tabbed sidebar (Start,
+World, Tools & weather, Settings, Help) fills the rest of the window.
 
 ```sh
 npm install
 npm run dev        # open the printed URL
 npm run build      # typecheck + production build into dist/
-npm run sim -- [seed] [ticks] [reportEvery]   # headless run for tuning
+npm run sim -- [seed] [ticks] [reportEvery] [width] [height]   # headless run for tuning
 ```
 
 ## Starting a world
 
 The page opens paused on the **Start** tab, with a preview of the map. Every
-starting condition is there: seed, terrain (landmass size, roughness), water
+starting condition is there: seed, terrain (world width and height,
+landmass size, roughness), water
 (sea level, starting wet-ground reach, starting soil wetness, starting cloud
 water), life (starting nutrients, number of grass seeds and algae, spread of
 water preferences) and starting genes. The preview and a summary (land/lake

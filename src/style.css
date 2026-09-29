@@ -28,7 +28,7 @@ body {
   display: block;
   width: 100%;
   max-width: 1200px;
-  aspect-ratio: 4 / 3;
+  height: auto;
   image-rendering: pixelated;
   border: 1px solid var(--line);
   cursor: crosshair;
@@ -41,12 +41,16 @@ body {
   min-height: 2.8em;
   white-space: pre-wrap;
 }
+/* Masonry: cards flow down columns and pack together without gaps. */
 .cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
-  gap: 12px;
+  column-width: 270px;
+  column-gap: 12px;
   margin-top: 8px;
-  align-items: start;
+}
+.cards .card {
+  break-inside: avoid;
+  margin-bottom: 12px;
+  display: block;
 }
 .card, .sidebar {
   background: var(--panel);

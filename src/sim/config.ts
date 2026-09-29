@@ -1,10 +1,20 @@
-// World dimensions: a 400x300 grid of squares, drawn 3x3 pixels each on a 1200x900 canvas.
-export const CANVAS_W = 1200;
-export const CANVAS_H = 900;
+// World dimensions in squares, each drawn CELL_PX x CELL_PX pixels. The size
+// is chosen on the Start tab and fixed while a world runs; these are live
+// bindings, so every module sees the current size.
 export const CELL_PX = 3;
-export const GRID_W = CANVAS_W / CELL_PX; // 400
-export const GRID_H = CANVAS_H / CELL_PX; // 300
-export const CELL_COUNT = GRID_W * GRID_H;
+export let GRID_W = 400;
+export let GRID_H = 150;
+export let CELL_COUNT = GRID_W * GRID_H;
+
+/** World size wanted for the next world (edited on the Start tab). */
+export const WORLD_SIZE = { width: 400, height: 150 };
+
+/** Applies WORLD_SIZE; call only while building a new world. */
+export function applyWorldSize(): void {
+  GRID_W = Math.max(40, Math.round(WORLD_SIZE.width));
+  GRID_H = Math.max(40, Math.round(WORLD_SIZE.height));
+  CELL_COUNT = GRID_W * GRID_H;
+}
 
 // Terrain
 export const MIN_HEIGHT = 1;

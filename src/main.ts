@@ -1,4 +1,4 @@
-import { CELL_PX, GRID_H, GRID_W, PARAMS, TICKS_PER_SECOND } from "./sim/config";
+import { applyWorldSize, CELL_PX, GRID_H, GRID_W, PARAMS, TICKS_PER_SECOND } from "./sim/config";
 import { ALGAE_UNUSED_GENES, GENE_COUNT, GENE_NAMES } from "./sim/genes";
 import { ALGAE, GRASS, SEED, World, type GroupStats, type RegionStats } from "./sim/world";
 import { Renderer, type View } from "./render";
@@ -204,6 +204,11 @@ function applyWeatherSettings(): void {
 
 function newWorld(seed: number): void {
   previewDirty = false;
+  applyWorldSize();
+  canvas.width = GRID_W * CELL_PX;
+  canvas.height = GRID_H * CELL_PX;
+  ctx.imageSmoothingEnabled = false;
+  hover = -1;
   world = new World(seed);
   renderer = new Renderer(world);
   seedInput.value = String(seed);

@@ -6,8 +6,6 @@ import type { Wind } from "./wind";
 
 /** Clouds are simulated on a coarse grid of CLOUD_CELL x CLOUD_CELL squares. */
 export const CLOUD_CELL = 4;
-export const CLOUD_W = GRID_W / CLOUD_CELL;
-export const CLOUD_H = GRID_H / CLOUD_CELL;
 const CLOUD_UPDATE_EVERY = 8; // ticks between cloud-pattern updates
 const CLOUD_RAMP = 0.45; // noise range over which clouds go from wisp to full thickness
 
@@ -37,8 +35,11 @@ export class Hydrology {
   /** Cloud level at which the current rain event ends. */
   private rainTarget = 0;
   private readonly rng: Rng;
+  /** Size of the coarse cloud grid (the world size in CLOUD_CELL blocks, edge blocks may be partial). */
+  readonly cloudW = Math.ceil(GRID_W / CLOUD_CELL);
+  readonly cloudH = Math.ceil(GRID_H / CLOUD_CELL);
   /** Cloud density 0..1 on the coarse cloud grid. */
-  readonly cloudDensity = new Float32Array(CLOUD_W * CLOUD_H);
+  readonly cloudDensity = new Float32Array(this.cloudW * this.cloudH);
   /** Total water in the world (surface + soil + cloud); only the tools change it. */
   total: number;
   /** Manual rain mode: automatic rain is off and `manualRain` decides. */
@@ -52,7 +53,7 @@ export class Hydrology {
 
   private cloudTime = 0;
   private cloudTick = 0;
-  /** Sum of rain weights (density squared) over the cloud grid. */
+  /** Sum of rain weights (density squared x squares covered) over the cloud grid. */
   private cloudWeight = 0;
   private readonly perlin: Perlin;
   private readonly fluxR = new Float64Array(CELL_COUNT);
@@ -108,17 +109,17 @@ export class Hydrology {
 
   /** Cloud density at a grid square, bilinearly interpolated. */
   cloudAt(x: number, y: number): number {
-    const fx = Math.min(CLOUD_W - 1.001, Math.max(0, (x + 0.5) / CLOUD_CELL - 0.5));
-    const fy = Math.min(CLOUD_H - 1.001, Math.max(0, (y + 0.5) / CLOUD_CELL - 0.5));
+    const fx = Math.min(this.cloudW - 1.001, Math.max(0, (x + 0.5) / CLOUD_CELL - 0.5));
+    const fy = Math.min(this.cloudH - 1.001, Math.max(0, (y + 0.5) / CLOUD_CELL - 0.5));
     const x0 = fx | 0;
     const y0 = fy | 0;
     const tx = fx - x0;
     const ty = fy - y0;
     const d = this.cloudDensity;
-    const a = d[y0 * CLOUD_W + x0];
-    const b = d[y0 * CLOUD_W + x0 + 1];
-    const c = d[(y0 + 1) * CLOUD_W + x0];
-    const e = d[(y0 + 1) * CLOUD_W + x0 + 1];
+    const a = d[y0 * this.cloudW + x0];
+    const b = d[y0 * this.cloudW + x0 + 1];
+    const c = d[(y0 + 1) * this.cloudW + x0];
+    const e = d[(y0 + 1) * this.cloudW + x0 + 1];
     return (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + e * tx) * ty;
   }
 
@@ -203,15 +204,18 @@ export class Hydrology {
     const frac = this.cloud / this.total;
     const threshold = 0.3 - 1.8 * frac;
     let weight = 0;
-    for (let cy = 0; cy < CLOUD_H; cy++) {
-      for (let cx = 0; cx < CLOUD_W; cx++) {
+    for (let cy = 0; cy < this.cloudH; cy++) {
+      for (let cx = 0; cx < this.cloudW; cx++) {
         const x = cx * CLOUD_CELL;
         const y = cy * CLOUD_CELL;
         const n = this.perlin.fbm3((x - ox) * cloudScale, (y - oy) * cloudScale, z, 4);
         // Wide ramp so only the cores reach full thickness.
         const d = Math.max(0, Math.min(1, (n - threshold) / CLOUD_RAMP));
-        this.cloudDensity[cy * CLOUD_W + cx] = d;
-        weight += d * d;
+        this.cloudDensity[cy * this.cloudW + cx] = d;
+        // Weight by the squares the block really covers (edge blocks can be partial).
+        const bw = Math.min(CLOUD_CELL, GRID_W - x);
+        const bh = Math.min(CLOUD_CELL, GRID_H - y);
+        weight += d * d * bw * bh;
       }
     }
     this.cloudWeight = weight;
@@ -246,20 +250,22 @@ export class Hydrology {
     if (!this.raining) return;
 
     const amount = Math.min(p.rainRate * this.total, this.cloud - this.rainTarget);
-    const perCell = this.cloudWeight > 0 ? amount / (this.cloudWeight * CLOUD_CELL * CLOUD_CELL) : 0;
+    const perCell = this.cloudWeight > 0 ? amount / this.cloudWeight : 0;
     const cap = p.rainMaxPerSquare;
     let fallen = 0;
-    for (let cy = 0; cy < CLOUD_H; cy++) {
-      for (let cx = 0; cx < CLOUD_W; cx++) {
-        const d = this.cloudDensity[cy * CLOUD_W + cx];
+    for (let cy = 0; cy < this.cloudH; cy++) {
+      for (let cx = 0; cx < this.cloudW; cx++) {
+        const d = this.cloudDensity[cy * this.cloudW + cx];
         if (d <= 0) continue;
         // Density squared: rain is concentrated under the thickest cloud.
         const r = Math.min(perCell, cap) * d * d;
-        for (let dy = 0; dy < CLOUD_CELL; dy++) {
+        const bw = Math.min(CLOUD_CELL, GRID_W - cx * CLOUD_CELL);
+        const bh = Math.min(CLOUD_CELL, GRID_H - cy * CLOUD_CELL);
+        for (let dy = 0; dy < bh; dy++) {
           const row = (cy * CLOUD_CELL + dy) * GRID_W + cx * CLOUD_CELL;
-          for (let dx = 0; dx < CLOUD_CELL; dx++) this.surface[row + dx] += r;
+          for (let dx = 0; dx < bw; dx++) this.surface[row + dx] += r;
         }
-        fallen += r * CLOUD_CELL * CLOUD_CELL;
+        fallen += r * bw * bh;
       }
     }
     this.cloud -= fallen;

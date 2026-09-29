@@ -1,4 +1,4 @@
-import { PARAMS, TERRAIN, TICKS_PER_SECOND, type Params } from "./sim/config";
+import { PARAMS, TERRAIN, TICKS_PER_SECOND, WORLD_SIZE, type Params } from "./sim/config";
 import { SWIMMER_TRAITS } from "./sim/swimmers";
 import {
   ALGAE_DEFAULTS, G_BREED, G_GERM, G_GROWTH, G_LIFESPAN, G_MUTATION, G_RANGE, G_WATER_PREF,
@@ -452,6 +452,26 @@ export const SETTINGS: Setting[] = [
   }),
 
   // --- Starting conditions (Start tab): terrain ---
+  {
+    id: "worldWidth", group: "Terrain", label: "World width",
+    tip: "Width of the world in squares. Bigger worlds run slower.",
+    min: 100, max: 800, int: true, newWorld: true,
+    get: () => WORLD_SIZE.width,
+    set: (v) => {
+      WORLD_SIZE.width = Math.round(v);
+    },
+    fmt: (v) => `${Math.round(v)} sq`,
+  },
+  {
+    id: "worldHeight", group: "Terrain", label: "World height",
+    tip: "Height of the world in squares. Bigger worlds run slower.",
+    min: 40, max: 600, int: true, newWorld: true,
+    get: () => WORLD_SIZE.height,
+    set: (v) => {
+      WORLD_SIZE.height = Math.round(v);
+    },
+    fmt: (v) => `${Math.round(v)} sq`,
+  },
   terrain("landScale", {
     group: "Terrain", label: "Landmass size",
     tip: "Size of hills, valleys and lakes, in squares. Bigger = broader landscape.",
