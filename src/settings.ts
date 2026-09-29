@@ -387,6 +387,16 @@ export const SETTINGS: Setting[] = [
     tip: "Algae can bud new cells once grown to this share of full size. Below the size swimmers bother eating, it gives grazed water a way to recover.",
     min: 0.1, max: 1, fmt: pct,
   }),
+  param("algaeSporeChance", {
+    group: "Algae", label: "Spore chance",
+    tip: "Chance a new algae cell is a spore that drifts off to a random water square nearby, instead of budding next door. Lets algae recolonise water where it was wiped out.",
+    min: 0, max: 1, fmt: pct,
+  }),
+  param("algaeSporeRange", {
+    group: "Algae", label: "Spore drift distance",
+    tip: "Furthest (squares) an algae spore can drift.",
+    min: 2, max: 150, int: true,
+  }),
   param("algaeBreedReserve", {
     group: "Algae", label: "Energy kept back when budding",
     tip: "Algae only buds a new cell if it would still have this much energy left.",

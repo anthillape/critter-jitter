@@ -104,6 +104,8 @@ export const PARAMS = {
   algaeChildE: 0.2, // energy a new algae cell takes from its parent
   algaeBreedReserve: 0.2,
   algaeBreedSize: 0.5, // algae can bud once grown to this share of full size
+  algaeSporeChance: 0.05, // chance a new algae cell is a spore that drifts off instead of budding next door
+  algaeSporeRange: 30, // how far (squares) a spore can drift
 
   // --- Swimmers ---
   swimMoveCost: 1, // multiplier on the ½·m·v² energy cost of moving
