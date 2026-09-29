@@ -45,7 +45,16 @@ let selection: { x0: number; y0: number; x1: number; y1: number } | null = null;
 let dragStart: { x: number; y: number } | null = null;
 let history: Array<{ grass: number; seeds: number; algae: number }> = [];
 
-type Tool = "select" | "rain" | "dryer";
+type Tool = "select" | "rain" | "dryer" | "seeds" | "algae";
+const TOOL_KEYS: Record<string, Tool> = { s: "select", r: "rain", d: "dryer", g: "seeds", a: "algae" };
+const BRUSH_COLOURS: Record<Exclude<Tool, "select">, string> = {
+  rain: "rgba(120,180,255,0.9)",
+  dryer: "rgba(255,170,80,0.9)",
+  seeds: "rgba(235,215,110,0.9)",
+  algae: "rgba(90,210,190,0.9)",
+};
+/** Fractional sprays owed but not yet placed (so low rates still spray). */
+let sprayOwed = 0;
 let tool: Tool = "select";
 /** Mouse position over the map in (fractional) grid squares, or null. */
 let mouse: { x: number; y: number } | null = null;
@@ -61,12 +70,33 @@ function brushSize(): number {
   return Number(sizeInput.value);
 }
 
-/** Applies the rain / dryer brush for `ticks` ticks' worth of time. */
+/** Spray tools: rate slider (0..100) -> particles per second over the whole brush, log scale. */
+function sprayPerSecond(): number {
+  return 2 * 10 ** (Number(rateInput.value) / 40);
+}
+
+/** Applies the current brush for `ticks` ticks' worth of time. */
 function applyBrush(ticks: number): void {
   if (!painting || !mouse || tool === "select") return;
-  const amount = brushRate() * ticks;
-  if (tool === "rain") world.water.addWater(mouse.x, mouse.y, brushSize(), amount);
-  else world.water.removeWater(mouse.x, mouse.y, brushSize(), amount);
+  if (tool === "rain" || tool === "dryer") {
+    const amount = brushRate() * ticks;
+    if (tool === "rain") world.water.addWater(mouse.x, mouse.y, brushSize(), amount);
+    else world.water.removeWater(mouse.x, mouse.y, brushSize(), amount);
+    return;
+  }
+  // Spray: particles land at random points spread evenly over the circle.
+  sprayOwed += (sprayPerSecond() / TICKS_PER_SECOND) * ticks;
+  const r = brushSize();
+  for (; sprayOwed >= 1; sprayOwed--) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = r * Math.sqrt(Math.random());
+    const x = Math.round(mouse.x + Math.cos(angle) * dist);
+    const y = Math.round(mouse.y + Math.sin(angle) * dist);
+    if (x < 0 || y < 0 || x >= GRID_W || y >= GRID_H) continue;
+    const i = y * GRID_W + x;
+    if (tool === "seeds") world.addSeed(i);
+    else world.addAlgae(i);
+  }
 }
 
 function setTool(t: Tool): void {
@@ -76,11 +106,15 @@ function setTool(t: Tool): void {
   for (const b of toolButtons) b.setAttribute("aria-pressed", String(b.dataset.tool === t));
   brushEl.classList.toggle("disabled", t === "select");
   rateInput.disabled = sizeInput.disabled = t === "select";
+  sprayOwed = 0;
+  refreshBrushLabels();
   draw();
 }
 
 function refreshBrushLabels(): void {
-  rateVal.textContent = `${(brushRate() * TICKS_PER_SECOND).toFixed(3)}/s`;
+  rateVal.textContent = tool === "seeds" || tool === "algae"
+    ? `${Math.round(sprayPerSecond())} per s`
+    : `${(brushRate() * TICKS_PER_SECOND).toFixed(3)}/s`;
   sizeVal.textContent = `${brushSize()} sq`;
 }
 /**
@@ -177,8 +211,8 @@ function draw(): void {
     ctx.setLineDash([]);
   }
   if (mouse && tool !== "select") {
-    // Brush outline: blue for rain, orange for the dryer.
-    ctx.strokeStyle = tool === "rain" ? "rgba(120,180,255,0.9)" : "rgba(255,170,80,0.9)";
+    // Brush outline, coloured by tool.
+    ctx.strokeStyle = BRUSH_COLOURS[tool];
     ctx.lineWidth = painting ? 2 : 1;
     ctx.setLineDash(painting ? [] : [5, 4]);
     ctx.beginPath();
@@ -482,8 +516,8 @@ window.addEventListener("keydown", (e) => {
     setRunning(false);
     world.step();
     refreshStats();
-  } else if (e.key === "s" || e.key === "r" || e.key === "d") {
-    setTool(e.key === "s" ? "select" : e.key === "r" ? "rain" : "dryer");
+  } else if (TOOL_KEYS[e.key]) {
+    setTool(TOOL_KEYS[e.key]);
   } else if (e.key >= "1" && e.key <= "6") {
     viewSel.selectedIndex = Number(e.key) - 1;
     draw();

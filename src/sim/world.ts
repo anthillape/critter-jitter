@@ -95,31 +95,50 @@ export class World {
     }
     let placed = 0;
     for (let tries = 0; placed < this.p.initialSeeds && tries < 1e6; tries++) {
-      const i = Math.floor(rng() * CELL_COUNT);
-      if (water.isWater(i) || this.kind[i] !== EMPTY || this.nutrients[i] < this.p.seedN) continue;
-      this.nutrients[i] -= this.p.seedN;
-      this.kind[i] = SEED;
-      this.floraN[i] = this.p.seedN;
-      this.floraE[i] = this.p.seedE;
-      this.age[i] = 1 + Math.floor(rng() * GRASS_DEFAULTS[G_GERM]);
-      setGenes(this.genes, i, GRASS_DEFAULTS);
-      // Start with a spread of water preferences so every moisture niche has
-      // a chance from the outset; evolution then refines them.
-      const pref = GRASS_DEFAULTS[G_WATER_PREF] + (rng() - 0.5) * this.p.initialWaterPrefSpread;
-      this.genes[i * GENE_COUNT + G_WATER_PREF] = Math.max(0.01, Math.min(1, pref));
-      placed++;
+      if (this.addSeed(Math.floor(rng() * CELL_COUNT), rng)) placed++;
     }
     placed = 0;
     for (let tries = 0; placed < this.p.initialAlgae && tries < 1e6; tries++) {
-      const i = Math.floor(rng() * CELL_COUNT);
-      if (!water.isWater(i) || this.kind[i] !== EMPTY || this.nutrients[i] < this.p.algaeChildN) continue;
-      this.nutrients[i] -= this.p.algaeChildN;
-      this.kind[i] = ALGAE;
-      this.floraN[i] = this.p.algaeChildN;
-      this.floraE[i] = this.p.algaeChildE;
-      setGenes(this.genes, i, ALGAE_DEFAULTS);
-      placed++;
+      if (this.addAlgae(Math.floor(rng() * CELL_COUNT))) placed++;
     }
+  }
+
+  /**
+   * Places a new grass seed with the starting genes (used at world creation
+   * and by the seed spray tool). Its nutrients come from the square's ground,
+   * so nutrients stay conserved. Returns false if the square is water,
+   * occupied, or too poor in nutrients.
+   */
+  addSeed(i: number, rng: Rng = this.rng): boolean {
+    if (this.water.isWater(i) || this.kind[i] !== EMPTY || this.nutrients[i] < this.p.seedN) return false;
+    this.nutrients[i] -= this.p.seedN;
+    this.kind[i] = SEED;
+    this.floraN[i] = this.p.seedN;
+    this.floraE[i] = this.p.seedE;
+    this.bornTick[i] = this.tick;
+    this.age[i] = 1 + Math.floor(rng() * GRASS_DEFAULTS[G_GERM]);
+    setGenes(this.genes, i, GRASS_DEFAULTS);
+    // Start with a spread of water preferences so every moisture niche has
+    // a chance from the outset; evolution then refines them.
+    const pref = GRASS_DEFAULTS[G_WATER_PREF] + (rng() - 0.5) * this.p.initialWaterPrefSpread;
+    this.genes[i * GENE_COUNT + G_WATER_PREF] = Math.max(0.01, Math.min(1, pref));
+    return true;
+  }
+
+  /**
+   * Places a new algae cell with the starting genes, taking its nutrients
+   * from the water. Returns false on land, occupied or nutrient-poor squares.
+   */
+  addAlgae(i: number): boolean {
+    if (!this.water.isWater(i) || this.kind[i] !== EMPTY || this.nutrients[i] < this.p.algaeChildN) return false;
+    this.nutrients[i] -= this.p.algaeChildN;
+    this.kind[i] = ALGAE;
+    this.floraN[i] = this.p.algaeChildN;
+    this.floraE[i] = this.p.algaeChildE;
+    this.bornTick[i] = this.tick;
+    this.age[i] = 0;
+    setGenes(this.genes, i, ALGAE_DEFAULTS);
+    return true;
   }
 
   step(): void {

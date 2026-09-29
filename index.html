@@ -91,9 +91,11 @@
               <button class="tool" data-tool="select" aria-pressed="true" title="Drag to select an area and see its stats (S)">Select</button>
               <button class="tool" data-tool="rain" aria-pressed="false" title="Hold to rain under the cursor, adding water to the world (R)">Rain</button>
               <button class="tool" data-tool="dryer" aria-pressed="false" title="Hold to dry the ground under the cursor, removing water from the world (D)">Dryer</button>
+              <button class="tool" data-tool="seeds" aria-pressed="false" title="Hold to spray grass seeds at random under the cursor. They land only on empty land, and take their nutrients from the ground they land on (G)">Seeds</button>
+              <button class="tool" data-tool="algae" aria-pressed="false" title="Hold to spray algae at random under the cursor. It lands only in empty water, and takes its nutrients from the water (A)">Algae</button>
             </div>
             <div class="brush" id="brush">
-              <label class="setting" title="How much water per second the brush adds or removes at its centre">
+              <label class="setting" id="rateLabel" title="How much water per second the brush adds or removes at its centre (Rain / Dryer), or how many seeds or algae it sprays per second (Seeds / Algae)">
                 <span class="setting-name">Rate</span><input id="rate" type="range" min="0" max="100" value="60" /><span id="rateVal" class="setting-value"></span>
               </label>
               <label class="setting" title="Radius of the brush, in squares">
@@ -122,6 +124,7 @@
               <tr><td>.</td><td>Step one tick</td></tr>
               <tr><td>1 – 6</td><td>Switch view</td></tr>
               <tr><td>S / R / D</td><td>Select / Rain / Dryer cursor</td></tr>
+              <tr><td>G / A</td><td>Seeds / Algae spray cursor</td></tr>
               <tr><td>Esc</td><td>Clear selection</td></tr>
             </table>
             <h2>Map</h2>
