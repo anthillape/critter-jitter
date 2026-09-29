@@ -519,7 +519,7 @@ export class World {
         const i = y * GRID_W + x;
         r.squares++;
         r.meanHeight += height[i];
-        r.waterVolume += water.surface[i] + water.soil[i];
+        r.waterVolume += water.surface[i] + water.soilColumn(i);
         r.meanCloud += water.cloudAt(x, y);
         if (water.isWater(i)) {
           r.water++;

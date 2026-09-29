@@ -21,14 +21,12 @@ export const MIN_HEIGHT = 1;
 export const MAX_HEIGHT = 16;
 /** Terrain generation settings; changing them only affects newly generated worlds. */
 export const TERRAIN = {
-  /** Lakes start filled so squares at or below this height are under water. */
-  waterLevel: 6,
-  /** Initial soil moisture reaches this many squares from water (then the water cycle takes over). */
-  irrigationRange: 60,
   /** Size of landmasses: noise is sampled at 1/landScale per square. */
   landScale: 120,
   /** Noise octaves: more gives rougher ground with small valleys for streams. */
   octaves: 7,
+  /** Layers in each square's soil column (top layer = what plants feel). */
+  soilLayers: 3,
 };
 
 /**
@@ -51,14 +49,14 @@ export const PARAMS = {
 
   // --- Water cycle (total water is conserved) ---
   waterDepthMin: 0.3, // standing water at least this deep makes a "water" square
-  soilCap: 1.0, // water a square's soil can hold
-  infiltration: 0.0002, // standing water soaking into dry soil per tick (less as it fills); much slower than run-off
-  soilWick: 0.2, // soil water spreading between squares (any direction; slow uphill pull)
-  soilDrain: 0.15, // extra soil drainage downhill per level of height difference
-  surfaceFlow: 0.2, // deep water (lakes, ponds, floods) flow toward lower water surfaces
-  runoffRate: 0.1, // river flow speed: share of shallow water moving one square downhill per tick (slider in the UI)
-  evapSurface: 0.0000025, // standing water evaporating per square per tick
-  evapSoil: 0.00005, // fraction of soil water evaporating per tick
+  flowRate: 0.3, // how fast standing water runs to lower neighbours (share of what it could move per tick)
+  flowFocus: 2, // how strongly water picks the steepest way (higher = narrower channels)
+  evaporation: 0.00003, // water evaporating from every square per tick (from surface water, else the top soil)
+  infiltration: 0.0005, // standing water soaking into dry top soil per tick (less as it fills)
+  soilCap: 1.0, // water each soil layer can hold
+  percolation: 0.001, // water seeping down from one soil layer to the next per tick (gravity)
+  capillary: 0.003, // water pulled up toward a drier layer above per tick (capillary pressure)
+  groundFlow: 0.01, // deepest layer (groundwater) flowing sideways toward lower ground
   initialCloud: 0.17, // share of all water that starts in the clouds
   rainMinCloud: 0.12, // no rain until the clouds hold at least this share of all water
   rainStart: 0.2, // at this share, rain has a rainChance chance of starting each tick...
@@ -171,7 +169,8 @@ export const PARAMS = {
   initialAlgae: 150,
   initialSwimmers: 80,
   initialSharks: 12,
-  initialSoilWetness: 1, // scales the starting damp band around the lakes
+  startingSurfaceWater: 1.3, // standing water at the start, as an average depth over the whole world
+  initialSoilWetness: 0.4, // how full the soil starts (0..1); full under the starting lakes
   initialWaterPrefSpread: 0.85, // starting seeds' water preference is spread over this range around the default
 };
 

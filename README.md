@@ -18,7 +18,7 @@ npm run sim -- [seed] [ticks] [reportEvery] [width] [height]   # headless run fo
 The page opens paused on the **Start** tab, with a preview of the map. Every
 starting condition is there: seed, terrain (world width and height,
 landmass size, roughness), water
-(sea level, starting wet-ground reach, starting soil wetness, starting cloud
+(starting standing water, soil layers, starting soil wetness, starting cloud
 water), life (starting nutrients, number of grass seeds and algae, spread of
 water preferences) and starting genes. The preview and a summary (land/lake
 split, total water and where it is, total nutrients, starting life) update as
@@ -39,8 +39,9 @@ is shown next to the speed control. All rates in `PARAMS` are per tick.
 1. **Ground**: every square has a height of 1–16 from seeded Perlin fBm noise,
    generated once per world seed and never changed. Brown, lighter on higher
    ground, darker the more saturated it is.
-2. **Water**: lakes start filled to a flat surface so squares at height ≤ 6
-   are under water. After that, water is dynamic (see *Water cycle*). A square
+2. **Water**: there is no special water height. The starting standing water
+   is poured into the lowest ground, filling it to one flat level, and after
+   that water is dynamic (see *Water cycle*). A square
    counts as water while its standing water is at least 0.3 deep. Deeper water
    is more opaque, and wetter ground is darker.
 3. **Flora**: at most one organism (or seed) per square.
@@ -145,22 +146,22 @@ accounted for.
 The total amount of water is constant apart from the tools (the panel shows it). It is split
 between three places:
 
-- **Standing water** comes in two kinds:
-  - **Run-off** (shallower than 0.3) runs downhill fast, half of it moving
-    one square each tick. It follows a drainage network worked out once from
-    the terrain: a priority flood from the lakes gives every square a route
-    down to a lake. Flows merge into branching streams, drawn as bright blue
-    lines, that swell during rain and dry up afterwards. Water follows the
-    smooth height before rounding to levels 1–16, plus fine detail octaves,
-    so it gathers in small valleys instead of spreading across flat terraces.
-  - **Deep water** (lakes, ponds, a stream in flood) flows toward
-    neighbours with a lower water surface, so lakes stay level.
-- **Soil water** (up to 1 per square) soaks in from standing water slowly,
-  much more slowly than run-off moves, and more slowly still as the soil
-  fills. It spreads slowly between squares in any direction, which pulls
-  water up and away from lakes. It drains downhill faster, in proportion to
-  the height difference. Water over the soil's capacity seeps back out as
-  standing water.
+- **Standing water** flows downhill everywhere by the same rule: each
+  square sends water to lower neighbours (all eight, judged by ground plus
+  water level), favouring the steepest way (*Channelling*), and never more
+  than would level the two squares. Streams, ponds and lakes all come out of
+  that one rule; nothing is levelled or routed specially.
+- **Soil water** sits in a column of soil layers under every square (3 by
+  default, each holding up to 1). Standing water soaks into the top layer,
+  more slowly as it fills. Within a column, water seeps down slowly under
+  gravity, and capillary pressure pulls it back up toward a drier layer
+  above. Water that doesn't fit is pushed up the column, and out of the top
+  it comes back out as a spring. The deepest layer is groundwater: it flows
+  sideways toward lower ground by the difference in head. The ground is
+  drawn and plants feel only the top layer; the whole column counts towards
+  water totals.
+- **Evaporation** takes the same amount from every square each tick: from
+  standing water if there is any, otherwise from the top soil layer.
 - **Clouds**: standing water and soil water evaporate into one shared cloud
   pool. Clouds are drawn as white translucent shapes made from 3D Perlin
   noise: the wind carries them across the map, and time runs along the third
@@ -174,8 +175,9 @@ between three places:
   water, but about one rain in twelve empties the clouds completely. Rain
   tapers off as the clouds thin out, and rain clouds fade to grey.
 
-The world starts with 17% of its water in the clouds, so lakes begin at the
-level-6 shoreline and don't shrink much to fill the sky.
+The world starts with 17% of its water in the clouds. The starting standing
+water (1.3 deep averaged over the world by default) fills the lowest ground,
+the soil under it starts full and the rest starts 40% wet.
 
 When water levels move, grass on a square that floods drowns and algae on a
 square that dries out is stranded. Either way, its nutrients go back to the

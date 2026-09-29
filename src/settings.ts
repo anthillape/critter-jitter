@@ -84,7 +84,7 @@ function critterSettings(sp: SpeciesDef, group: string, noun: string, food: stri
   const e = (name: string, label: string, tip: string, range: Pick<Setting, "min" | "max" | "log" | "int">) =>
     param(k(name), { group, label, tip, ...range });
   return [
-    e("MoveCost", "Cost of moving", `Multiplier on the energy a ${noun} spends moving (½ × mass × speed², where fat adds mass).`, { min: 0, max: 20 }),
+    e("MoveCost", "Cost of moving", `Multiplier on the energy a ${noun} spends moving (½ × mass × speed², where fat adds mass).`, { min: 0.005, max: 20, log: true }),
     e("Metabolism", "Upkeep per unit of mass", `Energy a ${noun} burns each tick just staying alive, per unit of body mass (fat counts as mass).` + PER_SEC, { min: 0.00005, max: 0.01, log: true }),
     e("FatMass", "Weight of fat", `Mass added by each unit of fat. Fatter ${noun}s cost more to move and to keep alive.`, { min: 0, max: 2 }),
     e("EnergyMax", "Short-term energy store", `Energy a ${noun} holds before the surplus goes to fat.`, { min: 0.2, max: 20, log: true }),
@@ -147,50 +147,50 @@ export const SETTINGS: Setting[] = [
   }),
 
   // --- Water on the ground ---
-  param("runoffRate", {
-    group: "Water on the ground", label: "River flow speed",
-    tip: "How fast streams and run-off flow downhill: the share of shallow water that moves one square down its channel each tick.",
+  param("flowRate", {
+    group: "Water on the ground", label: "Water flow speed",
+    tip: "How fast standing water runs to lower neighbouring squares (compared by ground height plus water depth). The same rule makes streams run and lakes settle level.",
     min: 0.01, max: 0.5, log: true,
   }),
-  param("surfaceFlow", {
-    group: "Water on the ground", label: "Lake levelling speed",
-    tip: "How fast deep water (lakes, ponds, floods) flows toward lower water levels to even itself out.",
-    min: 0.02, max: 0.24, log: true,
+  param("flowFocus", {
+    group: "Water on the ground", label: "Channelling",
+    tip: "How strongly running water picks the steepest way down. Higher values gather it into narrow streams; lower values spread it in sheets.",
+    min: 0.5, max: 6,
   }),
   param("waterDepthMin", {
     group: "Water on the ground", label: "Depth that counts as water",
-    tip: "Standing water at least this deep makes a water square: algae can live there, grass drowns, and lakes level out. Shallower water runs off as streams.",
+    tip: "Standing water at least this deep makes a water square: algae can live there, grass drowns, and swimmers can swim.",
     min: 0.05, max: 1.5, log: true,
+  }),
+  param("evaporation", {
+    group: "Water on the ground", label: "Evaporation",
+    tip: "Water evaporating into the clouds from every square each tick: from standing water if there is any, otherwise from the top soil." + PER_SEC,
+    min: 1e-6, max: 5e-4, log: true,
   }),
   param("infiltration", {
     group: "Water on the ground", label: "Soak-in speed",
-    tip: "How fast standing water soaks into dry ground. It slows as the soil fills. Lower = more run-off and bigger streams." + PER_SEC,
-    min: 0.00002, max: 0.01, log: true,
+    tip: "How fast standing water soaks into the top soil layer. It slows as the layer fills. Lower = more run-off and bigger streams." + PER_SEC,
+    min: 0.00002, max: 0.02, log: true,
   }),
   param("soilCap", {
-    group: "Water on the ground", label: "Soil water capacity",
-    tip: "How much water each square's soil can hold. Extra water seeps out as standing water.",
+    group: "Water on the ground", label: "Soil layer capacity",
+    tip: "How much water each soil layer can hold.",
     min: 0.2, max: 4, log: true,
   }),
-  param("soilWick", {
-    group: "Water on the ground", label: "Soil water spreading",
-    tip: "How fast soil water spreads to drier neighbours in any direction. This is what slowly pulls water up and away from lakes.",
-    min: 0.005, max: 0.24, log: true,
+  param("percolation", {
+    group: "Water on the ground", label: "Seeping down",
+    tip: "How fast water seeps down from one soil layer to the next under gravity (faster when the layer above is wet and the one below dry)." + PER_SEC,
+    min: 0.00005, max: 0.05, log: true,
   }),
-  param("soilDrain", {
-    group: "Water on the ground", label: "Soil drainage downhill",
-    tip: "Extra soil-water flow downhill, in proportion to the slope.",
-    min: 0.005, max: 0.6, log: true,
+  param("capillary", {
+    group: "Water on the ground", label: "Capillary rise",
+    tip: "How strongly water is pulled back up toward a drier soil layer above (water pressure), keeping the topsoil damp over wet ground." + PER_SEC,
+    min: 0, max: 0.05,
   }),
-  param("evapSurface", {
-    group: "Water on the ground", label: "Evaporation from open water",
-    tip: "Water evaporating into the clouds from each square of standing water, each tick." + PER_SEC,
-    min: 1e-7, max: 1e-4, log: true,
-  }),
-  param("evapSoil", {
-    group: "Water on the ground", label: "Evaporation from soil",
-    tip: "Share of each square's soil water evaporating into the clouds each tick." + PER_SEC,
-    min: 1e-6, max: 2e-3, log: true,
+  param("groundFlow", {
+    group: "Water on the ground", label: "Groundwater flow",
+    tip: "How fast groundwater (the deepest soil layer) flows sideways toward lower ground. It gathers under valleys and comes up as springs when the soil there is full.",
+    min: 0, max: 0.1,
   }),
 
   // --- Clouds & rain ---
@@ -472,21 +472,21 @@ export const SETTINGS: Setting[] = [
   }),
 
   // --- Starting conditions: water ---
-  terrain("waterLevel", {
-    group: "Water", label: "Sea level",
-    tip: "Lakes start filled up to this height (1–16), so everything at or below it begins under water.",
-    min: 1, max: 14, int: true,
+  param("startingSurfaceWater", {
+    group: "Water", label: "Starting surface water",
+    tip: "How much standing water there is at the start, as an average depth over the whole world. It fills the lowest ground first, so lakes form wherever the land is lowest.",
+    min: 0, max: 6, newWorld: true,
   }),
-  terrain("irrigationRange", {
-    group: "Water", label: "Starting wet-ground reach",
-    tip: "How far from the lakes the ground starts out damp, in squares. After that, the water cycle takes over.",
-    min: 5, max: 150, int: true,
+  terrain("soilLayers", {
+    group: "Water", label: "Soil layers",
+    tip: "How many layers each square's soil column has. The top layer is what plants feel; water seeps down through the column and is pulled back up, and the deepest layer flows as groundwater.",
+    min: 1, max: 8, int: true,
   }),
 
   param("initialSoilWetness", {
     group: "Water", label: "Starting soil wetness",
-    tip: "How wet the ground starts near the lakes (1 = the usual damp band, 0 = bone dry, above 1 = soggier). More soil water means more total water in the world.",
-    min: 0, max: 2, newWorld: true,
+    tip: "How full every soil layer starts (0 = bone dry, 100% = soaked). Soil under the starting lakes starts full. More soil water means more total water in the world.",
+    min: 0, max: 1, fmt: pct, newWorld: true,
   }),
   param("initialCloud", {
     group: "Water", label: "Starting cloud water",
