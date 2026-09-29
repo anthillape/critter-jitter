@@ -6,6 +6,12 @@ pixels), and its width and height can be changed on the Start tab. Stats and
 graphs sit in masonry-style cards under the map, and a tabbed sidebar (Start,
 World, Tools & weather, Settings, Help) fills the rest of the window.
 
+The map stays in place while the cards scroll on their own underneath it (the
+map shrinks to fit if the window is short). Click a card's title to collapse
+or expand it, or drag the title to move the card: the other cards make room
+as you drag, and it snaps into its new place when you let go. The order and
+collapsed cards are remembered in the browser.
+
 ```sh
 npm install
 npm run dev        # open the printed URL

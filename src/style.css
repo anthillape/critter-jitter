@@ -23,11 +23,21 @@ body {
   padding: 16px;
   align-items: start;
 }
-.main-col { min-width: 0; }
+/* The map stays put and the cards under it scroll on their own. The map
+   shrinks (keeping its shape) if it would leave the cards too little room. */
+.main-col {
+  min-width: 0;
+  position: sticky;
+  top: 16px;
+  height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+}
 #world {
   display: block;
-  width: 100%;
-  max-width: 1200px;
+  flex: none;
+  /* Full width, unless that would make it taller than the window minus room for the cards. */
+  width: min(100%, calc((100vh - 32px - 260px) * var(--map-aspect, 2.667)));
   height: auto;
   image-rendering: pixelated;
   border: 1px solid var(--line);
@@ -46,11 +56,39 @@ body {
   column-width: 270px;
   column-gap: 12px;
   margin-top: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 .cards .card {
   break-inside: avoid;
   margin-bottom: 12px;
   display: block;
+}
+/* Card titles: click to collapse, drag to move. */
+.card-title { cursor: grab; user-select: none; touch-action: none; }
+.card-title::before { content: "▾"; display: inline-block; width: 1em; color: var(--muted); }
+.card.collapsed .card-title::before { content: "▸"; }
+.card.collapsed > :not(.card-title) { display: none; }
+.card.collapsed .card-title { margin-bottom: 0; }
+.card-title:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+.card.dragging {
+  position: fixed;
+  z-index: 10;
+  margin: 0;
+  pointer-events: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  border-color: var(--accent);
+}
+.card.dragging .card-title { cursor: grabbing; }
+.card.settling { transition: left 0.15s ease-out, top 0.15s ease-out; }
+.card-placeholder {
+  break-inside: avoid;
+  margin-bottom: 12px;
+  border: 1px dashed var(--accent);
+  border-radius: 6px;
+  background: rgba(127, 176, 74, 0.06);
 }
 .card, .sidebar {
   background: var(--panel);
@@ -85,6 +123,9 @@ body {
 @media (max-width: 900px) {
   .app { grid-template-columns: minmax(0, 1fr); padding: 8px; }
   .sidebar { position: static; height: auto; }
+  .main-col { position: static; height: auto; }
+  #world { width: 100%; }
+  .cards { overflow: visible; }
 }
 h1 { font-size: 18px; margin: 0 0 10px; }
 h2 { font-size: 13px; margin: 14px 0 4px; color: var(--muted); font-weight: 600; }

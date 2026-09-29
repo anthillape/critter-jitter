@@ -6,6 +6,7 @@ import { formatSetting, fromSlider, SETTINGS, setCritterTraitsHook, SLIDER_STEPS
 import { bodyMass, CritterSystem, Mode, MODE_NAMES, T_LITTER, type Corpse, type Critter } from "./sim/critters";
 import type { CritterCounts } from "./sim/world";
 import { Sound, type SoundName } from "./sound";
+import { setupCards } from "./cards";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -234,6 +235,7 @@ function newWorld(seed: number): void {
   applyWorldSize();
   canvas.width = GRID_W * CELL_PX;
   canvas.height = GRID_H * CELL_PX;
+  canvas.style.setProperty("--map-aspect", String(GRID_W / GRID_H)); // lets CSS shrink it to fit the window
   ctx.imageSmoothingEnabled = false;
   hover = -1;
   world = new World(seed);
@@ -942,6 +944,8 @@ function selectTab(tab: HTMLButtonElement): void {
   }
 }
 for (const t of tabs) t.addEventListener("click", () => selectTab(t));
+
+setupCards(document.querySelector<HTMLElement>(".cards")!);
 
 setCritterTraitsHook(() => {
   world.fish.reexpress();
