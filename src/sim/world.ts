@@ -5,6 +5,7 @@ import {
 } from "./genes";
 import { Hydrology } from "./hydrology";
 import { Wind } from "./wind";
+import { SwimmerSystem } from "./swimmers";
 import { mulberry32, type Rng } from "./rng";
 import { generateTerrain, type Terrain } from "./terrain";
 
@@ -33,7 +34,15 @@ export interface Stats {
   nutrientsGround: number;
   nutrientsWater: number;
   nutrientsFlora: number;
+  /** Nutrients in living swimmers and rotting swimmer bodies. */
+  nutrientsSwimmers: number;
   nutrientsTotal: number;
+  swimmers: number;
+  swimmerCorpses: number;
+  swimmerBirths: number;
+  swimmerDeaths: number;
+  swimmersStarved: number;
+  swimmersOldAge: number;
   waterSurface: number;
   waterSoil: number;
   waterCloud: number;
@@ -47,6 +56,7 @@ export class World {
   readonly terrain: Terrain;
   readonly water: Hydrology;
   readonly wind: Wind;
+  readonly swimmers: SwimmerSystem;
   readonly p: Params;
   readonly rng: Rng;
   tick = 0;
@@ -78,6 +88,22 @@ export class World {
     this.wind = new Wind(seed, params);
     this.water = new Hydrology(this.terrain, params, this.wind);
     this.rng = mulberry32(seed ^ 0x9e3779b9);
+    this.swimmers = new SwimmerSystem({
+      p: this.p,
+      rng: this.rng,
+      kind: this.kind,
+      floraN: this.floraN,
+      floraE: this.floraE,
+      nutrients: this.nutrients,
+      isWater: (i) => this.water.isWater(i),
+      clearFlora: (i) => {
+        this.kind[i] = EMPTY;
+        this.floraN[i] = 0;
+        this.floraE[i] = 0;
+        this.age[i] = 0;
+        this.deaths[1]++;
+      },
+    });
     this.seedInitialState();
   }
 
@@ -97,6 +123,10 @@ export class World {
     placed = 0;
     for (let tries = 0; placed < this.p.initialAlgae && tries < 1e6; tries++) {
       if (this.addAlgae(Math.floor(rng() * CELL_COUNT))) placed++;
+    }
+    placed = 0;
+    for (let tries = 0; placed < this.p.initialSwimmers && tries < 1e6; tries++) {
+      if (this.swimmers.spawnRandom(rng() * GRID_W, rng() * GRID_H)) placed++;
     }
   }
 
@@ -150,6 +180,7 @@ export class World {
     } else {
       for (let i = CELL_COUNT - 1; i >= 0; i--) this.updateSquare(i);
     }
+    this.swimmers.step();
   }
 
   /**
@@ -389,6 +420,7 @@ export class World {
 
   /** Scans the world for population / nutrient totals and resets event counters. */
   stats(): Stats {
+    const sw = this.swimmers;
     let seeds = 0, grass = 0, algae = 0;
     let ground = 0, waterN = 0, flora = 0, waterSquares = 0;
     const water = this.water;
@@ -415,7 +447,14 @@ export class World {
       nutrientsGround: ground,
       nutrientsWater: waterN,
       nutrientsFlora: flora,
-      nutrientsTotal: ground + waterN + flora,
+      nutrientsSwimmers: sw.nutrientTotal(),
+      nutrientsTotal: ground + waterN + flora + sw.nutrientTotal(),
+      swimmers: sw.swimmers.length,
+      swimmerCorpses: sw.corpses.length,
+      swimmerBirths: sw.births,
+      swimmerDeaths: sw.deaths,
+      swimmersStarved: sw.starved,
+      swimmersOldAge: sw.oldAge,
       habitatLost: this.habitatLost,
       ...(() => {
         const m = water.measure();
@@ -429,6 +468,7 @@ export class World {
     this.starved = 0;
     this.oldAge = 0;
     this.habitatLost = 0;
+    sw.births = sw.deaths = sw.starved = sw.oldAge = 0;
     return s;
   }
 

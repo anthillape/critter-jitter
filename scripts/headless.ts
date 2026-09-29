@@ -27,7 +27,7 @@ for (let k = 1; k <= ticks; k++) {
     const ms = (performance.now() - t1) / every;
     t1 = performance.now();
     console.log(
-      `t=${s.tick} seeds=${s.seeds} grass=${s.grass} algae=${s.algae} ` +
+      `t=${s.tick} seeds=${s.seeds} grass=${s.grass} algae=${s.algae} swim=${s.swimmers} (b/d ${s.swimmerBirths}/${s.swimmerDeaths}, starved ${s.swimmersStarved}, old ${s.swimmersOldAge}, corpses ${s.swimmerCorpses}) ` +
       `gB/gD=${s.grassBirths}/${s.grassDeaths} aB/aD=${s.algaeBirths}/${s.algaeDeaths} ` +
       `starved=${s.starved} old=${s.oldAge} N[g/w/f]=${s.nutrientsGround.toFixed(0)}/${s.nutrientsWater.toFixed(0)}/${s.nutrientsFlora.toFixed(0)} ` +
       `drift=${(s.nutrientsTotal - start.nutrientsTotal).toExponential(1)} lost=${s.habitatLost}\n    ` +

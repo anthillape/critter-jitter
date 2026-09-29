@@ -94,12 +94,32 @@ export const PARAMS = {
   algaeChildE: 0.2, // energy a new algae cell takes from its parent
   algaeBreedReserve: 0.2,
 
+  // --- Swimmers ---
+  swimMoveCost: 1, // multiplier on the ½·m·v² energy cost of moving
+  swimMetabolism: 0.0012, // energy burned per tick per unit of body mass (fat adds mass)
+  swimFatMass: 0.4, // mass added per unit of fat
+  swimEnergyMax: 1, // short-term energy store; surplus goes to fat
+  swimNutrientLoss: 0.0004, // share of body nutrients shed into the water each tick
+  swimMinNutrients: 0.005, // a swimmer whose body nutrients fall below this dies
+  swimFoodRadius: 7, // squares searched for algae when hungry
+  swimMateRadius: 14, // squares searched for a mate
+  swimFoodInterval: 10, // ticks between food searches
+  swimMateInterval: 40, // ticks between mate searches (less often than food)
+  swimBreedCooldown: 600, // ticks after mating before a swimmer can mate again
+  swimMinChildEnergy: 0.3, // parents won't make a child with less energy than this
+  swimMinChildNutrients: 0.04, // ...or fewer nutrients than this
+  swimRotRate: 0.004, // share of a corpse's nutrients returned to its square each tick
+  swimGeneStrength: 0.35, // how strongly each gene nudges its traits
+  swimStartEnergy: 1, // energy each starting swimmer gets
+  swimStartNutrients: 0.1, // nutrients each starting swimmer takes from the water
+
   // --- Genetics ---
   fullGrowth: 0.98, // fraction of max nutrients considered "fully grown"
 
   // --- Initial population ---
   initialSeeds: 400,
   initialAlgae: 150,
+  initialSwimmers: 80,
   initialSoilWetness: 1, // scales the starting damp band around the lakes
   initialWaterPrefSpread: 0.85, // starting seeds' water preference is spread over this range around the default
 };

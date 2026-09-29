@@ -2,7 +2,8 @@ import { CELL_PX, GRID_H, GRID_W, PARAMS, TICKS_PER_SECOND } from "./sim/config"
 import { ALGAE_UNUSED_GENES, GENE_COUNT, GENE_NAMES } from "./sim/genes";
 import { ALGAE, GRASS, SEED, World, type GroupStats, type RegionStats } from "./sim/world";
 import { Renderer, type View } from "./render";
-import { formatSetting, fromSlider, SETTINGS, SLIDER_STEPS, toSlider, type Setting } from "./settings";
+import { formatSetting, fromSlider, SETTINGS, setSwimmerTraitsHook, SLIDER_STEPS, toSlider, type Setting } from "./settings";
+import { MODE_NAMES, SWIMMER_TRAITS, SwimmerSystem, T_LITTER } from "./sim/swimmers";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -13,6 +14,10 @@ const chart = $<HTMLCanvasElement>("chart");
 const chartCtx = chart.getContext("2d")!;
 const waterChart = $<HTMLCanvasElement>("waterChart");
 const waterChartCtx = waterChart.getContext("2d")!;
+const swimChart = $<HTMLCanvasElement>("swimChart");
+const swimChartCtx = swimChart.getContext("2d")!;
+const statsSwimmers = $<HTMLTableElement>("statsSwimmers");
+const swimTraits = $<HTMLTableElement>("swimTraits");
 const playBtn = $<HTMLButtonElement>("play");
 const speedSel = $<HTMLSelectElement>("speed");
 const viewSel = $<HTMLSelectElement>("view");
@@ -54,6 +59,7 @@ interface Sample {
   cloud: number;
   surface: number;
   soil: number;
+  swimmers: number;
   /** It rained at some point since the previous sample. */
   rained: boolean;
 }
@@ -275,6 +281,7 @@ function refreshStartPanel(): void {
 function draw(): void {
   renderer.draw(viewSel.value as View);
   ctx.drawImage(renderer.canvas, 0, 0, GRID_W * CELL_PX, GRID_H * CELL_PX);
+  drawSwimmers();
   if (hover >= 0) {
     ctx.strokeStyle = "rgba(255,255,255,0.8)";
     const x = (hover % GRID_W) * CELL_PX;
@@ -301,6 +308,33 @@ function draw(): void {
     ctx.setLineDash([]);
     ctx.lineWidth = 1;
   }
+}
+
+/**
+ * Swimmers are 3-pixel lines pointing the way they swim, wiggling side to
+ * side while they move. Rotting bodies are faint grey dots.
+ */
+function drawSwimmers(): void {
+  const sw = world.swimmers;
+  ctx.fillStyle = "rgba(170,170,160,0.55)";
+  for (const c of sw.corpses) ctx.fillRect(c.x * CELL_PX - 1, c.y * CELL_PX - 1, 2, 2);
+  ctx.lineWidth = 1.3;
+  ctx.lineCap = "round";
+  for (const s of sw.swimmers) {
+    const hx = s.x * CELL_PX;
+    const hy = s.y * CELL_PX;
+    const dx = Math.cos(s.heading);
+    const dy = Math.sin(s.heading);
+    // Side-to-side wiggle, only while moving.
+    const w = s.speed > 0 ? Math.sin(s.phase) * 0.9 : 0;
+    ctx.strokeStyle = s.colour;
+    ctx.beginPath();
+    ctx.moveTo(hx, hy);
+    ctx.lineTo(hx - dx * 1.5 - dy * w, hy - dy * 1.5 + dx * w);
+    ctx.lineTo(hx - dx * 3 + dy * w, hy - dy * 3 - dx * w);
+    ctx.stroke();
+  }
+  ctx.lineWidth = 1;
 }
 
 const FRAME_BUDGET_MS = 35; // max time spent simulating per frame
@@ -360,7 +394,7 @@ function refreshStats(): void {
   const s = world.stats();
   history.push({
     grass: s.grass, seeds: s.seeds, algae: s.algae,
-    cloud: s.waterCloud, surface: s.waterSurface, soil: s.waterSoil,
+    cloud: s.waterCloud, surface: s.waterSurface, soil: s.waterSoil, swimmers: s.swimmers,
     rained: rainedSinceSample || s.raining,
   });
   rainedSinceSample = false;
@@ -392,6 +426,7 @@ function refreshStats(): void {
     ["In the ground", s.nutrientsGround.toFixed(1)],
     ["In the water", s.nutrientsWater.toFixed(1)],
     ["In grass & algae", s.nutrientsFlora.toFixed(1)],
+    ["In swimmers (alive & dead)", s.nutrientsSwimmers.toFixed(1)],
     ["Total (conserved)", s.nutrientsTotal.toFixed(3)],
   ]);
 
@@ -403,6 +438,17 @@ function refreshStats(): void {
     ["seeds", "#e3cf7a"],
     ["algae", "#3fa7a0"],
   ]);
+  statsSwimmers.innerHTML = table([
+    ["Swimmers", s.swimmers.toLocaleString()],
+    ["Births / deaths (last 20 frames)", `${s.swimmerBirths} / ${s.swimmerDeaths}`],
+    ["Deaths: starved / old age", `${s.swimmersStarved} / ${s.swimmersOldAge}`],
+    ["Bodies rotting", s.swimmerCorpses.toLocaleString()],
+  ]);
+  const ts = SwimmerSystem.traitStats(world.swimmers.swimmers);
+  swimTraits.innerHTML = SWIMMER_TRAITS.map((d, t) =>
+    `<tr><td class="muted" title="${d.tip}">${d.label}</td><td>${Number.isNaN(ts[t].mean) ? "–" : `${fmtNum(ts[t].mean)} <span class="muted">±${fmtNum(ts[t].sd)}</span>`}</td></tr>`,
+  ).join("");
+  drawLineChart(swimChartCtx, swimChart, [["swimmers", "#e07a5f"]]);
   drawLineChart(waterChartCtx, waterChart, [
     ["cloud", "#e4ded2"],
     ["surface", "#4f94e0"],
@@ -472,6 +518,7 @@ function refreshSelection(): void {
     ...group("Grass", r.grass, PARAMS.grassMaxN, "mean age"),
     ...group("Seeds", r.seeds, 0, "mean ticks to germinate"),
     ...group("Algae", r.algae, PARAMS.algaeMaxN, "mean age"),
+    ...swimmerRows(x0, y0, x1, y1),
   ];
   selectionEl.innerHTML =
     `<table>${rows.map(([k, v]) => `<tr><td class="muted">${k}</td><td>${v}</td></tr>`).join("")}</table>` +
@@ -483,6 +530,17 @@ function refreshSelection(): void {
  * Draws the recent history as lines on a shared scale from zero. With
  * `rainBands`, samples where it rained are shaded as vertical bands.
  */
+function swimmerRows(x0: number, y0: number, x1: number, y1: number): Array<[string, string]> {
+  const inside = world.swimmers.swimmers.filter((s) => s.x >= x0 && s.x < x1 + 1 && s.y >= y0 && s.y < y1 + 1);
+  if (!inside.length) return [["Swimmers", "0"]];
+  const mean = (f: (s: (typeof inside)[number]) => number) => inside.reduce((a, s) => a + f(s), 0) / inside.length;
+  return [
+    ["Swimmers", inside.length.toLocaleString()],
+    ["&nbsp;&nbsp;mean energy / fat", `${mean((s) => s.energy).toFixed(2)} / ${mean((s) => s.fat).toFixed(2)}`],
+    ["&nbsp;&nbsp;mean age", mean((s) => s.age).toFixed(0)],
+  ];
+}
+
 function drawLineChart(
   ctx2: CanvasRenderingContext2D,
   canvas2: HTMLCanvasElement,
@@ -545,6 +603,13 @@ function showInspect(): void {
       ? `germinates in ${world.age[i]} ticks`
       : `age ${world.age[i]} · size ${((world.floraN[i] / maxN) * 100).toFixed(0)}% · energy ${world.floraE[i].toFixed(2)}`;
     line2 += ` · genes ` + GENE_NAMES.map((n, j) => `${n} ${g[j].toPrecision(3)}`).join(", ");
+  }
+  const sw = world.swimmers.nearest(x + 0.5, y + 0.5, 2.5);
+  if (sw) {
+    const tr = SWIMMER_TRAITS.map((d, j) => `${d.label.toLowerCase()} ${j === T_LITTER ? sw.traits[j].toFixed(1) : fmtNum(sw.traits[j])}`).join(", ");
+    line2 += (line2 ? "\n" : "") +
+      `swimmer #${sw.id} (${MODE_NAMES[sw.mode]}): age ${sw.age} · energy ${sw.energy.toFixed(2)} · fat ${sw.fat.toFixed(2)} · nutrients ${sw.nutrients.toFixed(3)}` +
+      (sw.parents[0] ? ` · parents #${sw.parents[0]} & #${sw.parents[1]}` : " · founder") + `\n  traits: ${tr}`;
   }
   inspectEl.textContent = line1 + (line2 ? "\n" + line2 : "");
 }
@@ -667,6 +732,7 @@ function selectTab(tab: HTMLButtonElement): void {
 }
 for (const t of tabs) t.addEventListener("click", () => selectTab(t));
 
+setSwimmerTraitsHook(() => world.swimmers.reexpress());
 const refreshSettings = buildSettings("settings", (s) => !s.newWorld);
 const refreshStartSettings = buildSettings("startSettings", (s) => !!s.newWorld, startConditionsChanged);
 $<HTMLButtonElement>("resetSettings").addEventListener("click", () => {

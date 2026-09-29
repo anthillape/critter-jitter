@@ -52,6 +52,50 @@ down rather than stuttering, and the panel shows the achieved speed with
      water and buds live algae into a free adjacent water square. If no square
      is free, it doesn't breed. Deeper water gets less light.
 
+## Swimmers (critters)
+
+Swimmers are small fish, drawn as 3-pixel lines that wiggle while they move.
+Their colour comes from their hue, saturation and lightness genes, so
+families show up as colour groups.
+
+- **Energy.** Each swimmer has a short-term energy store and a fat reserve
+  (both capped: the fat cap is genetic). Spare energy is turned into fat at
+  a genetic rate, and fat is drawn on when energy runs low. Moving costs
+  ½·m·v², where mass is body size plus fat, so fat swimmers pay more to move.
+  Staying alive costs energy per unit of mass. Metabolism also sheds a little
+  body nutrient into the water every tick, so swimmers must keep eating.
+- **Behaviour.**
+  - *Roaming*: with nothing in sight, a swimmer roams randomly at its genetic
+    roaming speed.
+  - *Hungry*: when fat drops below its hunger threshold, it looks for the
+    nearest algae within 7 squares every so often, swims to it at top speed,
+    and eats it in one go (the algae's nutrients and energy).
+  - *Looking for a mate*: once it's old and fat enough (both genetic) it
+    looks, less often, for another ready swimmer within 14 squares.
+  - Swimmers can't move on land and slowly starve there. They pass through
+    each other freely, and can sit on a square with grass.
+- **Breeding.** Both swimmers must be ready. Any two can mate (no sexes),
+  except a swimmer and its own parent. They make up to their preferred litter
+  size (the parents' genetic average), as long as they can afford it. Each
+  parent gives each child its genetic share of its nutrients and energy.
+  Children appear straight away between the parents, and the parents then
+  rest for a while before mating again.
+- **Death.** Swimmers die of old age (genetic lifespan), starvation, or
+  running out of body nutrients. Any remaining energy is lost, and the body
+  rots, returning its nutrients to the square gradually.
+- **Genome.** Swimmers have 16 traits (fat store max, fat storing, minimum /
+  top / roaming speed, colour hue / saturation / lightness, breeding age,
+  fat needed to breed, hunger threshold, lifespan, share given to each
+  child, litter size, mutation size, body size). A swimmer has 23 genes, and
+  each gene nudges a third of the traits (5) up or down, so several genes
+  overlap on each trait. The genes act on top of editable defaults (Settings
+  → *Swimmer traits*). A child gets 11 random genes from each parent, each
+  mutated slightly by the parents' mutation size, plus one brand-new random
+  gene, making 23 again.
+
+Nutrients stay conserved: starting swimmers take theirs from the water, and
+everything a swimmer eats, sheds or leaves behind is accounted for.
+
 ## Water cycle
 
 The total amount of water is constant apart from the tools (the panel shows it). It is split
