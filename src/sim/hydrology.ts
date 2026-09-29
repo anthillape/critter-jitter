@@ -8,6 +8,7 @@ export const CLOUD_CELL = 4;
 export const CLOUD_W = GRID_W / CLOUD_CELL;
 export const CLOUD_H = GRID_H / CLOUD_CELL;
 const CLOUD_UPDATE_EVERY = 8; // ticks between cloud-pattern updates
+const CLOUD_RAMP = 0.45; // noise range over which clouds go from wisp to full thickness
 
 /**
  * The water cycle. Water lives in three places and the sum never changes:
@@ -39,6 +40,7 @@ export class Hydrology {
   readonly wet = new Uint8Array(CELL_COUNT);
   readonly sat = new Float32Array(CELL_COUNT);
 
+  /** Sum of rain weights (density squared) over the cloud grid. */
   private cloudWeight = 0;
   private readonly perlin: Perlin;
   private readonly fluxR = new Float64Array(CELL_COUNT);
@@ -160,20 +162,21 @@ export class Hydrology {
         const y = cy * CLOUD_CELL;
         const n = 0.65 * this.perlin.fbm((x - windX * tick) * cloudScale, (y - windY * tick) * cloudScale, 4)
           + 0.35 * this.perlin.fbm((x - windX * 1.6 * tick) * cloudScale * 1.9 + 50, (y - windY * 0.4 * tick) * cloudScale * 1.9, 3);
-        const d = Math.max(0, Math.min(1, (n - threshold) / 0.35));
+        // Wide ramp so only the cores reach full thickness.
+        const d = Math.max(0, Math.min(1, (n - threshold) / CLOUD_RAMP));
         this.cloudDensity[cy * CLOUD_W + cx] = d;
-        weight += d;
+        weight += d * d;
       }
     }
     this.cloudWeight = weight;
   }
 
   /**
-   * Rain falls in proportion to cloud density, so it follows the clouds. The
-   * rate is steady (rainRate of all water per tick) but each event drops a
-   * random share of the cloud water: mostly showers, occasionally a deluge
-   * that empties the sky. Thin clouds can only drop so much per square, so
-   * rain tapers off as they vanish.
+   * Rain falls in proportion to cloud density squared, so it is heaviest
+   * under the thickest cloud. The rate is steady (rainRate of all water per
+   * tick) but each event drops a random share of the cloud water: mostly
+   * showers, occasionally a deluge that empties the sky. Thin clouds can only
+   * drop so much per square, so rain tapers off as they vanish.
    */
   private rain(): void {
     const p = this.p;
@@ -195,7 +198,8 @@ export class Hydrology {
       for (let cx = 0; cx < CLOUD_W; cx++) {
         const d = this.cloudDensity[cy * CLOUD_W + cx];
         if (d <= 0) continue;
-        const r = Math.min(perCell, cap) * d;
+        // Density squared: rain is concentrated under the thickest cloud.
+        const r = Math.min(perCell, cap) * d * d;
         for (let dy = 0; dy < CLOUD_CELL; dy++) {
           const row = (cy * CLOUD_CELL + dy) * GRID_W + cx * CLOUD_CELL;
           for (let dx = 0; dx < CLOUD_CELL; dx++) this.surface[row + dx] += r;
