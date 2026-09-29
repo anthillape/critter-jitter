@@ -100,9 +100,10 @@ speed.
   Seeds only take on empty land and algae only in empty water. Each takes
   its nutrients from the square it lands on, so nutrients stay conserved,
   and squares too poor to supply them are skipped. Sprayed life gets the
-  starting genes. Keys S / R / D / G / A switch between the tools. *Rate* and *Size* sliders set the brush strength (water per second at
-  the centre, or particles sprayed per second) and its radius. The effect falls off toward
-  the edge of the circle. The tools work while paused too.
+  starting genes. Keys S / R / D / G / A switch between the tools.
+  *Rate* and *Size* set the brush strength (water per second at the
+  centre, or particles sprayed per second) and its radius. Rain and Dryer
+  fade toward the edge of the circle. The tools work while paused too.
 - **Manual rain**: switches off automatic rain. A button then starts and
   stops rain from the clouds, until they run dry.
 
