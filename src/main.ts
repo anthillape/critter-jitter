@@ -2,6 +2,7 @@ import { CELL_PX, GRID_H, GRID_W, PARAMS, TICKS_PER_SECOND } from "./sim/config"
 import { ALGAE_UNUSED_GENES, GENE_COUNT, GENE_NAMES } from "./sim/genes";
 import { ALGAE, GRASS, SEED, World, type GroupStats, type RegionStats } from "./sim/world";
 import { Renderer, type View } from "./render";
+import { formatSetting, fromSlider, SETTINGS, SLIDER_STEPS, toSlider } from "./settings";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -24,6 +25,7 @@ const rateVal = $<HTMLSpanElement>("rateVal");
 const sizeVal = $<HTMLSpanElement>("sizeVal");
 const brushEl = $<HTMLDivElement>("brush");
 const manualRainBox = $<HTMLInputElement>("manualRain");
+
 const rainToggle = $<HTMLButtonElement>("rainToggle");
 const toolButtons = Array.from(document.querySelectorAll<HTMLButtonElement>(".tool"));
 
@@ -78,6 +80,63 @@ function refreshBrushLabels(): void {
   rateVal.textContent = `${(brushRate() * TICKS_PER_SECOND).toFixed(3)}/s`;
   sizeVal.textContent = `${brushSize()} sq`;
 }
+/**
+ * Settings panel: one slider per simulation variable, grouped into
+ * collapsible sections, built from the table in settings.ts.
+ */
+function buildSettings(): () => void {
+  const root = $<HTMLDivElement>("settings");
+  const refreshers: Array<() => void> = [];
+  const groups = new Map<string, HTMLElement>();
+  for (const s of SETTINGS) {
+    let body = groups.get(s.group);
+    if (!body) {
+      const details = document.createElement("details");
+      details.className = "settings-group";
+      const summary = document.createElement("summary");
+      summary.textContent = s.group;
+      if (s.group.startsWith("New world")) {
+        summary.title = "These only take effect when you press Restart or New world.";
+      }
+      details.append(summary);
+      body = document.createElement("div");
+      details.append(body);
+      root.append(details);
+      groups.set(s.group, body);
+    }
+    const row = document.createElement("label");
+    row.className = "setting";
+    const tip = s.tip + (s.newWorld ? " Takes effect when you press Restart or New world." : "");
+    row.title = tip;
+    const name = document.createElement("span");
+    name.className = "setting-name";
+    name.textContent = s.label;
+    const input = document.createElement("input");
+    input.type = "range";
+    input.min = "0";
+    input.max = String(SLIDER_STEPS);
+    input.setAttribute("aria-label", s.label);
+    const value = document.createElement("span");
+    value.className = "setting-value";
+    const refresh = () => {
+      const v = s.get();
+      input.value = String(toSlider(s, v));
+      value.textContent = formatSetting(s, v);
+      row.classList.toggle("changed", Math.abs(v - (s.defaultValue ?? v)) > 1e-12 * Math.max(1, Math.abs(v)));
+    };
+    input.addEventListener("input", () => {
+      s.set(fromSlider(s, Number(input.value)));
+      value.textContent = formatSetting(s, s.get());
+      row.classList.toggle("changed", Math.abs(s.get() - (s.defaultValue ?? 0)) > 1e-12 * Math.max(1, Math.abs(s.get())));
+    });
+    row.append(name, input, value);
+    body.append(row);
+    refreshers.push(refresh);
+    refresh();
+  }
+  return () => refreshers.forEach((r) => r());
+}
+
 function applyWeatherSettings(): void {
   world.water.manual = manualRainBox.checked;
   world.water.manualRain = false;
@@ -346,6 +405,7 @@ $<HTMLButtonElement>("step").addEventListener("click", () => {
   world.step();
   refreshStats();
 });
+$<HTMLButtonElement>("restart").addEventListener("click", () => newWorld(world.terrain.seed));
 $<HTMLButtonElement>("regen").addEventListener("click", () => {
   const typed = Number(seedInput.value);
   const seed = Number.isFinite(typed) && typed !== world.terrain.seed ? typed : Math.floor(Math.random() * 1e6);
@@ -430,6 +490,12 @@ manualRainBox.addEventListener("change", applyWeatherSettings);
 rainToggle.addEventListener("click", () => {
   world.water.manualRain = !world.water.manualRain;
   rainToggle.textContent = world.water.manualRain ? "Stop rain" : "Start rain";
+});
+
+const refreshSettings = buildSettings();
+$<HTMLButtonElement>("resetSettings").addEventListener("click", () => {
+  for (const s of SETTINGS) if (s.defaultValue !== undefined) s.set(s.defaultValue);
+  refreshSettings();
 });
 
 refreshBrushLabels();

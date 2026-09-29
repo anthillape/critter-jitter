@@ -27,7 +27,8 @@ export const GENE_LIMITS: ReadonlyArray<readonly [number, number]> = [
   [0.05, 1],
 ];
 
-export const GRASS_DEFAULTS = [0.008, 0.01, 8, 80, 0.05, 3000, 0.5, 0.35];
+/** Starting genes for new worlds (editable in the settings panel). */
+export const GRASS_DEFAULTS = [0.008, 0.01, 8, 80, 0.05, 3000, 0.525, 0.35];
 export const ALGAE_DEFAULTS = [0.006, 0.02, 1, 1, 0.05, 2000, 1, 1];
 
 /**

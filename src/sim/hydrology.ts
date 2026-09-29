@@ -1,4 +1,4 @@
-import { CELL_COUNT, GRID_H, GRID_W, WATER_LEVEL, type Params } from "./config";
+import { CELL_COUNT, GRID_H, GRID_W, TERRAIN, type Params } from "./config";
 import { Perlin } from "./perlin";
 import { mulberry32, type Rng } from "./rng";
 import type { Terrain } from "./terrain";
@@ -50,6 +50,8 @@ export class Hydrology {
   readonly wet = new Uint8Array(CELL_COUNT);
   readonly sat = new Float32Array(CELL_COUNT);
 
+  private cloudTime = 0;
+  private cloudTick = 0;
   /** Sum of rain weights (density squared) over the cloud grid. */
   private cloudWeight = 0;
   private readonly perlin: Perlin;
@@ -68,8 +70,8 @@ export class Hydrology {
       const x = i % GRID_W;
       this.notLastCol[i] = x < GRID_W - 1 ? 1 : 0;
       this.notFirstCol[i] = x > 0 ? 1 : 0;
-      // Lakes fill everything at or below WATER_LEVEL up to a flat surface.
-      const depth = Math.max(0, WATER_LEVEL + 1 - elevation[i]);
+      // Lakes fill everything at or below the water level up to a flat surface.
+      const depth = Math.max(0, TERRAIN.waterLevel + 1 - elevation[i]);
       this.surface[i] = depth;
       // Start the soil near its long-run profile so the world doesn't begin bone dry.
       this.soil[i] = depth > 0 ? p.soilCap : p.soilCap * moisture[i];
@@ -194,7 +196,10 @@ export class Hydrology {
     const { cloudScale, cloudMorph } = this.p;
     const ox = this.wind.offsetX;
     const oy = this.wind.offsetY;
-    const z = tick * cloudMorph;
+    // Shape-change progress accumulates, so changing cloudMorph never jumps.
+    this.cloudTime += cloudMorph * (tick - this.cloudTick);
+    this.cloudTick = tick;
+    const z = this.cloudTime;
     const frac = this.cloud / this.total;
     const threshold = 0.3 - 1.8 * frac;
     let weight = 0;
@@ -228,7 +233,7 @@ export class Hydrology {
     } else if (!this.raining) {
       // The fuller the clouds, the more likely rain is to start this tick.
       const frac = this.cloud / this.total;
-      const x = (frac - p.rainMinCloud) / (p.rainStart - p.rainMinCloud);
+      const x = (frac - p.rainMinCloud) / Math.max(0.01, p.rainStart - p.rainMinCloud);
       if (x > 0 && this.rng() < p.rainChance * x * x) {
         const u = this.rng();
         // Skewed: typically 15-40% of the clouds, about 1 in 12 empties them.

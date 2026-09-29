@@ -9,12 +9,17 @@ export const CELL_COUNT = GRID_W * GRID_H;
 // Terrain
 export const MIN_HEIGHT = 1;
 export const MAX_HEIGHT = 16;
-/** Lakes start filled so squares at or below this height are under water. */
-export const WATER_LEVEL = 6;
-/** Initial soil moisture reaches this many squares from water (then the water cycle takes over). */
-export const IRRIGATION_RANGE = 60;
-export const NOISE_SCALE = 1 / 120; // larger denominator = bigger landmasses
-export const NOISE_OCTAVES = 7; // fine octaves give the small valleys streams gather in
+/** Terrain generation settings; changing them only affects newly generated worlds. */
+export const TERRAIN = {
+  /** Lakes start filled so squares at or below this height are under water. */
+  waterLevel: 6,
+  /** Initial soil moisture reaches this many squares from water (then the water cycle takes over). */
+  irrigationRange: 60,
+  /** Size of landmasses: noise is sampled at 1/landScale per square. */
+  landScale: 120,
+  /** Noise octaves: more gives rougher ground with small valleys for streams. */
+  octaves: 7,
+};
 
 /**
  * Simulation ticks per second of game time. The main loop runs the
@@ -42,7 +47,7 @@ export const PARAMS = {
   soilWick: 0.2, // soil water spreading between squares (any direction; slow uphill pull)
   soilDrain: 0.15, // extra soil drainage downhill per level of height difference
   surfaceFlow: 0.2, // deep water (lakes, ponds, floods) flow toward lower water surfaces
-  runoffRate: 0.5, // share of shallow water running to the steepest downhill square per tick
+  runoffRate: 0.1, // river flow speed: share of shallow water moving one square downhill per tick (slider in the UI)
   evapSurface: 0.0000025, // standing water evaporating per square per tick
   evapSoil: 0.00005, // fraction of soil water evaporating per tick
   initialCloud: 0.17, // share of all water that starts in the clouds
@@ -96,6 +101,7 @@ export const PARAMS = {
   // --- Initial population ---
   initialSeeds: 400,
   initialAlgae: 150,
+  initialWaterPrefSpread: 0.85, // starting seeds' water preference is spread over this range around the default
 };
 
 export type Params = typeof PARAMS;

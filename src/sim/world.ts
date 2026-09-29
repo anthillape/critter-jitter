@@ -105,7 +105,8 @@ export class World {
       setGenes(this.genes, i, GRASS_DEFAULTS);
       // Start with a spread of water preferences so every moisture niche has
       // a chance from the outset; evolution then refines them.
-      this.genes[i * GENE_COUNT + G_WATER_PREF] = 0.1 + 0.85 * rng();
+      const pref = GRASS_DEFAULTS[G_WATER_PREF] + (rng() - 0.5) * this.p.initialWaterPrefSpread;
+      this.genes[i * GENE_COUNT + G_WATER_PREF] = Math.max(0.01, Math.min(1, pref));
       placed++;
     }
     placed = 0;
@@ -124,7 +125,7 @@ export class World {
   step(): void {
     this.tick++;
     this.addEnergy();
-    this.wind.step(this.tick);
+    this.wind.step();
     this.water.step(this.tick);
     // Nutrients spread slowly; every other tick is plenty.
     if (this.tick & 1) this.diffuseNutrients();
@@ -215,7 +216,7 @@ export class World {
     // soil saturation. Wide tolerance lowers the peak (generalist's cost).
     const tol = genes[g + G_WATER_TOL];
     const miss = (this.water.saturation(i) - genes[g + G_WATER_PREF]) / tol;
-    const eff = (1 - p.grassToleranceCost * tol) * Math.exp(-miss * miss);
+    const eff = Math.max(0, 1 - p.grassToleranceCost * tol) * Math.exp(-miss * miss);
     let e = this.floraE[i];
     let take = Math.min(p.grassAbsorb * eff, p.grassMaxE - e, this.energy[i]);
     if (take > 0) {

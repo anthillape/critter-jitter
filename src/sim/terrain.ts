@@ -1,6 +1,5 @@
 import {
-  CELL_COUNT, GRID_H, GRID_W, IRRIGATION_RANGE, MAX_HEIGHT, MIN_HEIGHT,
-  NOISE_OCTAVES, NOISE_SCALE, WATER_LEVEL,
+  CELL_COUNT, GRID_H, GRID_W, MAX_HEIGHT, MIN_HEIGHT, TERRAIN,
 } from "./config";
 import { Perlin } from "./perlin";
 import { mulberry32 } from "./rng";
@@ -20,7 +19,7 @@ export interface Terrain {
   downhill: Int32Array;
   /**
    * Starting soil saturation 0..1: 1 in the initial lakes, falling off to 0
-   * at IRRIGATION_RANGE. After that the water cycle (hydrology.ts) takes over.
+   * at TERRAIN.irrigationRange. After that the water cycle (hydrology.ts) takes over.
    */
   moisture: Float32Array;
   /** Relative starting fertility (~0.2..1.8), used only to seed initial nutrients. */
@@ -28,13 +27,15 @@ export interface Terrain {
 }
 
 export function generateTerrain(seed: number): Terrain {
+  const { waterLevel, irrigationRange, octaves } = TERRAIN;
+  const scale = 1 / TERRAIN.landScale;
   const perlin = new Perlin(mulberry32(seed));
   const raw = new Float32Array(CELL_COUNT);
   let lo = Infinity;
   let hi = -Infinity;
   for (let y = 0; y < GRID_H; y++) {
     for (let x = 0; x < GRID_W; x++) {
-      const v = perlin.fbm(x * NOISE_SCALE, y * NOISE_SCALE, NOISE_OCTAVES);
+      const v = perlin.fbm(x * scale, y * scale, octaves);
       raw[y * GRID_W + x] = v;
       if (v < lo) lo = v;
       if (v > hi) hi = v;
@@ -51,14 +52,14 @@ export function generateTerrain(seed: number): Terrain {
     const h = Math.floor(e);
     elevation[i] = e;
     height[i] = h;
-    if (h <= WATER_LEVEL) water[i] = 1;
+    if (h <= waterLevel) water[i] = 1;
   }
 
   const waterDist = distanceToWater(water);
   const moisture = new Float32Array(CELL_COUNT);
   for (let i = 0; i < CELL_COUNT; i++) {
     const d = waterDist[i];
-    const t = d > IRRIGATION_RANGE ? 0 : 1 - d / (IRRIGATION_RANGE + 1);
+    const t = d > irrigationRange ? 0 : 1 - d / (irrigationRange + 1);
     moisture[i] = t * t; // falls off quickly near the shore, trickles out to 60 squares
   }
 
@@ -66,7 +67,7 @@ export function generateTerrain(seed: number): Terrain {
   const fertility = new Float32Array(CELL_COUNT);
   for (let y = 0; y < GRID_H; y++) {
     for (let x = 0; x < GRID_W; x++) {
-      const v = fertNoise.fbm(x * NOISE_SCALE * 2, y * NOISE_SCALE * 2, 3);
+      const v = fertNoise.fbm(x * scale * 2, y * scale * 2, 3);
       fertility[y * GRID_W + x] = Math.max(0.2, Math.min(1.8, 1 + v * 2));
     }
   }

@@ -102,6 +102,17 @@ speed.
 Total water is conserved apart from what the Rain and Dryer tools add and
 remove.
 
+## Settings
+
+Every simulation variable has a slider in the **Settings** panel, grouped
+into collapsible sections, with a plain-English name. Hover a name for a
+description. Settings you've changed are highlighted, and *Reset all to
+defaults* puts everything back. Most apply immediately. The *New world*
+sections (terrain, starting life and starting genes) take effect when you
+press **Restart** (same seed) or **New world** (typed or random seed). The
+slider table lives in `src/settings.ts`, and the underlying values are in
+`src/sim/config.ts` (`PARAMS`, `TERRAIN`) and `src/sim/genes.ts`.
+
 ## Nutrients and energy
 
 - **Nutrients are conserved.** They move between ground, water and organisms
@@ -140,8 +151,7 @@ Drag a rectangle on the map to get terrain, nutrient, population and gene
 statistics (mean ± sd, min–max) for that area. They update live. Click or
 press Esc to clear it.
 
-All tunables live in `src/sim/config.ts` (`PARAMS`) and `src/sim/genes.ts`
-(defaults and limits).
+All tunables can be changed live from the Settings panel.
 
 ## Code layout
 

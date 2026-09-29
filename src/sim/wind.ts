@@ -23,21 +23,24 @@ export class Wind {
   offsetY = 0;
 
   private readonly perlin: Perlin;
+  /** Noise time, advanced by windChangeRate each tick (so changing the rate never jumps). */
+  private phase = 0;
 
   constructor(seed: number, private p: Params) {
     this.perlin = new Perlin(mulberry32(seed + 4));
-    this.sample(0);
+    this.sample();
   }
 
-  step(tick: number): void {
-    this.sample(tick);
+  step(): void {
+    this.phase += this.p.windChangeRate;
+    this.sample();
     this.offsetX += this.vx;
     this.offsetY += this.vy;
   }
 
-  private sample(tick: number): void {
-    const { windPrevailing, windSwing, windSpeed, windSpeedVariation, windChangeRate } = this.p;
-    const t = tick * windChangeRate;
+  private sample(): void {
+    const { windPrevailing, windSwing, windSpeed, windSpeedVariation } = this.p;
+    const t = this.phase;
     // Noise is mostly within ±0.3 and rarely beyond ±0.7, so the bearing
     // stays near the prevailing one but can occasionally go anywhere.
     this.angle = windPrevailing + windSwing * this.perlin.noise(t, 0.37);

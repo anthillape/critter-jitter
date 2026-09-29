@@ -80,3 +80,11 @@ td.muted { color: var(--muted); }
 .brush input[type="range"] { width: 110px; }
 .brush.disabled { opacity: 0.45; }
 .arrow { display: inline-block; }
+.settings-group { border-top: 1px solid var(--line); padding: 4px 0; }
+.settings-group summary { cursor: pointer; padding: 3px 0; font-weight: 600; }
+.setting { display: grid; grid-template-columns: 1fr 110px 70px; align-items: center; gap: 6px; padding: 2px 0; cursor: help; }
+.setting-name { font-size: 12px; }
+.setting input[type="range"] { width: 100%; }
+.setting-value { font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+.setting.changed .setting-name, .setting.changed .setting-value { color: var(--accent); }
+.settings-actions { margin-top: 6px; }
