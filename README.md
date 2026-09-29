@@ -54,51 +54,51 @@ is shown next to the speed control. All rates in `PARAMS` are per tick.
      water and buds live algae into a free adjacent water square. If no square
      is free, it doesn't breed. Deeper water gets less light.
 
-## Critters: swimmers and sharks
+## Animals: fish, sharks and sheep
 
-Swimmers are small fish, drawn as 3-pixel lines that wiggle while they move.
+Fish are small, drawn as 3-pixel lines that wiggle while they move.
 Their colour comes from their hue, saturation and lightness genes, so
 families show up as colour groups.
 
-- **Energy.** Each swimmer has a short-term energy store and a fat reserve
+- **Energy.** Each fish has a short-term energy store and a fat reserve
   (both capped: the fat cap is genetic). Spare energy is turned into fat at
   a genetic rate, and fat is drawn on when energy runs low. Moving costs
-  ½·m·v², where mass is body size plus fat, so fat swimmers pay more to move.
+  ½·m·v², where mass is body size plus fat, so fat fish pay more to move.
   Staying alive costs energy per unit of mass. Metabolism also sheds a little
-  body nutrient into the water every tick, so swimmers must keep eating.
+  body nutrient into the water every tick, so fish must keep eating.
 - **Behaviour.**
-  - *Roaming*: with nothing in sight, a swimmer roams randomly at its genetic
+  - *Roaming*: with nothing in sight, a fish roams randomly at its genetic
     roaming speed.
   - *Hungry*: when fat drops below its hunger threshold, it looks for the
     nearest algae within 7 squares every so often, swims to it at top speed,
     and eats it in one go (the algae's nutrients and energy).
   - *Looking for a mate*: once it's old and fat enough (both genetic) it
-    looks, less often, for another ready swimmer within 14 squares.
-  - Swimmers can't move on land and slowly starve there. They pass through
+    looks, less often, for another ready fish within 14 squares.
+  - Fish can't move on land and slowly starve there. They pass through
     each other freely, and can sit on a square with grass.
-- **Breeding.** Both swimmers must be ready. Any two can mate (no sexes),
-  except a swimmer and its own parent. They make up to their preferred litter
+- **Breeding.** Both fish must be ready. Any two can mate (no sexes),
+  except a fish and its own parent. They make up to their preferred litter
   size (the parents' genetic average), as long as they can afford it. Each
   parent gives each child its genetic share of its nutrients and energy.
   Children appear straight away between the parents, and the parents then
   rest for a while before mating again.
-- **Death.** Swimmers die of old age (genetic lifespan), starvation, or
+- **Death.** Fish die of old age (genetic lifespan), starvation, or
   running out of body nutrients. Any remaining energy is lost, and the body
   rots, returning its nutrients to the square gradually. Dead bodies stay
   where they died, turn grey, and fade out as they decompose.
-- **Genome.** Swimmers have 16 traits (fat store max, fat storing, minimum /
-  top / roaming speed, colour hue / saturation / lightness, breeding age,
-  fat needed to breed, hunger threshold, lifespan, share given to each
-  child, litter size, mutation size, body size). A swimmer has 23 genes, and
+- **Genome.** Fish have 16 traits (fat store max, fat storing, minimum /
+  top / roaming speed, colour hue, breeding age, fat needed to breed, hunger
+  threshold, lifespan, share given to each child, litter size, mutation
+  size, body size, colour saturation / lightness). A fish has 23 genes, and
   each gene nudges a third of the traits (5) up or down, so several genes
   overlap on each trait. The genes act on top of editable defaults (Settings
-  → *Swimmer traits*). A child gets 11 random genes from each parent, each
+  → *Fish traits*). A child gets 11 random genes from each parent, each
   mutated slightly by the parents' mutation size, plus one brand-new random
   gene, making 23 again.
 
 ### Sharks
 
-Sharks hunt swimmers. They have the same lifecycle as swimmers (fat, hunger,
+Sharks hunt fish. They have the same lifecycle as fish (fat, hunger,
 mates, breeding, old age, rotting bodies) and the same kind of genome: 23
 genes, each nudging a third of their traits. They have two extra traits:
 
@@ -109,7 +109,7 @@ genes, each nudging a third of their traits. They have two extra traits:
 While boosting, a shark burns several times its normal upkeep, on top of the
 higher ½·m·v² cost of moving faster, for a set number of ticks. A caught fish
 is eaten whole: the shark gets its energy, fat and nutrients, plus extra
-energy from digesting its body. Sharks are bigger than swimmers and drawn
+energy from digesting its body. Sharks are bigger than fish and drawn
 shark-shaped (seen from above: tapered body, pectoral fins, and a forked
 tail that sweeps as they swim), with a pale streak behind them while
 boosting. Their colour is genetic too, defaulting to grey-blue.
@@ -121,24 +121,48 @@ default 6, up to 20). A shark's current mass sets how much energy it spends
 moving (½·m·v²) and staying alive, and how much energy it gives when eaten,
 so big sharks cost more to run. Sharks are drawn in proportion to their
 current size. Birth size, growth speed and growth cost are settings for each
-species; swimmers are born full-size by default.
+species; fish are born full-size by default.
 
 Sharks glide. They turn gradually (a slow turn rate), speed up and slow down
 smoothly, keep a steady course while roaming and only change course now and
 then. They look ahead for land and turn away before reaching the shore, and
 curve toward prey, turning harder only in the last few squares. They're
 drawn centred on their position, so they rotate about their middle.
-Swimmers use the same steering with nimble settings, so they stay quick and
+Fish use the same steering with nimble settings, so they stay quick and
 twitchy. The turn rate, acceleration, how often and how far they change
 course, and how far ahead they look for land are all in Settings for each
 species.
 
-Swimmers and sharks run on the same code (`src/sim/critters.ts`). Each
-species has its own traits, settings (Settings → *Swimmers* / *Sharks*, and
-their trait defaults) and diet.
+### Sheep
 
-Nutrients stay conserved: starting swimmers and sharks gather theirs from
-the water, and everything a critter eats, sheds or leaves behind is
+Sheep live on land and graze grass. They have the same lifecycle and kind
+of genome as fish and sharks (23 genes, each nudging a third of their 16
+traits). They are drawn as little rounded squares of fleece, 4 pixels
+across at the default size, with a black head at the front. Their colour
+genome has only a hue: sheep are always pastel shades.
+
+- **Meandering.** A sheep walks slowly in a general direction, and its path
+  wanders to and fro within an arc around that direction. The arc is
+  genetic (*Meander arc*, 20–90°). The general direction changes now and
+  then, and turns along the shore when the sheep looks ahead and sees water.
+- **Grazing.** A hungry sheep (fat below its hunger threshold) that walks
+  onto grass stops and grazes. Each tick it takes a bite (*Bite size*, in
+  nutrients, with the same share of the plant's energy), so the grass shrinks
+  over several ticks. Once the plant is grazed below *Grazed down to*, the
+  sheep eats the rest and the plant is gone. A sheep keeps grazing a plant
+  it has started until the plant is gone or its fat store is full.
+- **Finding grass.** Every so often a hungry sheep looks over the grass
+  within its genetic *Grass sight* (10–30 squares), and turns its general
+  direction toward the grassiest of eight directions.
+- **Mates.** When ready to breed, it walks to the nearest other ready sheep.
+- Sheep caught in water (by a flood) wade on until they reach land.
+
+Fish, sharks and sheep run on the same code (`src/sim/critters.ts`). Each
+species has its own traits, settings (Settings → *Fish* / *Sharks* /
+*Sheep*, and their trait defaults), diet and habitat.
+
+Nutrients stay conserved: starting fish and sharks gather theirs from
+the water and starting sheep from the ground, and everything a critter eats, sheds or leaves behind is
 accounted for.
 
 ## Water cycle
@@ -198,13 +222,14 @@ speed.
 - **Cursor**: *Select* (drag a rectangle for area stats), *Rain* (hold to
   rain under the cursor, adding new water to the world), *Dryer* (hold to
   remove standing water, then soil water, under the cursor), and the sprays
-  *Seeds*, *Algae*, *Swimmers* and *Sharks*, which drop things at random
+  *Seeds*, *Algae*, *Fish*, *Sharks* and *Sheep*, which drop things at random
   points inside the brush circle. Seeds only take on empty land and algae
   only in empty water, each taking its nutrients from the square it lands on.
-  Swimmers and sharks get random genomes, land only in water, and gather
-  their body nutrients from the water around them. Anything that can't be
+  Animals get random genomes. Fish and sharks land only in water and sheep
+  only on land, and they gather their body nutrients from the squares
+  around them. Anything that can't be
   supplied is skipped, so nutrients stay conserved. Sprayed seeds and algae
-  get the starting genes. Keys S / R / D / G / A / F / K switch between the
+  get the starting genes. Keys S / R / D / G / A / F / K / H switch between the
   tools.
   *Rate* and *Size* set the brush strength (water per second at the
   centre, or particles sprayed per second) and its radius. Rain and Dryer

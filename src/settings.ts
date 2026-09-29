@@ -1,5 +1,5 @@
 import { PARAMS, TERRAIN, TICKS_PER_SECOND, WORLD_SIZE, type Params } from "./sim/config";
-import { SHARK, SWIMMER, type SpeciesDef } from "./sim/critters";
+import { FISH, SHARK, SHEEP, type SpeciesDef } from "./sim/critters";
 import {
   ALGAE_DEFAULTS, G_BREED, G_GERM, G_GROWTH, G_LIFESPAN, G_MUTATION, G_RANGE, G_WATER_PREF,
   G_WATER_TOL, GRASS_DEFAULTS,
@@ -78,21 +78,26 @@ function angleFromBearing(fromDeg: number): number {
   return Math.atan2(-Math.cos(t), Math.sin(t));
 }
 
-/** The per-species settings shared by swimmers and sharks (PARAMS keys by prefix). */
+/** The per-species settings shared by all animals (PARAMS keys by prefix). */
 function critterSettings(sp: SpeciesDef, group: string, noun: string, food: string): Setting[] {
   const k = (name: string) => `${sp.prefix}${name}` as keyof Params;
   const e = (name: string, label: string, tip: string, range: Pick<Setting, "min" | "max" | "log" | "int">) =>
     param(k(name), { group, label, tip, ...range });
+  const edge = sp.habitat === "water" ? "land" : "water";
+  const grazer = sp.diet === "grass";
   return [
     e("MoveCost", "Cost of moving", `Multiplier on the energy a ${noun} spends moving (½ × mass × speed², where fat adds mass).`, { min: 0.005, max: 20, log: true }),
     e("Metabolism", "Upkeep per unit of mass", `Energy a ${noun} burns each tick just staying alive, per unit of body mass (fat counts as mass).` + PER_SEC, { min: 0.00005, max: 0.01, log: true }),
-    e("FatMass", "Weight of fat", `Mass added by each unit of fat. Fatter ${noun}s cost more to move and to keep alive.`, { min: 0, max: 2 }),
+    e("FatMass", "Weight of fat", `Mass added by each unit of fat. Fatter ${sp.plural} cost more to move and to keep alive.`, { min: 0, max: 2 }),
     e("EnergyMax", "Short-term energy store", `Energy a ${noun} holds before the surplus goes to fat.`, { min: 0.2, max: 20, log: true }),
-    e("NutrientLoss", "Nutrient shedding", `Share of its body nutrients a ${noun} sheds into the water each tick, so it has to keep eating.` + PER_SEC, { min: 0, max: 0.005 }),
+    e("NutrientLoss", "Nutrient shedding", `Share of its body nutrients a ${noun} sheds into its square each tick, so it has to keep eating.` + PER_SEC, { min: 0, max: 0.005 }),
     e("MinNutrients", "Fewest nutrients to survive", `A ${noun} whose body nutrients fall below this dies.`, { min: 0.0005, max: 0.5, log: true }),
-    e("FoodRadius", "Food sight range", `How far (squares) a hungry ${noun} can detect ${food}.`, { min: 1, max: 60, int: true }),
+    // Grazers' sight range is genetic (the grass sight trait).
+    ...(grazer ? [] : [e("FoodRadius", "Food sight range", `How far (squares) a hungry ${noun} can detect ${food}.`, { min: 1, max: 60, int: true })]),
     e("MateRadius", "Mate sight range", `How far (squares) a ${noun} ready to breed can see another ready ${noun}.`, { min: 2, max: 100, int: true }),
-    e("FoodInterval", "Ticks between food searches", `How often a hungry ${noun} looks around for ${food}.`, { min: 1, max: 120, int: true }),
+    e("FoodInterval", "Ticks between food searches", grazer
+      ? `How often a hungry ${noun} looks around and turns toward the grassiest direction.`
+      : `How often a hungry ${noun} looks around for ${food}.`, { min: 1, max: grazer ? 600 : 120, int: true, log: grazer }),
     e("MateInterval", "Ticks between mate searches", `How often a ${noun} ready to breed looks around for a mate.`, { min: 1, max: 300, int: true }),
     e("BreedCooldown", "Rest after mating", `Ticks after mating before a ${noun} can mate again.`, { min: 0, max: 10000, int: true }),
     e("MinChildEnergy", "Least energy for a child", "Parents won't make a child they can't give at least this much energy between them.", { min: 0.01, max: 10, log: true }),
@@ -101,12 +106,14 @@ function critterSettings(sp: SpeciesDef, group: string, noun: string, food: stri
     e("GeneStrength", "Gene strength", "How strongly each gene pushes its traits away from the defaults (affects new genes and mutations).", { min: 0.02, max: 1, log: true }),
     e("TurnRate", "Turning speed", `Most a ${noun} can turn each tick, in radians. Low values give smooth, gliding turns.`, { min: 0.005, max: 3.2, log: true }),
     e("Accel", "Acceleration", `Most a ${noun}'s speed can change each tick. Low values make it glide up to speed and coast to a stop.`, { min: 0.0002, max: 0.5, log: true }),
-    e("WanderTurnChance", "Course changes while roaming", `Chance each tick that a roaming ${noun} picks a new course (1 = constant small jitters).`, { min: 0.0005, max: 1, log: true }),
+    e("WanderTurnChance", "Course changes while roaming", grazer
+      ? `Chance each tick that a ${noun}'s general direction changes (its path also meanders around it).`
+      : `Chance each tick that a roaming ${noun} picks a new course (1 = constant small jitters).`, { min: 0.0005, max: 1, log: true }),
     e("WanderTurnSize", "Size of course changes", `How far a roaming ${noun} turns when it changes course, in radians.`, { min: 0.05, max: 6.3 }),
     e("BirthSize", "Size at birth", `How big a newborn ${noun} is, as a share of its adult body size (100% = born full size). It grows into its adult size and can breed once nearly full-grown.`, { min: 0.05, max: 1 }),
     e("GrowthRate", "Growth speed", `Share of its adult size a young ${noun} grows each tick while it has spare energy.`, { min: 0.00005, max: 0.02, log: true }),
     e("GrowthCost", "Energy cost of growing", `Energy a young ${noun} spends for each unit of body mass it grows.`, { min: 0, max: 10 }),
-    e("LookAhead", "Looks ahead for land", `How many squares ahead a ${noun} checks for land, so it turns away before reaching the shore (0 = it just bumps into it).`, { min: 0, max: 20, int: true }),
+    e("LookAhead", `Looks ahead for ${edge}`, `How many squares ahead a ${noun} checks for ${edge}, so it turns away before reaching the shore (0 = it just bumps into it).`, { min: 0, max: 20, int: true }),
   ];
 }
 
@@ -159,7 +166,7 @@ export const SETTINGS: Setting[] = [
   }),
   param("waterDepthMin", {
     group: "Water on the ground", label: "Depth that counts as water",
-    tip: "Standing water at least this deep makes a water square: algae can live there, grass drowns, and swimmers can swim.",
+    tip: "Standing water at least this deep makes a water square: algae can live there, grass drowns, and fish can swim.",
     min: 0.05, max: 1.5, log: true,
   }),
   param("evaporation", {
@@ -392,7 +399,7 @@ export const SETTINGS: Setting[] = [
   }),
   param("algaeBreedSize", {
     group: "Algae", label: "Size when algae can bud",
-    tip: "Algae can bud new cells once grown to this share of full size. Below the size swimmers bother eating, it gives grazed water a way to recover.",
+    tip: "Algae can bud new cells once grown to this share of full size. Below the size fish bother eating, it gives grazed water a way to recover.",
     min: 0.1, max: 1, fmt: pct,
   }),
   param("algaeBreedReserve", {
@@ -401,14 +408,14 @@ export const SETTINGS: Setting[] = [
     min: 0, max: 2,
   }),
 
-  // --- Critters: swimmers and sharks ---
-  ...critterSettings(SWIMMER, "Swimmers", "swimmer", "algae"),
-  param("swimMinAlgaeSize", {
-    group: "Swimmers", label: "Smallest algae worth eating",
-    tip: "Swimmers only eat algae grown to at least this share of full size, so young algae can regrow.",
+  // --- Animals: fish, sharks and sheep ---
+  ...critterSettings(FISH, "Fish", "fish", "algae"),
+  param("fishMinAlgaeSize", {
+    group: "Fish", label: "Smallest algae worth eating",
+    tip: "Fish only eat algae grown to at least this share of full size, so young algae can regrow.",
     min: 0, max: 1, fmt: pct,
   }),
-  ...critterTraitSettings(SWIMMER, "Swimmer traits (defaults)"),
+  ...critterTraitSettings(FISH, "Fish traits (defaults)"),
   ...critterSettings(SHARK, "Sharks", "shark", "fish"),
   param("sharkBoostDuration", {
     group: "Sharks", label: "Boost length",
@@ -426,6 +433,23 @@ export const SETTINGS: Setting[] = [
     min: 0, max: 10,
   }),
   ...critterTraitSettings(SHARK, "Shark traits (defaults)"),
+  ...critterSettings(SHEEP, "Sheep", "sheep", "grass"),
+  param("sheepBite", {
+    group: "Sheep", label: "Bite size",
+    tip: "Nutrients a grazing sheep takes from the grass under it each tick, with the same share of the plant's energy. Smaller bites mean it takes longer to eat a plant.",
+    min: 0.0005, max: 0.2, log: true,
+  }),
+  param("sheepGrazeFloor", {
+    group: "Sheep", label: "Grazed down to",
+    tip: "Once grass is grazed below this share of full size, the sheep eats the rest and the plant is gone.",
+    min: 0, max: 0.9, fmt: pct,
+  }),
+  param("sheepMeanderRate", {
+    group: "Sheep", label: "Meander speed",
+    tip: "How quickly a sheep's path swings about within its meander arc, in radians per tick.",
+    min: 0.001, max: 0.3, log: true,
+  }),
+  ...critterTraitSettings(SHEEP, "Sheep traits (defaults)"),
 
   // --- Both plants ---
   param("growEnergyPerN", {
@@ -515,19 +539,19 @@ export const SETTINGS: Setting[] = [
     tip: "Number of algae cells scattered in the water at the start.",
     min: 10, max: 3000, log: true, int: true, newWorld: true,
   }),
-  param("initialSwimmers", {
-    group: "Life", label: "Starting swimmers",
-    tip: "Number of swimmers (with random genomes) released into the water at the start. Each takes a few nutrients from the water.",
+  param("initialFish", {
+    group: "Life", label: "Starting fish",
+    tip: "Number of fish (with random genomes) released into the water at the start. Each takes a few nutrients from the water.",
     min: 0, max: 2000, int: true, newWorld: true,
   }),
-  param("swimStartEnergy", {
-    group: "Life", label: "Starting swimmer energy",
-    tip: "Energy each starting swimmer begins with.",
+  param("fishStartEnergy", {
+    group: "Life", label: "Starting fish energy",
+    tip: "Energy each starting fish begins with.",
     min: 0.1, max: 3, log: true, newWorld: true,
   }),
-  param("swimStartNutrients", {
-    group: "Life", label: "Starting swimmer nutrients",
-    tip: "Nutrients each starting swimmer takes from the water to build its body.",
+  param("fishStartNutrients", {
+    group: "Life", label: "Starting fish nutrients",
+    tip: "Nutrients each starting fish takes from the water to build its body.",
     min: 0.01, max: 0.5, log: true, newWorld: true,
   }),
   param("initialSharks", {
@@ -544,6 +568,21 @@ export const SETTINGS: Setting[] = [
     group: "Life", label: "Starting shark nutrients",
     tip: "Nutrients each starting shark gathers from the water to build its body.",
     min: 0.02, max: 2, log: true, newWorld: true,
+  }),
+  param("initialSheep", {
+    group: "Life", label: "Starting sheep",
+    tip: "Number of sheep (with random genomes) released on land at the start. Each gathers a few nutrients from the ground around it.",
+    min: 0, max: 1000, int: true, newWorld: true,
+  }),
+  param("sheepStartEnergy", {
+    group: "Life", label: "Starting sheep energy",
+    tip: "Energy each starting sheep begins with (beyond its short-term store it starts as fat).",
+    min: 0.2, max: 20, log: true, newWorld: true,
+  }),
+  param("sheepStartNutrients", {
+    group: "Life", label: "Starting sheep nutrients",
+    tip: "Nutrients each starting sheep gathers from the ground to build its body.",
+    min: 0.01, max: 1, log: true, newWorld: true,
   }),
   param("initialWaterPrefSpread", {
     group: "Life", label: "Spread of starting water preferences",

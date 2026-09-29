@@ -2,12 +2,14 @@ import { GRID_H, GRID_W, type Params } from "./config";
 import type { Rng } from "./rng";
 
 /**
- * Critters: creatures that move freely through the water, with genomes.
+ * Critters: creatures that move freely through the water or over the land,
+ * with genomes.
  *
- * - Swimmers are small fish that eat algae.
- * - Sharks are bigger and eat swimmers. They can boost after spotting prey.
+ * - Fish are small and eat algae.
+ * - Sharks are bigger and eat fish. They can boost after spotting prey.
+ * - Sheep live on land and graze grass, meandering about.
  *
- * Both share one lifecycle. They store fat, hunt when hungry, find a ready
+ * All share one lifecycle. They store fat, hunt when hungry, find a ready
  * partner to breed, grow old, and die, leaving rotting bodies. Each has a
  * genome of genes, and every gene nudges a third of the species' traits up
  * or down on top of editable defaults.
@@ -28,23 +30,29 @@ export interface TraitDef {
   wrap?: boolean;
 }
 
-// Trait indices shared by every species (sharks add two more at the end).
-export const T_MAX_FAT = 0, T_FAT_TEND = 1, T_MIN_SPEED = 2, T_MAX_SPEED = 3, T_HUE = 4, T_SAT = 5, T_LUM = 6,
-  T_BREED_AGE = 7, T_BREED_FAT = 8, T_HUNGER_FAT = 9, T_LIFESPAN = 10, T_PARENT_SHARE = 11, T_LITTER = 12,
-  T_MUTATION = 13, T_BODY = 14, T_ROAM_SPEED = 15, T_BOOST_CHANCE = 16, T_BOOST_POWER = 17;
+// Trait indices shared by every species.
+export const T_MAX_FAT = 0, T_FAT_TEND = 1, T_MIN_SPEED = 2, T_MAX_SPEED = 3, T_HUE = 4,
+  T_BREED_AGE = 5, T_BREED_FAT = 6, T_HUNGER_FAT = 7, T_LIFESPAN = 8, T_PARENT_SHARE = 9, T_LITTER = 10,
+  T_MUTATION = 11, T_BODY = 12, T_ROAM_SPEED = 13;
+// Species-specific traits follow the shared ones. Fish and sharks: full
+// colour (saturation, lightness); sharks also boosting.
+export const T_SAT = 14, T_LUM = 15, T_BOOST_CHANCE = 16, T_BOOST_POWER = 17;
+// Sheep (always pastel, so no saturation / lightness): meandering and grass sight.
+export const T_WANDER_ARC = 14, T_GRASS_SIGHT = 15;
 
 type TraitDefaults = Partial<Record<string, Partial<TraitDef>>>;
 
-/** The traits every critter has, with the given per-species defaults. */
-function baseTraits(o: TraitDefaults): TraitDef[] {
+/**
+ * The traits every critter has, with the given per-species defaults, then
+ * (with `colour`) saturation and lightness, then the species' own extras.
+ */
+function traitList(o: TraitDefaults, colour: boolean, extras: TraitDef[] = []): TraitDef[] {
   const t: TraitDef[] = [
     { key: "maxFat", label: "Fat store max", tip: "Most energy it can keep as fat.", def: 2, min: 0.1, max: 40, mode: "mul", spread: 0.8 },
     { key: "fatTendency", label: "Fat storing", tip: "Share of spare energy turned into fat each tick. High = stores fat eagerly.", def: 0.05, min: 0.002, max: 0.5, mode: "mul", spread: 0.8 },
     { key: "minSpeed", label: "Minimum speed", tip: "Slowest it moves when it's going anywhere, in squares per tick.", def: 0.01, min: 0.001, max: 0.2, mode: "mul", spread: 0.6 },
     { key: "maxSpeed", label: "Top speed", tip: "Speed while chasing food or a mate, in squares per tick.", def: 0.07, min: 0.01, max: 0.5, mode: "mul", spread: 0.6 },
     { key: "hue", label: "Colour hue", tip: "Hue of its colour, in degrees.", def: 200, min: 0, max: 360, mode: "add", spread: 140, wrap: true },
-    { key: "sat", label: "Colour saturation", tip: "Saturation of its colour.", def: 0.65, min: 0.05, max: 1, mode: "add", spread: 0.35 },
-    { key: "lum", label: "Colour lightness", tip: "Lightness of its colour.", def: 0.62, min: 0.3, max: 0.9, mode: "add", spread: 0.25 },
     { key: "breedAge", label: "Breeding age", tip: "Age (ticks) from which it starts prioritising breeding.", def: 900, min: 60, max: 40000, mode: "mul", spread: 0.6 },
     { key: "breedFat", label: "Fat needed to breed", tip: "Fat it needs before it starts looking for a mate.", def: 0.8, min: 0, max: 40, mode: "mul", spread: 0.6 },
     { key: "hungerFat", label: "Hunger threshold", tip: "When fat falls below this, it actively hunts for food.", def: 0.6, min: 0, max: 40, mode: "mul", spread: 0.7 },
@@ -55,31 +63,43 @@ function baseTraits(o: TraitDefaults): TraitDef[] {
     { key: "bodySize", label: "Body size", tip: "Body mass: bigger critters cost more to move and to keep alive.", def: 1, min: 0.3, max: 12, mode: "mul", spread: 0.35 },
     { key: "roamSpeed", label: "Roaming speed", tip: "Speed while roaming randomly (with nothing in sight), in squares per tick. Kept between the minimum and top speeds.", def: 0.025, min: 0.001, max: 0.3, mode: "mul", spread: 0.6 },
   ];
+  if (colour) {
+    t.push(
+      { key: "sat", label: "Colour saturation", tip: "Saturation of its colour.", def: 0.65, min: 0.05, max: 1, mode: "add", spread: 0.35 },
+      { key: "lum", label: "Colour lightness", tip: "Lightness of its colour.", def: 0.62, min: 0.3, max: 0.9, mode: "add", spread: 0.25 },
+    );
+  }
+  t.push(...extras);
   for (const d of t) Object.assign(d, o[d.key] ?? {});
   return t;
 }
 
 export interface SpeciesDef {
-  key: "swimmer" | "shark";
+  key: "fish" | "shark" | "sheep";
   /** Singular / plural names for the UI. */
   name: string;
   plural: string;
-  /** Prefix of this species' settings in PARAMS (e.g. "swim" -> swimMoveCost). */
-  prefix: "swim" | "shark";
-  /** What it eats: algae on the grid, or the prey species. */
-  diet: "algae" | "prey";
+  /** Prefix of this species' settings in PARAMS (e.g. "fish" -> fishMoveCost). */
+  prefix: "fish" | "shark" | "sheep";
+  /** What it eats: algae on the grid, the prey species, or grass (grazed a bite at a time). */
+  diet: "algae" | "prey" | "grass";
+  /** Where it lives. Land critters caught in water wade out; water critters on land are stuck. */
+  habitat: "water" | "land";
+  /** Colour comes from hue alone, always a pastel shade. */
+  pastel?: boolean;
+  /** Describes it when it's out of its habitat. */
+  stranded: string;
   traits: TraitDef[];
 }
 
-export const SWIMMER: SpeciesDef = {
-  key: "swimmer", name: "swimmer", plural: "swimmers", prefix: "swim", diet: "algae",
-  traits: baseTraits({}),
+export const FISH: SpeciesDef = {
+  key: "fish", name: "fish", plural: "fish", prefix: "fish", diet: "algae", habitat: "water", stranded: "stranded on land",
+  traits: traitList({}, true),
 };
 
 export const SHARK: SpeciesDef = {
-  key: "shark", name: "shark", plural: "sharks", prefix: "shark", diet: "prey",
-  traits: [
-    ...baseTraits({
+  key: "shark", name: "shark", plural: "sharks", prefix: "shark", diet: "prey", habitat: "water", stranded: "stranded on land",
+  traits: traitList({
       maxFat: { def: 6 },
       minSpeed: { def: 0.012 },
       maxSpeed: { def: 0.06 },
@@ -93,13 +113,33 @@ export const SHARK: SpeciesDef = {
       lifespan: { def: 15000 },
       litterSize: { def: 1.5 },
       bodySize: { def: 6, max: 20, tip: "Adult body mass (babies start small and grow into it). Bigger sharks cost more to move and to keep alive." },
-    }),
+    }, true, [
     { key: "boostChance", label: "Boost likelihood", tip: "Chance a shark bursts into a boost when it spots a fish.", def: 0.5, min: 0, max: 1, mode: "add", spread: 0.3 },
     { key: "boostPower", label: "Boost power", tip: "Boost speed as a multiple of top speed.", def: 2, min: 1, max: 5, mode: "mul", spread: 0.3 },
-  ],
+  ]),
 };
 
-export const SPECIES = [SWIMMER, SHARK];
+export const SHEEP: SpeciesDef = {
+  key: "sheep", name: "sheep", plural: "sheep", prefix: "sheep", diet: "grass", habitat: "land", pastel: true, stranded: "wading out of water",
+  traits: traitList({
+    maxFat: { def: 4 },
+    minSpeed: { def: 0.004 },
+    maxSpeed: { def: 0.03, tip: "Speed while heading for a mate, in squares per tick." },
+    roamSpeed: { def: 0.012, tip: "Walking speed while meandering (including looking for grass), in squares per tick. Kept between the minimum and top speeds." },
+    hue: { def: 0, spread: 180, tip: "Hue of its (always pastel) fleece, in degrees." },
+    breedAge: { def: 2000 },
+    breedFat: { def: 1.5 },
+    hungerFat: { def: 1.2, tip: "When fat falls below this, it grazes any grass it walks over, and now and then heads for the grassiest direction it can see." },
+    lifespan: { def: 12000 },
+    litterSize: { def: 1.3 },
+    bodySize: { def: 2 },
+  }, false, [
+    { key: "wanderArc", label: "Meander arc", tip: "Width of the arc (degrees) its path wanders within, around its general direction.", def: 50, min: 20, max: 90, mode: "add", spread: 25 },
+    { key: "grassSight", label: "Grass sight", tip: "How far (squares) a hungry sheep looks to find the grassiest direction.", def: 18, min: 10, max: 30, mode: "add", spread: 8 },
+  ]),
+};
+
+export const SPECIES = [FISH, SHARK, SHEEP];
 
 export const GENE_COUNT_CRITTER = 23;
 /** Genes taken from each parent (the child also gets one brand-new gene). */
@@ -111,8 +151,9 @@ export interface Gene {
   deltas: Float32Array;
 }
 
-export const enum Mode { Wander, Hungry, Mating, Stranded }
-export const MODE_NAMES = ["roaming", "hunting for food", "looking for a mate", "stranded on land"];
+export const enum Mode { Wander, Hungry, Mating, Stranded, Grazing }
+/** Mode descriptions (Stranded is described per species, see SpeciesDef.stranded). */
+export const MODE_NAMES = ["roaming", "hunting for food", "looking for a mate", "stranded", "grazing"];
 
 export interface Critter {
   id: number;
@@ -139,6 +180,10 @@ export interface Critter {
   boostLeft: number;
   /** Direction it's turning toward (it turns gradually, at the species' turn rate). */
   desired: number;
+  /** Meandering critters (sheep): the general direction they're walking in... */
+  general: number;
+  /** ...and how far their path has wandered off it (radians, within half the meander arc). */
+  wander: number;
   /** How grown it is: its current size as a share of its genetic adult body size (0..1). */
   grown: number;
   phase: number;
@@ -169,10 +214,11 @@ export interface CritterHost {
   floraE: Float32Array;
   nutrients: Float64Array;
   isWater(i: number): boolean;
-  /** Removes the algae on square i (it's been eaten). */
+  /** Removes the grass or algae on square i (it's been eaten). */
   clearFlora(i: number): void;
 }
 
+const GRASS_KIND = 2;
 const ALGAE_KIND = 3;
 
 /** Current body mass: the genetic adult body size scaled by how grown it is. */
@@ -180,7 +226,8 @@ export function bodyMass(c: Critter): number {
   return c.traits[T_BODY] * c.grown;
 }
 
-export function colourOf(t: Float32Array): string {
+export function colourOf(t: Float32Array, sp: SpeciesDef): string {
+  if (sp.pastel) return `hsl(${t[T_HUE].toFixed(0)} 75% 86%)`;
   return `hsl(${t[T_HUE].toFixed(0)} ${(t[T_SAT] * 100).toFixed(0)}% ${(t[T_LUM] * 100).toFixed(0)}%)`;
 }
 
@@ -223,6 +270,8 @@ const PARAM_NAMES = [
   "FoodInterval", "MateInterval", "BreedCooldown", "MinChildEnergy", "MinChildNutrients", "RotRate",
   "GeneStrength", "StartEnergy", "StartNutrients",
   "TurnRate", "Accel", "WanderTurnChance", "WanderTurnSize", "LookAhead",
+  // Sheep have no FoodRadius (grass sight is genetic) and use these instead:
+  "Bite", "GrazeFloor", "MeanderRate",
   "BirthSize", "GrowthRate", "GrowthCost",
 ] as const;
 type ParamName = (typeof PARAM_NAMES)[number];
@@ -258,16 +307,21 @@ export class CritterSystem {
     return this.host.p[this.keys[name]];
   }
 
+  /** Whether square i is where this species lives (water or land). */
+  private home(i: number): boolean {
+    return this.host.isWater(i) === (this.species.habitat === "water");
+  }
+
   /**
-   * Adds a founder with a random genome at (x, y), in water only. Its body
-   * nutrients are gathered from the water around it (up to 4 squares away),
+   * Adds a founder with a random genome at (x, y), in its habitat only. Its
+   * body nutrients are gathered from the squares around it (up to 4 away),
    * so nutrients stay conserved; it isn't created if there aren't enough.
    */
   spawnRandom(x: number, y: number): boolean {
     const h = this.host;
     const i = Math.floor(y) * GRID_W + Math.floor(x);
     const n = this.sp("StartNutrients");
-    if (x < 0 || y < 0 || x >= GRID_W || y >= GRID_H || !h.isWater(i)) return false;
+    if (x < 0 || y < 0 || x >= GRID_W || y >= GRID_H || !this.home(i)) return false;
     if (!this.gatherNutrients(Math.floor(x), Math.floor(y), n)) return false;
     const genes: Gene[] = [];
     for (let g = 0; g < GENE_COUNT_CRITTER; g++) genes.push(randomGene(h.rng, this.sp("GeneStrength"), this.species.traits.length));
@@ -279,7 +333,7 @@ export class CritterSystem {
     return true;
   }
 
-  /** Takes `amount` nutrients from water squares near (cx, cy), nearest first. False (and nothing taken) if short. */
+  /** Takes `amount` nutrients from habitat squares near (cx, cy), nearest first. False (and nothing taken) if short. */
   private gatherNutrients(cx: number, cy: number, amount: number): boolean {
     const h = this.host;
     const R = 4;
@@ -291,7 +345,7 @@ export class CritterSystem {
           if (Math.max(Math.abs(x - cx), Math.abs(y - cy)) !== r) continue; // ring r only
           if (x < 0 || y < 0 || x >= GRID_W || y >= GRID_H) continue;
           const i = y * GRID_W + x;
-          if (!h.isWater(i) || h.nutrients[i] <= 0) continue;
+          if (!this.home(i) || h.nutrients[i] <= 0) continue;
           cells.push(i);
           available += h.nutrients[i];
         }
@@ -313,10 +367,10 @@ export class CritterSystem {
     const c: Critter = {
       id: this.nextId++, x, y, heading: this.host.rng() * Math.PI * 2, speed: 0,
       energy, fat, nutrients, age: 0, cooldown: 0, parents, genes, traits,
-      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, desired: 0, grown: 1,
-      phase: this.host.rng() * Math.PI * 2, alive: true, colour: colourOf(traits),
+      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, desired: 0, general: 0, wander: 0, grown: 1,
+      phase: this.host.rng() * Math.PI * 2, alive: true, colour: colourOf(traits, this.species),
     };
-    c.desired = c.heading;
+    c.desired = c.general = c.heading;
     this.critters.push(c);
     return c;
   }
@@ -376,11 +430,21 @@ export class CritterSystem {
     }
 
     const here = Math.floor(c.y) * GRID_W + Math.floor(c.x);
-    const inWater = h.isWater(here);
+    const atHome = this.home(here);
+    const land = this.species.habitat === "land";
+    const grazer = this.species.diet === "grass";
+
+    // A grazer keeps at a plant until it's gone or it can't store any more.
+    if (c.mode === Mode.Grazing && !(h.kind[here] === GRASS_KIND && c.fat < t[T_MAX_FAT])) c.mode = Mode.Wander;
 
     // Choose what to do.
-    if (!inWater) {
+    if (!atHome) {
       c.mode = Mode.Stranded;
+    } else if (c.mode === Mode.Grazing) {
+      // Still grazing.
+    } else if (grazer && c.fat < t[T_HUNGER_FAT] && h.kind[here] === GRASS_KIND) {
+      this.dropTarget(c);
+      c.mode = Mode.Grazing;
     } else if (c.fat < t[T_HUNGER_FAT]) {
       if (c.mode !== Mode.Hungry) this.dropTarget(c);
       c.mode = Mode.Hungry;
@@ -396,11 +460,14 @@ export class CritterSystem {
     if (c.mode === Mode.Hungry && (this.tick + c.id) % this.sp("FoodInterval") === 0) this.findFood(c);
     if (c.mode === Mode.Mating && (this.tick + c.id) % this.sp("MateInterval") === 0) this.findMate(c);
 
-    // Steer and set speed.
+    // Steer and set speed. Water critters stranded on land can't move; land
+    // critters caught in water wade on until they reach land. Grazers stand still.
     let speed = 0;
     let boosting = false;
-    if (c.mode === Mode.Stranded) {
-      speed = 0;
+    const moving = c.mode !== Mode.Grazing && (land || c.mode !== Mode.Stranded);
+    if (c.mode === Mode.Grazing) {
+      c.speed = 0;
+      this.graze(c, here);
     } else if (c.hasTarget) {
       const other = c.mate ?? c.prey;
       if (other) {
@@ -415,7 +482,7 @@ export class CritterSystem {
     // Work out where it wants to head and how fast; it then turns and
     // speeds up or slows down gradually (species turn rate / acceleration).
     let turnRate = this.sp("TurnRate");
-    if (c.mode !== Mode.Stranded && c.hasTarget) {
+    if (moving && c.hasTarget) {
       const dx = c.targetX - c.x;
       const dy = c.targetY - c.y;
       const dist = Math.hypot(dx, dy);
@@ -431,21 +498,34 @@ export class CritterSystem {
       }
       speed = Math.max(Math.min(t[T_MIN_SPEED], dist), Math.min(top, dist));
       if (dist < (c.prey ? 1 : 0.75)) this.arrive(c);
-    } else if (c.mode !== Mode.Stranded) {
+    } else if (moving && land) {
+      // Meander: the path wanders to and fro within the genetic arc around
+      // its general direction, which itself changes now and then.
+      if (h.rng() < this.sp("WanderTurnChance")) c.general += (h.rng() - 0.5) * this.sp("WanderTurnSize");
+      const half = (t[T_WANDER_ARC] * Math.PI) / 360;
+      c.wander = Math.max(-half, Math.min(half, c.wander + (h.rng() - 0.5) * 2 * this.sp("MeanderRate")));
+      c.desired = c.general + c.wander;
+      speed = t[T_ROAM_SPEED];
+    } else if (moving) {
       // Nothing in sight: roam, picking a new course now and then.
       if (h.rng() < this.sp("WanderTurnChance")) c.desired = c.heading + (h.rng() - 0.5) * this.sp("WanderTurnSize");
       speed = t[T_ROAM_SPEED];
       c.boostLeft = 0;
     }
-    if (c.mode !== Mode.Stranded) {
-      // Land coming up ahead: pick the nearest clear direction to turn to.
+    if (moving) {
+      // Edge of its habitat coming up ahead: pick the nearest clear direction to turn to.
       const look = this.sp("LookAhead");
-      if (look > 0 && !this.clearAhead(c.x, c.y, c.heading, look)) {
+      if (look > 0 && atHome && !this.clearAhead(c.x, c.y, c.heading, look)) {
         for (let k = 1; k <= 6; k++) {
           const off = (k * Math.PI) / 6;
           const side = h.rng() < 0.5 ? 1 : -1;
           if (this.clearAhead(c.x, c.y, c.heading + side * off, look)) { c.desired = c.heading + side * off; break; }
           if (this.clearAhead(c.x, c.y, c.heading - side * off, look)) { c.desired = c.heading - side * off; break; }
+        }
+        if (land) {
+          // Meanderers take the new way as their general direction.
+          c.general = c.desired;
+          c.wander = 0;
         }
       }
       let delta = c.desired - c.heading;
@@ -455,23 +535,25 @@ export class CritterSystem {
       speed = c.speed + Math.max(-accel, Math.min(accel, speed - c.speed));
     }
 
-    // Move, but never onto land or off the map.
-    if (speed > 0 && c.alive) {
+    // Move, but never out of its habitat (land critters already in water can
+    // wade anywhere) or off the map.
+    if (moving && speed > 0 && c.alive) {
       const nx = c.x + Math.cos(c.heading) * speed;
       const ny = c.y + Math.sin(c.heading) * speed;
       const ni = Math.floor(ny) * GRID_W + Math.floor(nx);
-      if (nx >= 0 && ny >= 0 && nx < GRID_W && ny < GRID_H && h.isWater(ni)) {
+      if (nx >= 0 && ny >= 0 && nx < GRID_W && ny < GRID_H && (!atHome || this.home(ni))) {
         c.x = nx;
         c.y = ny;
       } else {
-        // Bumped the shore anyway: stop and turn away.
+        // Bumped the edge anyway: stop and turn away.
         c.heading += Math.PI * (0.5 + h.rng());
-        c.desired = c.heading;
+        c.desired = c.general = c.heading;
+        c.wander = 0;
         this.dropTarget(c);
         speed = 0;
       }
     }
-    c.speed = speed;
+    if (c.mode !== Mode.Grazing) c.speed = speed;
     c.phase += speed * 12; // wiggle only while moving
     if (!c.alive) return;
 
@@ -503,7 +585,7 @@ export class CritterSystem {
     }
     if (c.energy > eMax) c.energy = eMax; // anything beyond both stores is lost
 
-    // Metabolism also sheds a little of the body's nutrients into the water.
+    // Metabolism also sheds a little of the body's nutrients into its square.
     const shed = c.nutrients * this.sp("NutrientLoss");
     c.nutrients -= shed;
     h.nutrients[here] += shed;
@@ -514,7 +596,7 @@ export class CritterSystem {
     }
   }
 
-  /** Whether the water is clear for `dist` squares ahead along `angle`. */
+  /** Whether its habitat continues for `dist` squares ahead along `angle`. */
   private clearAhead(x: number, y: number, angle: number, dist: number): boolean {
     const dx = Math.cos(angle);
     const dy = Math.sin(angle);
@@ -522,7 +604,7 @@ export class CritterSystem {
       const px = x + dx * d;
       const py = y + dy * d;
       if (px < 0 || py < 0 || px >= GRID_W || py >= GRID_H) return false;
-      if (!this.host.isWater(Math.floor(py) * GRID_W + Math.floor(px))) return false;
+      if (!this.home(Math.floor(py) * GRID_W + Math.floor(px))) return false;
     }
     return true;
   }
@@ -535,13 +617,71 @@ export class CritterSystem {
 
   private findFood(c: Critter): void {
     if (this.species.diet === "prey") this.findPrey(c);
+    else if (this.species.diet === "grass") this.findGrass(c);
     else this.findAlgae(c);
+  }
+
+  /** Grass (nutrients) per direction, in 8 sectors; reused between searches. */
+  private sectors = new Float64Array(8);
+
+  /**
+   * Grazers: looks over the grass within its genetic sight range and sets
+   * its general direction toward the grassiest of 8 directions. It still
+   * meanders, and grazes whatever grass it walks over while hungry.
+   */
+  private findGrass(c: Critter): void {
+    const h = this.host;
+    const r = Math.round(c.traits[T_GRASS_SIGHT]);
+    const s = this.sectors;
+    s.fill(0);
+    const cx = Math.floor(c.x);
+    const cy = Math.floor(c.y);
+    for (let y = Math.max(0, cy - r); y <= Math.min(GRID_H - 1, cy + r); y++) {
+      const dy = y - cy;
+      for (let x = Math.max(0, cx - r); x <= Math.min(GRID_W - 1, cx + r); x++) {
+        const i = y * GRID_W + x;
+        if (h.kind[i] !== GRASS_KIND) continue;
+        const dx = x - cx;
+        if (dx * dx + dy * dy > r * r || (dx === 0 && dy === 0)) continue;
+        const sector = Math.floor(((Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI)) * 8) & 7;
+        s[sector] += h.floraN[i];
+      }
+    }
+    let best = 0;
+    for (let k = 1; k < 8; k++) if (s[k] > s[best]) best = k;
+    if (s[best] <= 0) return; // no grass in sight: carry on
+    c.general = -Math.PI + ((best + 0.5) * 2 * Math.PI) / 8;
+    c.wander = 0;
+  }
+
+  /**
+   * One bite of the grass on square i: a share of its nutrients and energy.
+   * Once it's grazed down below the floor, the rest is eaten and it's gone.
+   */
+  private graze(c: Critter, i: number): void {
+    const h = this.host;
+    const n = h.floraN[i];
+    const bite = Math.min(n, this.sp("Bite"));
+    const share = n > 0 ? bite / n : 1;
+    const e = h.floraE[i] * share;
+    h.floraN[i] -= bite;
+    h.floraE[i] -= e;
+    c.nutrients += bite;
+    c.energy += e;
+    if (h.floraN[i] < this.sp("GrazeFloor") * h.p.grassMaxN) {
+      c.nutrients += h.floraN[i];
+      c.energy += h.floraE[i];
+      h.floraN[i] = 0;
+      h.clearFlora(i);
+      c.mode = Mode.Wander;
+    }
+    this.storeSurplus(c);
   }
 
   private findAlgae(c: Critter): void {
     const h = this.host;
     const r = this.sp("FoodRadius");
-    const minAlgae = h.p.swimMinAlgaeSize * h.p.algaeMaxN;
+    const minAlgae = h.p.fishMinAlgaeSize * h.p.algaeMaxN;
     const cx = Math.floor(c.x);
     const cy = Math.floor(c.y);
     let best = -1;
@@ -737,7 +877,7 @@ export class CritterSystem {
   reexpress(): void {
     for (const c of this.critters) {
       c.traits = expressTraits(c.genes, this.species.traits);
-      c.colour = colourOf(c.traits);
+      c.colour = colourOf(c.traits, this.species);
     }
   }
 

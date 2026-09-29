@@ -103,35 +103,35 @@ export const PARAMS = {
   algaeBreedReserve: 0.2,
   algaeBreedSize: 0.5, // algae can bud once grown to this share of full size
 
-  // --- Swimmers ---
-  swimMoveCost: 1, // multiplier on the ½·m·v² energy cost of moving
-  swimMetabolism: 0.0012, // energy burned per tick per unit of body mass (fat adds mass)
-  swimFatMass: 0.4, // mass added per unit of fat
-  swimEnergyMax: 1, // short-term energy store; surplus goes to fat
-  swimNutrientLoss: 0.0004, // share of body nutrients shed into the water each tick
-  swimMinNutrients: 0.005, // a swimmer whose body nutrients fall below this dies
-  swimFoodRadius: 7, // squares searched for algae when hungry
-  swimMinAlgaeSize: 0.6, // swimmers only eat algae grown to at least this share of full size
-  swimMateRadius: 14, // squares searched for a mate
-  swimFoodInterval: 10, // ticks between food searches
-  swimMateInterval: 40, // ticks between mate searches (less often than food)
-  swimBreedCooldown: 600, // ticks after mating before a swimmer can mate again
-  swimMinChildEnergy: 0.3, // parents won't make a child with less energy than this
-  swimMinChildNutrients: 0.04, // ...or fewer nutrients than this
-  swimRotRate: 0.004, // share of a corpse's nutrients returned to its square each tick
-  swimGeneStrength: 0.35, // how strongly each gene nudges its traits
-  swimStartEnergy: 1, // energy each starting swimmer gets
-  swimStartNutrients: 0.1, // nutrients each starting swimmer takes from the water
-  swimTurnRate: 0.6, // most a swimmer can turn per tick (radians): nimble
-  swimAccel: 0.05, // most its speed can change per tick
-  swimWanderTurnChance: 1, // chance per tick of changing course while roaming (1 = constant jitter)
-  swimWanderTurnSize: 0.5, // size of those course changes (radians)
-  swimLookAhead: 0, // squares ahead it checks for land (0 = just bumps into the shore)
-  swimBirthSize: 1, // newborn size as a share of adult body size (1 = born full size)
-  swimGrowthRate: 0.001, // share of adult size grown per tick while it has spare energy
-  swimGrowthCost: 1, // energy per unit of body mass grown
+  // --- Fish ---
+  fishMoveCost: 1, // multiplier on the ½·m·v² energy cost of moving
+  fishMetabolism: 0.0012, // energy burned per tick per unit of body mass (fat adds mass)
+  fishFatMass: 0.4, // mass added per unit of fat
+  fishEnergyMax: 1, // short-term energy store; surplus goes to fat
+  fishNutrientLoss: 0.0004, // share of body nutrients shed into the water each tick
+  fishMinNutrients: 0.005, // a fish whose body nutrients fall below this dies
+  fishFoodRadius: 7, // squares searched for algae when hungry
+  fishMinAlgaeSize: 0.6, // fish only eat algae grown to at least this share of full size
+  fishMateRadius: 14, // squares searched for a mate
+  fishFoodInterval: 10, // ticks between food searches
+  fishMateInterval: 40, // ticks between mate searches (less often than food)
+  fishBreedCooldown: 600, // ticks after mating before a fish can mate again
+  fishMinChildEnergy: 0.3, // parents won't make a child with less energy than this
+  fishMinChildNutrients: 0.04, // ...or fewer nutrients than this
+  fishRotRate: 0.004, // share of a corpse's nutrients returned to its square each tick
+  fishGeneStrength: 0.35, // how strongly each gene nudges its traits
+  fishStartEnergy: 1, // energy each starting fish gets
+  fishStartNutrients: 0.1, // nutrients each starting fish takes from the water
+  fishTurnRate: 0.6, // most a fish can turn per tick (radians): nimble
+  fishAccel: 0.05, // most its speed can change per tick
+  fishWanderTurnChance: 1, // chance per tick of changing course while roaming (1 = constant jitter)
+  fishWanderTurnSize: 0.5, // size of those course changes (radians)
+  fishLookAhead: 0, // squares ahead it checks for land (0 = just bumps into the shore)
+  fishBirthSize: 1, // newborn size as a share of adult body size (1 = born full size)
+  fishGrowthRate: 0.001, // share of adult size grown per tick while it has spare energy
+  fishGrowthCost: 1, // energy per unit of body mass grown
 
-  // --- Sharks (eat swimmers) ---
+  // --- Sharks (eat fish) ---
   sharkMoveCost: 0.15,
   sharkMetabolism: 0.00015,
   sharkFatMass: 0.3,
@@ -161,14 +161,44 @@ export const PARAMS = {
   sharkGrowthCost: 1, // energy per unit of body mass grown
   sharkPreyEnergy: 2, // extra energy per unit of a fish's body size when a shark digests it
 
+  // --- Sheep (graze grass on land) ---
+  sheepMoveCost: 1,
+  sheepMetabolism: 0.0004,
+  sheepFatMass: 0.4,
+  sheepEnergyMax: 2,
+  sheepNutrientLoss: 0.0003,
+  sheepMinNutrients: 0.01,
+  sheepMateRadius: 30,
+  sheepFoodInterval: 90, // ticks between looks for the grassiest direction while hungry
+  sheepMateInterval: 60,
+  sheepBreedCooldown: 1500,
+  sheepMinChildEnergy: 0.6,
+  sheepMinChildNutrients: 0.08,
+  sheepRotRate: 0.003,
+  sheepGeneStrength: 0.35,
+  sheepStartEnergy: 3,
+  sheepStartNutrients: 0.2,
+  sheepTurnRate: 0.08, // most a sheep can turn per tick (radians)
+  sheepAccel: 0.002,
+  sheepWanderTurnChance: 0.003, // chance per tick its general direction changes
+  sheepWanderTurnSize: 1.2, // size of those changes (radians)
+  sheepLookAhead: 3, // squares ahead it checks for water
+  sheepBirthSize: 0.4,
+  sheepGrowthRate: 0.0005,
+  sheepGrowthCost: 1,
+  sheepBite: 0.008, // nutrients (with a matching share of energy) taken from grass per tick of grazing
+  sheepGrazeFloor: 0.08, // grass grazed below this share of full size is eaten up entirely
+  sheepMeanderRate: 0.03, // how fast its path swings about within the meander arc (radians per tick)
+
   // --- Genetics ---
   fullGrowth: 0.98, // fraction of max nutrients considered "fully grown"
 
   // --- Initial population ---
   initialSeeds: 400,
   initialAlgae: 150,
-  initialSwimmers: 80,
+  initialFish: 80,
   initialSharks: 12,
+  initialSheep: 40,
   startingSurfaceWater: 1.3, // standing water at the start, as an average depth over the whole world
   initialSoilWetness: 0.4, // how full the soil starts (0..1); full under the starting lakes
   initialWaterPrefSpread: 0.85, // starting seeds' water preference is spread over this range around the default

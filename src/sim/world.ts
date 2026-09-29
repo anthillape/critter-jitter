@@ -5,7 +5,7 @@ import {
 } from "./genes";
 import { Hydrology } from "./hydrology";
 import { Wind } from "./wind";
-import { CritterSystem, SHARK, SWIMMER, type CritterHost } from "./critters";
+import { CritterSystem, FISH, SHARK, SHEEP, type CritterHost } from "./critters";
 import { mulberry32, type Rng } from "./rng";
 import { generateTerrain, type Terrain } from "./terrain";
 
@@ -34,11 +34,12 @@ export interface Stats {
   nutrientsGround: number;
   nutrientsWater: number;
   nutrientsFlora: number;
-  /** Nutrients in living swimmers and sharks and their rotting bodies. */
-  nutrientsSwimmers: number;
+  /** Nutrients in living animals (fish, sharks, sheep) and their rotting bodies. */
+  nutrientsAnimals: number;
   nutrientsTotal: number;
-  swimmers: CritterCounts;
+  fish: CritterCounts;
   sharks: CritterCounts;
+  sheep: CritterCounts;
   waterSurface: number;
   waterSoil: number;
   waterCloud: number;
@@ -74,8 +75,9 @@ export class World {
   readonly terrain: Terrain;
   readonly water: Hydrology;
   readonly wind: Wind;
-  readonly swimmers: CritterSystem;
+  readonly fish: CritterSystem;
   readonly sharks: CritterSystem;
+  readonly sheep: CritterSystem;
   readonly p: Params;
   readonly rng: Rng;
   tick = 0;
@@ -116,15 +118,16 @@ export class World {
       nutrients: this.nutrients,
       isWater: (i) => this.water.isWater(i),
       clearFlora: (i) => {
+        this.deaths[this.kind[i] === ALGAE ? 1 : 0]++;
         this.kind[i] = EMPTY;
         this.floraN[i] = 0;
         this.floraE[i] = 0;
         this.age[i] = 0;
-        this.deaths[1]++;
       },
     };
-    this.swimmers = new CritterSystem(host, SWIMMER);
-    this.sharks = new CritterSystem(host, SHARK, this.swimmers);
+    this.fish = new CritterSystem(host, FISH);
+    this.sharks = new CritterSystem(host, SHARK, this.fish);
+    this.sheep = new CritterSystem(host, SHEEP);
     this.seedInitialState();
   }
 
@@ -146,12 +149,16 @@ export class World {
       if (this.addAlgae(Math.floor(rng() * CELL_COUNT))) placed++;
     }
     placed = 0;
-    for (let tries = 0; placed < this.p.initialSwimmers && tries < 1e6; tries++) {
-      if (this.swimmers.spawnRandom(rng() * GRID_W, rng() * GRID_H)) placed++;
+    for (let tries = 0; placed < this.p.initialFish && tries < 1e6; tries++) {
+      if (this.fish.spawnRandom(rng() * GRID_W, rng() * GRID_H)) placed++;
     }
     placed = 0;
     for (let tries = 0; placed < this.p.initialSharks && tries < 1e6; tries++) {
       if (this.sharks.spawnRandom(rng() * GRID_W, rng() * GRID_H)) placed++;
+    }
+    placed = 0;
+    for (let tries = 0; placed < this.p.initialSheep && tries < 1e6; tries++) {
+      if (this.sheep.spawnRandom(rng() * GRID_W, rng() * GRID_H)) placed++;
     }
   }
 
@@ -205,9 +212,10 @@ export class World {
     } else {
       for (let i = CELL_COUNT - 1; i >= 0; i--) this.updateSquare(i);
     }
-    this.swimmers.step();
+    this.fish.step();
     this.sharks.step();
-    this.swimmers.removeDead(); // swimmers eaten by sharks this tick
+    this.sheep.step();
+    this.fish.removeDead(); // fish eaten by sharks this tick
   }
 
   /**
@@ -400,7 +408,7 @@ export class World {
     }
 
     // Breed: bud a live algae cell into a free adjacent water square, if there is one.
-    // Algae can bud once half grown (algaeBreedSize), before swimmers find it
+    // Algae can bud once half grown (algaeBreedSize), before fish find it
     // worth eating, so grazed waters can recover.
     if (n >= p.algaeMaxN * p.algaeBreedSize && this.rng() < genes[g + G_BREED]
       && e >= p.algaeChildE + p.algaeBreedReserve && this.nutrients[i] >= p.algaeChildN) {
@@ -449,7 +457,7 @@ export class World {
 
   /** Scans the world for population / nutrient totals and resets event counters. */
   stats(): Stats {
-    const sw = this.swimmers;
+    const sw = this.fish;
     const sh = this.sharks;
     let seeds = 0, grass = 0, algae = 0;
     let ground = 0, waterN = 0, flora = 0, waterSquares = 0;
@@ -465,6 +473,7 @@ export class World {
       } else ground += this.nutrients[i];
       flora += this.floraN[i];
     }
+    const animals = sw.nutrientTotal() + sh.nutrientTotal() + this.sheep.nutrientTotal();
     const s: Stats = {
       tick: this.tick,
       seeds, grass, algae,
@@ -477,10 +486,11 @@ export class World {
       nutrientsGround: ground,
       nutrientsWater: waterN,
       nutrientsFlora: flora,
-      nutrientsSwimmers: sw.nutrientTotal() + sh.nutrientTotal(),
-      nutrientsTotal: ground + waterN + flora + sw.nutrientTotal() + sh.nutrientTotal(),
-      swimmers: counts(sw),
+      nutrientsAnimals: animals,
+      nutrientsTotal: ground + waterN + flora + animals,
+      fish: counts(sw),
       sharks: counts(sh),
+      sheep: counts(this.sheep),
       habitatLost: this.habitatLost,
       ...(() => {
         const m = water.measure();
@@ -494,7 +504,7 @@ export class World {
     this.starved = 0;
     this.oldAge = 0;
     this.habitatLost = 0;
-    for (const c of [sw, sh]) c.births = c.deaths = c.starved = c.oldAge = c.eaten = 0;
+    for (const c of [sw, sh, this.sheep]) c.births = c.deaths = c.starved = c.oldAge = c.eaten = 0;
     return s;
   }
 
