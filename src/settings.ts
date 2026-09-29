@@ -1,5 +1,5 @@
 import { PARAMS, TERRAIN, TICKS_PER_SECOND, WORLD_SIZE, type Params } from "./sim/config";
-import { SWIMMER_TRAITS } from "./sim/swimmers";
+import { SHARK, SWIMMER, type SpeciesDef } from "./sim/critters";
 import {
   ALGAE_DEFAULTS, G_BREED, G_GERM, G_GROWTH, G_LIFESPAN, G_MUTATION, G_RANGE, G_WATER_PREF,
   G_WATER_TOL, GRASS_DEFAULTS,
@@ -76,6 +76,48 @@ function bearingFromAngle(a: number): number {
 function angleFromBearing(fromDeg: number): number {
   const t = ((fromDeg + 180) * Math.PI) / 180;
   return Math.atan2(-Math.cos(t), Math.sin(t));
+}
+
+/** The per-species settings shared by swimmers and sharks (PARAMS keys by prefix). */
+function critterSettings(sp: SpeciesDef, group: string, noun: string, food: string): Setting[] {
+  const k = (name: string) => `${sp.prefix}${name}` as keyof Params;
+  const e = (name: string, label: string, tip: string, range: Pick<Setting, "min" | "max" | "log" | "int">) =>
+    param(k(name), { group, label, tip, ...range });
+  return [
+    e("MoveCost", "Cost of moving", `Multiplier on the energy a ${noun} spends moving (½ × mass × speed², where fat adds mass).`, { min: 0, max: 20 }),
+    e("Metabolism", "Upkeep per unit of mass", `Energy a ${noun} burns each tick just staying alive, per unit of body mass (fat counts as mass).` + PER_SEC, { min: 0.00005, max: 0.01, log: true }),
+    e("FatMass", "Weight of fat", `Mass added by each unit of fat. Fatter ${noun}s cost more to move and to keep alive.`, { min: 0, max: 2 }),
+    e("EnergyMax", "Short-term energy store", `Energy a ${noun} holds before the surplus goes to fat.`, { min: 0.2, max: 20, log: true }),
+    e("NutrientLoss", "Nutrient shedding", `Share of its body nutrients a ${noun} sheds into the water each tick, so it has to keep eating.` + PER_SEC, { min: 0, max: 0.005 }),
+    e("MinNutrients", "Fewest nutrients to survive", `A ${noun} whose body nutrients fall below this dies.`, { min: 0.0005, max: 0.5, log: true }),
+    e("FoodRadius", "Food sight range", `How far (squares) a hungry ${noun} can detect ${food}.`, { min: 1, max: 60, int: true }),
+    e("MateRadius", "Mate sight range", `How far (squares) a ${noun} ready to breed can see another ready ${noun}.`, { min: 2, max: 100, int: true }),
+    e("FoodInterval", "Ticks between food searches", `How often a hungry ${noun} looks around for ${food}.`, { min: 1, max: 120, int: true }),
+    e("MateInterval", "Ticks between mate searches", `How often a ${noun} ready to breed looks around for a mate.`, { min: 1, max: 300, int: true }),
+    e("BreedCooldown", "Rest after mating", `Ticks after mating before a ${noun} can mate again.`, { min: 0, max: 10000, int: true }),
+    e("MinChildEnergy", "Least energy for a child", "Parents won't make a child they can't give at least this much energy between them.", { min: 0.01, max: 10, log: true }),
+    e("MinChildNutrients", "Fewest nutrients for a child", "Parents won't make a child they can't give at least this many nutrients between them.", { min: 0.001, max: 1, log: true }),
+    e("RotRate", "Rotting speed", `Share of a dead ${noun}'s remaining nutrients returned to its square each tick.` + PER_SEC, { min: 0.0002, max: 0.1, log: true }),
+    e("GeneStrength", "Gene strength", "How strongly each gene pushes its traits away from the defaults (affects new genes and mutations).", { min: 0.02, max: 1, log: true }),
+  ];
+}
+
+/** Sliders for a species' trait defaults (the values before genes act). */
+function critterTraitSettings(sp: SpeciesDef, group: string): Setting[] {
+  return sp.traits.map((d): Setting => ({
+    id: `${sp.key}Trait_${d.key}`,
+    group,
+    label: d.label,
+    tip: `${d.tip} This is the default before genes act; changing it updates every ${sp.name}.`,
+    min: d.mode === "mul" ? Math.max(d.min, d.max / 2000) : d.min,
+    max: d.max,
+    log: d.mode === "mul",
+    get: () => d.def,
+    set: (v) => {
+      d.def = v;
+      onCritterTraitsChanged();
+    },
+  }));
 }
 
 export const SETTINGS: Setting[] = [
@@ -346,98 +388,31 @@ export const SETTINGS: Setting[] = [
     min: 0, max: 2,
   }),
 
-  // --- Swimmers ---
-  param("swimMoveCost", {
-    group: "Swimmers", label: "Cost of moving",
-    tip: "Multiplier on the energy swimmers spend moving (½ × mass × speed², where fat adds mass).",
-    min: 0, max: 20,
+  // --- Critters: swimmers and sharks ---
+  ...critterSettings(SWIMMER, "Swimmers", "swimmer", "algae"),
+  param("swimMinAlgaeSize", {
+    group: "Swimmers", label: "Smallest algae worth eating",
+    tip: "Swimmers only eat algae grown to at least this share of full size, so young algae can regrow.",
+    min: 0, max: 1, fmt: pct,
   }),
-  param("swimMetabolism", {
-    group: "Swimmers", label: "Upkeep per unit of mass",
-    tip: "Energy a swimmer burns each tick just staying alive, per unit of body mass (fat counts as mass)." + PER_SEC,
-    min: 0.0001, max: 0.01, log: true,
+  ...critterTraitSettings(SWIMMER, "Swimmer traits (defaults)"),
+  ...critterSettings(SHARK, "Sharks", "shark", "fish"),
+  param("sharkBoostDuration", {
+    group: "Sharks", label: "Boost length",
+    tip: "Ticks a shark's boost lasts once it bursts after a fish.",
+    min: 5, max: 600, int: true, log: true,
   }),
-  param("swimFatMass", {
-    group: "Swimmers", label: "Weight of fat",
-    tip: "Mass added by each unit of fat. Fatter swimmers cost more to move and to keep alive.",
-    min: 0, max: 2,
+  param("sharkBoostMetabolism", {
+    group: "Sharks", label: "Upkeep while boosting",
+    tip: "How many times its normal upkeep a shark burns while boosting (on top of the extra cost of moving faster).",
+    min: 1, max: 20, log: true,
   }),
-  param("swimEnergyMax", {
-    group: "Swimmers", label: "Short-term energy store",
-    tip: "Energy a swimmer holds before the surplus goes to fat.",
-    min: 0.2, max: 5, log: true,
+  param("sharkPreyEnergy", {
+    group: "Sharks", label: "Energy from digesting a fish",
+    tip: "Energy a shark gets per unit of a fish's body size when it eats it, on top of the fish's own stored energy and fat.",
+    min: 0, max: 10,
   }),
-  param("swimNutrientLoss", {
-    group: "Swimmers", label: "Nutrient shedding",
-    tip: "Share of its body nutrients a swimmer sheds into the water each tick, so it has to keep eating." + PER_SEC,
-    min: 0, max: 0.005,
-  }),
-  param("swimMinNutrients", {
-    group: "Swimmers", label: "Fewest nutrients to survive",
-    tip: "A swimmer whose body nutrients fall below this dies.",
-    min: 0.0005, max: 0.1, log: true,
-  }),
-  param("swimFoodRadius", {
-    group: "Swimmers", label: "Food sight range",
-    tip: "How far (squares) a hungry swimmer can see algae.",
-    min: 1, max: 30, int: true,
-  }),
-  param("swimMateRadius", {
-    group: "Swimmers", label: "Mate sight range",
-    tip: "How far (squares) a swimmer ready to breed can see another ready swimmer.",
-    min: 2, max: 60, int: true,
-  }),
-  param("swimFoodInterval", {
-    group: "Swimmers", label: "Ticks between food searches",
-    tip: "How often a hungry swimmer looks around for algae.",
-    min: 1, max: 120, int: true,
-  }),
-  param("swimMateInterval", {
-    group: "Swimmers", label: "Ticks between mate searches",
-    tip: "How often a swimmer ready to breed looks around for a mate.",
-    min: 1, max: 300, int: true,
-  }),
-  param("swimBreedCooldown", {
-    group: "Swimmers", label: "Rest after mating",
-    tip: "Ticks after mating before a swimmer can mate again.",
-    min: 0, max: 5000, int: true,
-  }),
-  param("swimMinChildEnergy", {
-    group: "Swimmers", label: "Least energy for a child",
-    tip: "Parents won't make a child they can't give at least this much energy between them.",
-    min: 0.01, max: 3, log: true,
-  }),
-  param("swimMinChildNutrients", {
-    group: "Swimmers", label: "Fewest nutrients for a child",
-    tip: "Parents won't make a child they can't give at least this many nutrients between them.",
-    min: 0.001, max: 0.5, log: true,
-  }),
-  param("swimRotRate", {
-    group: "Swimmers", label: "Rotting speed",
-    tip: "Share of a dead swimmer's remaining nutrients returned to its square each tick." + PER_SEC,
-    min: 0.0002, max: 0.1, log: true,
-  }),
-  param("swimGeneStrength", {
-    group: "Swimmers", label: "Gene strength",
-    tip: "How strongly each gene pushes its traits away from the defaults (affects new genes and mutations).",
-    min: 0.02, max: 1, log: true,
-  }),
-
-  // --- Swimmer trait defaults ---
-  ...SWIMMER_TRAITS.map((d): Setting => ({
-    id: `swimTrait_${d.key}`,
-    group: "Swimmer traits (defaults)",
-    label: d.label,
-    tip: `${d.tip} This is the default before genes act; changing it updates every swimmer.`,
-    min: d.mode === "mul" ? Math.max(d.min, d.max / 2000) : d.min,
-    max: d.max,
-    log: d.mode === "mul",
-    get: () => d.def,
-    set: (v) => {
-      d.def = v;
-      onSwimmerTraitsChanged();
-    },
-  })),
+  ...critterTraitSettings(SHARK, "Shark traits (defaults)"),
 
   // --- Both plants ---
   param("growEnergyPerN", {
@@ -542,6 +517,21 @@ export const SETTINGS: Setting[] = [
     tip: "Nutrients each starting swimmer takes from the water to build its body.",
     min: 0.01, max: 0.5, log: true, newWorld: true,
   }),
+  param("initialSharks", {
+    group: "Life", label: "Starting sharks",
+    tip: "Number of sharks (with random genomes) released into the water at the start. Each gathers a few nutrients from the water around it.",
+    min: 0, max: 500, int: true, newWorld: true,
+  }),
+  param("sharkStartEnergy", {
+    group: "Life", label: "Starting shark energy",
+    tip: "Energy each starting shark begins with (beyond its short-term store it starts as fat).",
+    min: 0.5, max: 30, log: true, newWorld: true,
+  }),
+  param("sharkStartNutrients", {
+    group: "Life", label: "Starting shark nutrients",
+    tip: "Nutrients each starting shark gathers from the water to build its body.",
+    min: 0.02, max: 2, log: true, newWorld: true,
+  }),
   param("initialWaterPrefSpread", {
     group: "Life", label: "Spread of starting water preferences",
     tip: "Starting seeds get random water preferences spread over this range around the starting water preference, so different moisture niches can be tried from the outset.",
@@ -565,10 +555,10 @@ export const SETTINGS: Setting[] = [
 
 for (const s of SETTINGS) s.defaultValue = s.get();
 
-/** Called when swimmer trait defaults change (the app re-expresses living swimmers). */
-let onSwimmerTraitsChanged: () => void = () => {};
-export function setSwimmerTraitsHook(f: () => void): void {
-  onSwimmerTraitsChanged = f;
+/** Called when critter trait defaults change (the app re-expresses living critters). */
+let onCritterTraitsChanged: () => void = () => {};
+export function setCritterTraitsHook(f: () => void): void {
+  onCritterTraitsChanged = f;
 }
 
 /** Slider positions run 0..SLIDER_STEPS. */

@@ -5,7 +5,7 @@ import {
 } from "./genes";
 import { Hydrology } from "./hydrology";
 import { Wind } from "./wind";
-import { SwimmerSystem } from "./swimmers";
+import { CritterSystem, SHARK, SWIMMER, type CritterHost } from "./critters";
 import { mulberry32, type Rng } from "./rng";
 import { generateTerrain, type Terrain } from "./terrain";
 
@@ -34,15 +34,11 @@ export interface Stats {
   nutrientsGround: number;
   nutrientsWater: number;
   nutrientsFlora: number;
-  /** Nutrients in living swimmers and rotting swimmer bodies. */
+  /** Nutrients in living swimmers and sharks and their rotting bodies. */
   nutrientsSwimmers: number;
   nutrientsTotal: number;
-  swimmers: number;
-  swimmerCorpses: number;
-  swimmerBirths: number;
-  swimmerDeaths: number;
-  swimmersStarved: number;
-  swimmersOldAge: number;
+  swimmers: CritterCounts;
+  sharks: CritterCounts;
   waterSurface: number;
   waterSoil: number;
   waterCloud: number;
@@ -52,11 +48,34 @@ export interface Stats {
   waterSquares: number;
 }
 
+export interface CritterCounts {
+  alive: number;
+  corpses: number;
+  births: number;
+  deaths: number;
+  starved: number;
+  oldAge: number;
+  eaten: number;
+}
+
+function counts(c: CritterSystem): CritterCounts {
+  return {
+    alive: c.critters.filter((x) => x.alive).length,
+    corpses: c.corpses.length,
+    births: c.births,
+    deaths: c.deaths,
+    starved: c.starved,
+    oldAge: c.oldAge,
+    eaten: c.eaten,
+  };
+}
+
 export class World {
   readonly terrain: Terrain;
   readonly water: Hydrology;
   readonly wind: Wind;
-  readonly swimmers: SwimmerSystem;
+  readonly swimmers: CritterSystem;
+  readonly sharks: CritterSystem;
   readonly p: Params;
   readonly rng: Rng;
   tick = 0;
@@ -88,7 +107,7 @@ export class World {
     this.wind = new Wind(seed, params);
     this.water = new Hydrology(this.terrain, params, this.wind);
     this.rng = mulberry32(seed ^ 0x9e3779b9);
-    this.swimmers = new SwimmerSystem({
+    const host: CritterHost = {
       p: this.p,
       rng: this.rng,
       kind: this.kind,
@@ -103,7 +122,9 @@ export class World {
         this.age[i] = 0;
         this.deaths[1]++;
       },
-    });
+    };
+    this.swimmers = new CritterSystem(host, SWIMMER);
+    this.sharks = new CritterSystem(host, SHARK, this.swimmers);
     this.seedInitialState();
   }
 
@@ -127,6 +148,10 @@ export class World {
     placed = 0;
     for (let tries = 0; placed < this.p.initialSwimmers && tries < 1e6; tries++) {
       if (this.swimmers.spawnRandom(rng() * GRID_W, rng() * GRID_H)) placed++;
+    }
+    placed = 0;
+    for (let tries = 0; placed < this.p.initialSharks && tries < 1e6; tries++) {
+      if (this.sharks.spawnRandom(rng() * GRID_W, rng() * GRID_H)) placed++;
     }
   }
 
@@ -181,6 +206,8 @@ export class World {
       for (let i = CELL_COUNT - 1; i >= 0; i--) this.updateSquare(i);
     }
     this.swimmers.step();
+    this.sharks.step();
+    this.swimmers.removeDead(); // swimmers eaten by sharks this tick
   }
 
   /**
@@ -421,6 +448,7 @@ export class World {
   /** Scans the world for population / nutrient totals and resets event counters. */
   stats(): Stats {
     const sw = this.swimmers;
+    const sh = this.sharks;
     let seeds = 0, grass = 0, algae = 0;
     let ground = 0, waterN = 0, flora = 0, waterSquares = 0;
     const water = this.water;
@@ -447,14 +475,10 @@ export class World {
       nutrientsGround: ground,
       nutrientsWater: waterN,
       nutrientsFlora: flora,
-      nutrientsSwimmers: sw.nutrientTotal(),
-      nutrientsTotal: ground + waterN + flora + sw.nutrientTotal(),
-      swimmers: sw.swimmers.length,
-      swimmerCorpses: sw.corpses.length,
-      swimmerBirths: sw.births,
-      swimmerDeaths: sw.deaths,
-      swimmersStarved: sw.starved,
-      swimmersOldAge: sw.oldAge,
+      nutrientsSwimmers: sw.nutrientTotal() + sh.nutrientTotal(),
+      nutrientsTotal: ground + waterN + flora + sw.nutrientTotal() + sh.nutrientTotal(),
+      swimmers: counts(sw),
+      sharks: counts(sh),
       habitatLost: this.habitatLost,
       ...(() => {
         const m = water.measure();
@@ -468,7 +492,7 @@ export class World {
     this.starved = 0;
     this.oldAge = 0;
     this.habitatLost = 0;
-    sw.births = sw.deaths = sw.starved = sw.oldAge = 0;
+    for (const c of [sw, sh]) c.births = c.deaths = c.starved = c.oldAge = c.eaten = 0;
     return s;
   }
 

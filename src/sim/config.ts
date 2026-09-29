@@ -112,6 +112,7 @@ export const PARAMS = {
   swimNutrientLoss: 0.0004, // share of body nutrients shed into the water each tick
   swimMinNutrients: 0.005, // a swimmer whose body nutrients fall below this dies
   swimFoodRadius: 7, // squares searched for algae when hungry
+  swimMinAlgaeSize: 0.6, // swimmers only eat algae grown to at least this share of full size
   swimMateRadius: 14, // squares searched for a mate
   swimFoodInterval: 10, // ticks between food searches
   swimMateInterval: 40, // ticks between mate searches (less often than food)
@@ -123,6 +124,28 @@ export const PARAMS = {
   swimStartEnergy: 1, // energy each starting swimmer gets
   swimStartNutrients: 0.1, // nutrients each starting swimmer takes from the water
 
+  // --- Sharks (eat swimmers) ---
+  sharkMoveCost: 0.3,
+  sharkMetabolism: 0.0003,
+  sharkFatMass: 0.3,
+  sharkEnergyMax: 3,
+  sharkNutrientLoss: 0.0002,
+  sharkMinNutrients: 0.02,
+  sharkFoodRadius: 20, // squares within which a hungry shark can detect fish
+  sharkMateRadius: 40,
+  sharkFoodInterval: 15,
+  sharkMateInterval: 60,
+  sharkBreedCooldown: 2000,
+  sharkMinChildEnergy: 1,
+  sharkMinChildNutrients: 0.1,
+  sharkRotRate: 0.003,
+  sharkGeneStrength: 0.35,
+  sharkStartEnergy: 7,
+  sharkStartNutrients: 0.3,
+  sharkBoostDuration: 60, // ticks a boost lasts
+  sharkBoostMetabolism: 3, // upkeep multiplier while boosting
+  sharkPreyEnergy: 2, // extra energy per unit of a fish's body size when a shark digests it
+
   // --- Genetics ---
   fullGrowth: 0.98, // fraction of max nutrients considered "fully grown"
 
@@ -130,6 +153,7 @@ export const PARAMS = {
   initialSeeds: 400,
   initialAlgae: 150,
   initialSwimmers: 80,
+  initialSharks: 12,
   initialSoilWetness: 1, // scales the starting damp band around the lakes
   initialWaterPrefSpread: 0.85, // starting seeds' water preference is spread over this range around the default
 };

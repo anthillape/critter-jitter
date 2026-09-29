@@ -29,6 +29,13 @@
             <table id="swimTraits"></table>
           </section>
           <section class="card">
+            <h2>Sharks</h2>
+            <canvas id="sharkChart" class="chart" width="360" height="110"></canvas>
+            <table id="statsSharks"></table>
+            <h2>Shark traits <span class="small">(mean ±sd)</span></h2>
+            <table id="sharkTraits"></table>
+          </section>
+          <section class="card">
             <h2>World</h2>
             <table id="statsWorld"></table>
           </section>
@@ -121,6 +128,7 @@
               <button class="tool" data-tool="dryer" aria-pressed="false" title="Hold to dry the ground under the cursor, removing water from the world (D)">Dryer</button>
               <button class="tool" data-tool="seeds" aria-pressed="false" title="Hold to spray grass seeds at random under the cursor. They land only on empty land, and take their nutrients from the ground they land on (G)">Seeds</button>
               <button class="tool" data-tool="swimmers" aria-pressed="false" title="Hold to release swimmers (with random genomes) at random points under the cursor. They land only in water and take their body nutrients from the water they land in (F)">Swimmers</button>
+              <button class="tool" data-tool="sharks" aria-pressed="false" title="Hold to release sharks (with random genomes) at random points under the cursor. They land only in water and gather their body nutrients from the water around them (K)">Sharks</button>
               <button class="tool" data-tool="algae" aria-pressed="false" title="Hold to spray algae at random under the cursor. It lands only in empty water, and takes its nutrients from the water (A)">Algae</button>
             </div>
             <div class="brush" id="brush">
@@ -153,11 +161,11 @@
               <tr><td>.</td><td>Step one tick</td></tr>
               <tr><td>1 – 6</td><td>Switch view</td></tr>
               <tr><td>S / R / D</td><td>Select / Rain / Dryer cursor</td></tr>
-              <tr><td>G / A / F</td><td>Seeds / Algae / Swimmers spray cursor</td></tr>
+              <tr><td>G / A / F / K</td><td>Seeds / Algae / Swimmers / Sharks spray cursor</td></tr>
               <tr><td>Esc</td><td>Clear selection</td></tr>
             </table>
             <h2>Map</h2>
-            <p class="hint">Brown ground is lighter on higher ground and darker when wet. Green is grass, pale specks are seeds, blue is water (deeper is more opaque), bright blue lines are streams, a green tint in water is algae, and white patches are clouds, which turn grey while raining. Wiggling coloured dashes are swimmers (colour is genetic, so families share colours); faint grey dots are dead swimmers rotting.</p>
+            <p class="hint">Brown ground is lighter on higher ground and darker when wet. Green is grass, pale specks are seeds, blue is water (deeper is more opaque), bright blue lines are streams, a green tint in water is algae, and white patches are clouds, which turn grey while raining. Wiggling coloured dashes are swimmers and the larger shark shapes are sharks (colour is genetic, so families share colours); a pale streak behind a shark means it's boosting. Faint grey dots are dead bodies rotting.</p>
           </section>
         </div>
       </aside>

@@ -31,7 +31,9 @@ for (let k = 1; k <= ticks; k++) {
     const ms = (performance.now() - t1) / every;
     t1 = performance.now();
     console.log(
-      `t=${s.tick} seeds=${s.seeds} grass=${s.grass} algae=${s.algae} swim=${s.swimmers} (b/d ${s.swimmerBirths}/${s.swimmerDeaths}, starved ${s.swimmersStarved}, old ${s.swimmersOldAge}, corpses ${s.swimmerCorpses}) ` +
+      `t=${s.tick} seeds=${s.seeds} grass=${s.grass} algae=${s.algae} ` +
+      `\n    swim=${s.swimmers.alive} (b/d ${s.swimmers.births}/${s.swimmers.deaths}, starved ${s.swimmers.starved}, old ${s.swimmers.oldAge}, eaten ${s.swimmers.eaten}) ` +
+      `algae=${s.algae} sharks=${s.sharks.alive} (b/d ${s.sharks.births}/${s.sharks.deaths}, starved ${s.sharks.starved}, old ${s.sharks.oldAge})\n    ` +
       `gB/gD=${s.grassBirths}/${s.grassDeaths} aB/aD=${s.algaeBirths}/${s.algaeDeaths} ` +
       `starved=${s.starved} old=${s.oldAge} N[g/w/f]=${s.nutrientsGround.toFixed(0)}/${s.nutrientsWater.toFixed(0)}/${s.nutrientsFlora.toFixed(0)} ` +
       `drift=${(s.nutrientsTotal - start.nutrientsTotal).toExponential(1)} lost=${s.habitatLost}\n    ` +

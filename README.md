@@ -53,7 +53,7 @@ down rather than stuttering, and the panel shows the achieved speed with
      water and buds live algae into a free adjacent water square. If no square
      is free, it doesn't breed. Deeper water gets less light.
 
-## Swimmers (critters)
+## Critters: swimmers and sharks
 
 Swimmers are small fish, drawn as 3-pixel lines that wiggle while they move.
 Their colour comes from their hue, saturation and lightness genes, so
@@ -94,8 +94,31 @@ families show up as colour groups.
   mutated slightly by the parents' mutation size, plus one brand-new random
   gene, making 23 again.
 
-Nutrients stay conserved: starting swimmers take theirs from the water, and
-everything a swimmer eats, sheds or leaves behind is accounted for.
+### Sharks
+
+Sharks hunt swimmers. They have the same lifecycle as swimmers (fat, hunger,
+mates, breeding, old age, rotting bodies) and the same kind of genome: 23
+genes, each nudging a third of their traits. They have two extra traits:
+
+- **Boost likelihood**: when a shark spots a fish (it can detect them up to
+  20 squares away), this is the chance it bursts into a boost.
+- **Boost power**: the boost speed as a multiple of its top speed.
+
+While boosting, a shark burns several times its normal upkeep, on top of the
+higher ½·m·v² cost of moving faster, for a set number of ticks. A caught fish
+is eaten whole: the shark gets its energy, fat and nutrients, plus extra
+energy from digesting its body. Sharks are bigger than swimmers and drawn
+shark-shaped (seen from above: tapered body, pectoral fins, and a forked
+tail that sweeps as they swim), with a pale streak behind them while
+boosting. Their colour is genetic too, defaulting to grey-blue.
+
+Swimmers and sharks run on the same code (`src/sim/critters.ts`). Each
+species has its own traits, settings (Settings → *Swimmers* / *Sharks*, and
+their trait defaults) and diet.
+
+Nutrients stay conserved: starting swimmers and sharks gather theirs from
+the water, and everything a critter eats, sheds or leaves behind is
+accounted for.
 
 ## Water cycle
 
@@ -151,15 +174,16 @@ speed.
 ## Tools and weather controls
 
 - **Cursor**: *Select* (drag a rectangle for area stats), *Rain* (hold to
-  rain under the cursor, adding new water to the world) and *Dryer* (hold to
-  remove standing water, then soil water, under the cursor), *Seeds*,
-  *Algae* and *Swimmers*. The last three spray at random points inside the
-  brush circle. Swimmers are released with random genomes, in water only,
-  and take their body nutrients from the water they land in.
-  Seeds only take on empty land and algae only in empty water. Each takes
-  its nutrients from the square it lands on, so nutrients stay conserved,
-  and squares too poor to supply them are skipped. Sprayed life gets the
-  starting genes. Keys S / R / D / G / A / F switch between the tools.
+  rain under the cursor, adding new water to the world), *Dryer* (hold to
+  remove standing water, then soil water, under the cursor), and the sprays
+  *Seeds*, *Algae*, *Swimmers* and *Sharks*, which drop things at random
+  points inside the brush circle. Seeds only take on empty land and algae
+  only in empty water, each taking its nutrients from the square it lands on.
+  Swimmers and sharks get random genomes, land only in water, and gather
+  their body nutrients from the water around them. Anything that can't be
+  supplied is skipped, so nutrients stay conserved. Sprayed seeds and algae
+  get the starting genes. Keys S / R / D / G / A / F / K switch between the
+  tools.
   *Rate* and *Size* set the brush strength (water per second at the
   centre, or particles sprayed per second) and its radius. Rain and Dryer
   fade toward the edge of the circle. The tools work while paused too.
