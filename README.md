@@ -283,6 +283,27 @@ The **Water** card charts cloud water, free water (lakes, puddles and
 streams) and water in the ground over time. Shaded vertical bands mark when
 it was raining.
 
+## Sound
+
+The **Sound** button next to the speed control (or the M key) switches sound
+on and off. It starts off, because browsers only allow audio after a click.
+Every sound is synthesised in the browser with the Web Audio API (`src/sound.ts`);
+there are no audio files. Sounds are panned left or right by where on the map
+they happen.
+
+- **Rain**: a hiss of falling rain with pattering drops, fading in and out
+  with the rain (silent while paused).
+- **Fish**: a plop when one dies, and a reversed plop when two breed.
+- **Sharks**: a chomp when one catches prey, and the two-note *Jaws* theme
+  when two breed.
+- **Sheep**: a sad, falling baa when one dies (including being eaten), and a
+  high baa when two breed.
+- **Cats**: a roar when one catches a sheep, and a meow when two breed.
+
+Grass and algae make no sound. In a busy world each sound plays at most every
+so often (a plop every 70 ms, the Jaws theme every 6 s), so it doesn't turn
+into noise.
+
 ## Settings
 
 Every variable of the running simulation has a slider on the **Settings**

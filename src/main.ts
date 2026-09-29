@@ -5,6 +5,7 @@ import { Renderer, type View } from "./render";
 import { formatSetting, fromSlider, SETTINGS, setCritterTraitsHook, SLIDER_STEPS, toSlider, type Setting } from "./settings";
 import { bodyMass, CritterSystem, Mode, MODE_NAMES, T_LITTER, type Corpse, type Critter } from "./sim/critters";
 import type { CritterCounts } from "./sim/world";
+import { Sound, type SoundName } from "./sound";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -489,6 +490,36 @@ function drawSharkShape(x: number, y: number, heading: number, mass: number, wig
   ctx.restore();
 }
 
+// --- Sound (starts off: browsers only allow audio after the player clicks) ---
+const sound = new Sound();
+const soundBtn = $<HTMLButtonElement>("sound");
+function setSound(on: boolean): void {
+  sound.setEnabled(on);
+  soundBtn.textContent = on ? "Sound on" : "Sound off";
+  soundBtn.setAttribute("aria-pressed", String(on));
+}
+soundBtn.addEventListener("click", () => setSound(!sound.enabled));
+
+/** Plays sounds for what the animals did since the last frame, then clears their event counts. */
+function playAnimalSounds(dt: number): void {
+  const pan = (x: number) => (x / GRID_W) * 2 - 1;
+  const cues: Array<[CritterSystem, "births" | "deaths" | "kills", SoundName]> = [
+    [world.fish, "deaths", "plop"],
+    [world.fish, "births", "unplop"],
+    [world.sharks, "kills", "chomp"],
+    [world.sharks, "births", "jaws"],
+    [world.sheep, "deaths", "sadBaa"],
+    [world.sheep, "births", "highBaa"],
+    [world.cats, "kills", "roar"],
+    [world.cats, "births", "meow"],
+  ];
+  for (const [sys, event, name] of cues) if (sys.sounds[event] > 0) sound.play(name, pan(sys.sounds.x));
+  for (const sys of [world.fish, world.sharks, world.sheep, world.cats]) {
+    sys.sounds.births = sys.sounds.deaths = sys.sounds.kills = 0;
+  }
+  sound.update(running ? world.water.rainFade : 0, dt);
+}
+
 const FRAME_BUDGET_MS = 35; // max time spent simulating per frame
 
 // Real-time clock: ticks are owed at TICKS_PER_SECOND x speed per second of
@@ -533,6 +564,7 @@ function loop(now: number): void {
     refreshStats();
   }
   if (hover >= 0) showInspect();
+  playAnimalSounds(dt);
   requestAnimationFrame(loop);
 }
 
@@ -868,7 +900,9 @@ canvas.addEventListener("mouseleave", () => {
 });
 window.addEventListener("keydown", (e) => {
   if (e.target instanceof HTMLInputElement) return;
-  if (e.key === "Escape") {
+  if (e.key === "m") {
+    setSound(!sound.enabled);
+  } else if (e.key === "Escape") {
     setSelection(null);
   } else if (e.key === " ") {
     e.preventDefault();

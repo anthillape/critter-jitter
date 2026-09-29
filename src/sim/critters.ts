@@ -329,6 +329,12 @@ export class CritterSystem {
   oldAge = 0;
   /** Killed and eaten by a predator. */
   eaten = 0;
+  /**
+   * Events since the UI last read them (for sounds): matings that made
+   * children, deaths (including being eaten), kills (predators), and the
+   * x position of the latest one.
+   */
+  readonly sounds = { births: 0, deaths: 0, kills: 0, x: 0 };
   private nextId = 1;
   private tick = 0;
   /** Mate-search buckets: ready critters by coarse cell. */
@@ -892,6 +898,10 @@ export class CritterSystem {
       const sys = this.preySystems.find((sy) => sy.species === p.species)!;
       sys.eaten++;
       sys.deaths++;
+      sys.sounds.deaths++;
+      sys.sounds.x = p.x;
+      this.sounds.kills++;
+      this.sounds.x = c.x;
       this.storeSurplus(c);
       return;
     }
@@ -944,6 +954,8 @@ export class CritterSystem {
     }
     if (made > 0) {
       this.births += made;
+      this.sounds.births++;
+      this.sounds.x = a.x;
       a.cooldown = b.cooldown = this.sp("BreedCooldown");
     }
     function take(c: Critter, amount: number): void {
@@ -978,6 +990,8 @@ export class CritterSystem {
   private die(c: Critter): void {
     c.alive = false;
     this.deaths++;
+    this.sounds.deaths++;
+    this.sounds.x = c.x;
     this.corpses.push({
       x: c.x, y: c.y, nutrients: c.nutrients, startNutrients: c.nutrients, heading: c.heading, mass: bodyMass(c),
     });
