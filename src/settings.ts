@@ -382,6 +382,11 @@ export const SETTINGS: Setting[] = [
     tip: "Energy the parent gives each new algae cell.",
     min: 0.02, max: 1.5, log: true,
   }),
+  param("algaeBreedSize", {
+    group: "Algae", label: "Size when algae can bud",
+    tip: "Algae can bud new cells once grown to this share of full size. Below the size swimmers bother eating, it gives grazed water a way to recover.",
+    min: 0.1, max: 1, fmt: pct,
+  }),
   param("algaeBreedReserve", {
     group: "Algae", label: "Energy kept back when budding",
     tip: "Algae only buds a new cell if it would still have this much energy left.",

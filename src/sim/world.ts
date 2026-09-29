@@ -400,7 +400,9 @@ export class World {
     }
 
     // Breed: bud a live algae cell into a free adjacent water square, if there is one.
-    if (n >= p.algaeMaxN * p.fullGrowth && this.rng() < genes[g + G_BREED]
+    // Algae can bud once half grown (algaeBreedSize), before swimmers find it
+    // worth eating, so grazed waters can recover.
+    if (n >= p.algaeMaxN * p.algaeBreedSize && this.rng() < genes[g + G_BREED]
       && e >= p.algaeChildE + p.algaeBreedReserve && this.nutrients[i] >= p.algaeChildN) {
       const t = this.freeWaterNeighbour(i);
       if (t >= 0) {
