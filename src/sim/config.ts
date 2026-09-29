@@ -41,9 +41,9 @@ export const TICKS_PER_SECOND = 60;
  */
 export const PARAMS = {
   // --- Ground / water ---
-  energyPerTick: 0.02, // sunlight arriving in every square each tick; only a plant there can use it (not stored)
-  landNutrients: 0.6, // mean starting nutrients per land square
-  waterNutrients: 0.15, // mean starting nutrients per water square
+  energyPerTick: 0.03, // sunlight arriving in every square each tick; only a plant there can use it (not stored)
+  landNutrients: 0.9, // mean starting nutrients per land square
+  waterNutrients: 0.25, // mean starting nutrients per water square
   waterDiffusion: 0.2, // nutrient exchange rate between neighbouring water squares
   wetDiffusion: 0.03, // max exchange rate through wet ground (scaled by saturation)
 
