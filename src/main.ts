@@ -2,7 +2,7 @@ import { CELL_PX, GRID_H, GRID_W, PARAMS, TICKS_PER_SECOND } from "./sim/config"
 import { ALGAE_UNUSED_GENES, GENE_COUNT, GENE_NAMES } from "./sim/genes";
 import { ALGAE, GRASS, SEED, World, type GroupStats, type RegionStats } from "./sim/world";
 import { Renderer, type View } from "./render";
-import { formatSetting, fromSlider, SETTINGS, SLIDER_STEPS, toSlider } from "./settings";
+import { formatSetting, fromSlider, SETTINGS, SLIDER_STEPS, toSlider, type Setting } from "./settings";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -39,7 +39,9 @@ const HISTORY = 320;
 
 let world: World;
 let renderer: Renderer;
-let running = true;
+let running = false;
+/** False while setting up on the Start tab (the map is just a preview). */
+let started = false;
 let frame = 0;
 let hover = -1;
 /** Selected rectangle in grid squares (inclusive corners), or null. */
@@ -135,20 +137,19 @@ function refreshBrushLabels(): void {
  * Settings panel: one slider per simulation variable, grouped into
  * collapsible sections, built from the table in settings.ts.
  */
-function buildSettings(): () => void {
-  const root = $<HTMLDivElement>("settings");
+function buildSettings(rootId: string, include: (s: Setting) => boolean, onChange: () => void = () => {}): () => void {
+  const root = $<HTMLDivElement>(rootId);
   const refreshers: Array<() => void> = [];
   const groups = new Map<string, HTMLElement>();
-  for (const s of SETTINGS) {
+  for (const s of SETTINGS.filter(include)) {
     let body = groups.get(s.group);
     if (!body) {
       const details = document.createElement("details");
       details.className = "settings-group";
+      // On the Start tab, show the main starting conditions open.
+      details.open = rootId === "startSettings" && s.group !== "Starting genes";
       const summary = document.createElement("summary");
       summary.textContent = s.group;
-      if (s.group.startsWith("New world")) {
-        summary.title = "These only take effect when you press Restart or New world.";
-      }
       details.append(summary);
       body = document.createElement("div");
       details.append(body);
@@ -157,8 +158,7 @@ function buildSettings(): () => void {
     }
     const row = document.createElement("label");
     row.className = "setting";
-    const tip = s.tip + (s.newWorld ? " Takes effect when you press Restart or New world." : "");
-    row.title = tip;
+    row.title = s.tip;
     const name = document.createElement("span");
     name.className = "setting-name";
     name.textContent = s.label;
@@ -179,6 +179,7 @@ function buildSettings(): () => void {
       s.set(fromSlider(s, Number(input.value)));
       value.textContent = formatSetting(s, s.get());
       row.classList.toggle("changed", Math.abs(s.get() - (s.defaultValue ?? 0)) > 1e-12 * Math.max(1, Math.abs(s.get())));
+      onChange();
     });
     row.append(name, input, value);
     body.append(row);
@@ -196,6 +197,7 @@ function applyWeatherSettings(): void {
 }
 
 function newWorld(seed: number): void {
+  previewDirty = false;
   world = new World(seed);
   renderer = new Renderer(world);
   seedInput.value = String(seed);
@@ -204,6 +206,70 @@ function newWorld(seed: number): void {
   applyWeatherSettings();
   draw();
   refreshStats();
+  refreshStartSummary();
+}
+
+const startSummary = $<HTMLTableElement>("startSummary");
+const startBtn = $<HTMLButtonElement>("startBtn");
+const startHint = $<HTMLParagraphElement>("startHint");
+
+/** Describes the (preview or current) world on the Start tab. */
+function refreshStartSummary(): void {
+  const s = world.stats();
+  const lakes = (100 * s.waterSquares) / (GRID_W * GRID_H);
+  const t = s.waterTotal;
+  const share = (v: number) => `${Math.round(v).toLocaleString()} (${((100 * v) / t).toFixed(0)}%)`;
+  startSummary.innerHTML = [
+    ["Land / lakes", `${(100 - lakes).toFixed(0)}% / ${lakes.toFixed(0)}%`],
+    ["Total water", Math.round(t).toLocaleString()],
+    ["&nbsp;&nbsp;in lakes", share(s.waterSurface)],
+    ["&nbsp;&nbsp;in the ground", share(s.waterSoil)],
+    ["&nbsp;&nbsp;in clouds", share(s.waterCloud)],
+    ["Total nutrients", Math.round(s.nutrientsTotal).toLocaleString()],
+    ["Grass seeds / algae", `${s.seeds.toLocaleString()} / ${s.algae.toLocaleString()}`],
+  ].map(([k, v]) => `<tr><td class="muted">${k}</td><td>${v}</td></tr>`).join("");
+}
+
+function currentSeed(): number {
+  const typed = Math.floor(Number(seedInput.value));
+  return Number.isFinite(typed) ? typed : world.terrain.seed;
+}
+
+let previewTimer = 0;
+/** Starting conditions changed since the preview was built. */
+let previewDirty = false;
+/** Starting conditions changed: rebuild the preview (only before starting). */
+function startConditionsChanged(): void {
+  previewDirty = true;
+  if (started) return;
+  clearTimeout(previewTimer);
+  previewTimer = window.setTimeout(() => newWorld(currentSeed()), 250);
+}
+
+/** Start button: begin the previewed world, or build a fresh one if already running. */
+function startWorld(): void {
+  clearTimeout(previewTimer);
+  if (started || previewDirty || world.terrain.seed !== currentSeed() || world.tick > 0) newWorld(currentSeed());
+  started = true;
+  setRunning(true);
+  refreshStartPanel();
+  selectTab($<HTMLButtonElement>("tab-world"));
+}
+
+/** Back to the Start tab with a paused preview of a new world. */
+function setUpNewWorld(): void {
+  started = false;
+  setRunning(false);
+  newWorld(currentSeed());
+  refreshStartPanel();
+  selectTab($<HTMLButtonElement>("tab-start"));
+}
+
+function refreshStartPanel(): void {
+  startBtn.textContent = started ? "Start a new world" : "Start";
+  startHint.textContent = started
+    ? "A world is running. Change the starting conditions and press Start a new world to replace it, or use Set up a new world on the World tab to preview first."
+    : "Set up the starting conditions, then press Start. The map shows a preview. Hover a name for what it does.";
 }
 
 function draw(): void {
@@ -400,7 +466,6 @@ function refreshSelection(): void {
     ["Mean water depth", r.water ? r.meanWaterDepth.toFixed(2) : "–"],
     ["Water (surface + soil)", r.waterVolume.toFixed(1)],
     ["Mean cloud cover", `${(r.meanCloud * 100).toFixed(0)}%`],
-    ["Mean square energy", r.meanEnergy.toFixed(2)],
     ["Nutrients: ground", `${r.groundNutrients.toFixed(2)}${r.land ? ` (${(r.groundNutrients / r.land).toFixed(3)}/sq)` : ""}`],
     ["Nutrients: water", `${r.waterNutrients.toFixed(2)}${r.water ? ` (${(r.waterNutrients / r.water).toFixed(3)}/sq)` : ""}`],
     ["Nutrients: in flora", r.floraNutrients.toFixed(2)],
@@ -468,7 +533,7 @@ function showInspect(): void {
     ? ` · water depth ${wtr.surface[i].toFixed(2)}`
     : ` · saturation ${(wtr.saturation(i) * 100).toFixed(0)}%` + (wtr.surface[i] > 0.005 ? ` · puddle ${wtr.surface[i].toFixed(2)}` : "");
   line1 += ` · cloud ${(wtr.cloudAt(x, y) * 100).toFixed(0)}%`;
-  line1 += ` · nutrients ${world.nutrients[i].toFixed(3)} · energy ${world.energy[i].toFixed(2)}`;
+  line1 += ` · nutrients ${world.nutrients[i].toFixed(3)}`;
   const k = world.kind[i];
   let line2 = "";
   if (k !== 0) {
@@ -486,21 +551,29 @@ function showInspect(): void {
 
 function setRunning(r: boolean): void {
   running = r;
-  playBtn.textContent = r ? "Pause" : "Play";
+  playBtn.textContent = !started ? "Start" : r ? "Pause" : "Play";
 }
 
-playBtn.addEventListener("click", () => setRunning(!running));
+playBtn.addEventListener("click", () => {
+  if (!started) startWorld();
+  else setRunning(!running);
+});
 $<HTMLButtonElement>("step").addEventListener("click", () => {
   setRunning(false);
   world.step();
   refreshStats();
 });
-$<HTMLButtonElement>("restart").addEventListener("click", () => newWorld(world.terrain.seed));
-$<HTMLButtonElement>("regen").addEventListener("click", () => {
-  const typed = Number(seedInput.value);
-  const seed = Number.isFinite(typed) && typed !== world.terrain.seed ? typed : Math.floor(Math.random() * 1e6);
-  newWorld(seed);
+$<HTMLButtonElement>("restart").addEventListener("click", () => {
+  newWorld(world.terrain.seed);
+  if (!started) startWorld();
 });
+$<HTMLButtonElement>("setupNew").addEventListener("click", setUpNewWorld);
+$<HTMLButtonElement>("randomSeed").addEventListener("click", () => {
+  seedInput.value = String(Math.floor(Math.random() * 1e6));
+  startConditionsChanged();
+});
+seedInput.addEventListener("input", startConditionsChanged);
+startBtn.addEventListener("click", startWorld);
 viewSel.addEventListener("change", draw);
 function eventCell(e: MouseEvent): { x: number; y: number } {
   const r = canvas.getBoundingClientRect();
@@ -557,7 +630,8 @@ window.addEventListener("keydown", (e) => {
     setSelection(null);
   } else if (e.key === " ") {
     e.preventDefault();
-    setRunning(!running);
+    if (!started) startWorld();
+    else setRunning(!running);
   } else if (e.key === ".") {
     setRunning(false);
     world.step();
@@ -582,7 +656,7 @@ rainToggle.addEventListener("click", () => {
   rainToggle.textContent = world.water.manualRain ? "Stop rain" : "Start rain";
 });
 
-// Sidebar tabs (the chosen tab is remembered in this browser).
+// Sidebar tabs.
 const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
 function selectTab(tab: HTMLButtonElement): void {
   for (const t of tabs) {
@@ -590,29 +664,25 @@ function selectTab(tab: HTMLButtonElement): void {
     t.setAttribute("aria-selected", String(selected));
     $<HTMLElement>(t.getAttribute("aria-controls")!).hidden = !selected;
   }
-  try {
-    localStorage.setItem("critter-jitter-tab", tab.id);
-  } catch {
-    // storage unavailable: just don't remember
-  }
 }
 for (const t of tabs) t.addEventListener("click", () => selectTab(t));
-try {
-  const saved = localStorage.getItem("critter-jitter-tab");
-  const t = tabs.find((x) => x.id === saved);
-  if (t) selectTab(t);
-} catch {
-  // storage unavailable
-}
 
-const refreshSettings = buildSettings();
+const refreshSettings = buildSettings("settings", (s) => !s.newWorld);
+const refreshStartSettings = buildSettings("startSettings", (s) => !!s.newWorld, startConditionsChanged);
 $<HTMLButtonElement>("resetSettings").addEventListener("click", () => {
-  for (const s of SETTINGS) if (s.defaultValue !== undefined) s.set(s.defaultValue);
+  for (const s of SETTINGS) if (!s.newWorld && s.defaultValue !== undefined) s.set(s.defaultValue);
   refreshSettings();
+});
+$<HTMLButtonElement>("resetStart").addEventListener("click", () => {
+  for (const s of SETTINGS) if (s.newWorld && s.defaultValue !== undefined) s.set(s.defaultValue);
+  refreshStartSettings();
+  startConditionsChanged();
 });
 
 refreshBrushLabels();
 newWorld(1337);
+setRunning(false);
+refreshStartPanel();
 setTool("select");
 requestAnimationFrame((t) => {
   lastFrame = t;

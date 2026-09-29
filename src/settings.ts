@@ -81,13 +81,8 @@ export const SETTINGS: Setting[] = [
   // --- Sunlight & nutrients ---
   param("energyPerTick", {
     group: "Sunlight & nutrients", label: "Sunlight",
-    tip: "Energy arriving in every square each tick, like sunlight. Grass and algae live on it." + PER_SEC,
+    tip: "Sunlight energy arriving in every square each tick. Only a plant or algae in that square can use it; the ground can't store it, so unused light is lost." + PER_SEC,
     min: 0.004, max: 0.1, log: true,
-  }),
-  param("energyCap", {
-    group: "Sunlight & nutrients", label: "Energy a square can store",
-    tip: "The most sunlight energy a square can bank up while nothing is using it.",
-    min: 0.2, max: 6, log: true,
   }),
   param("waterDiffusion", {
     group: "Sunlight & nutrients", label: "Nutrient mixing in water",
@@ -192,11 +187,6 @@ export const SETTINGS: Setting[] = [
     group: "Clouds & rain", label: "Cloud shape change speed",
     tip: "How quickly clouds change shape as they drift.",
     min: 1e-5, max: 5e-3, log: true,
-  }),
-  param("initialCloud", {
-    group: "Clouds & rain", label: "Starting cloud water",
-    tip: "Share of the world's water that starts in the clouds.",
-    min: 0, max: 0.5, fmt: pct, newWorld: true,
   }),
 
   // --- Wind ---
@@ -367,68 +357,81 @@ export const SETTINGS: Setting[] = [
     min: 0.3, max: 1, fmt: pct,
   }),
 
-  // --- New world: terrain ---
-  terrain("waterLevel", {
-    group: "New world: terrain", label: "Sea level",
-    tip: "Lakes start filled up to this height (1–16), so everything at or below it begins under water.",
-    min: 1, max: 14, int: true,
-  }),
+  // --- Starting conditions (Start tab): terrain ---
   terrain("landScale", {
-    group: "New world: terrain", label: "Landmass size",
+    group: "Terrain", label: "Landmass size",
     tip: "Size of hills, valleys and lakes, in squares. Bigger = broader landscape.",
     min: 30, max: 500, log: true, int: true,
   }),
   terrain("octaves", {
-    group: "New world: terrain", label: "Ground roughness",
+    group: "Terrain", label: "Ground roughness",
     tip: "Layers of detail in the terrain noise. More layers give rougher ground with small valleys for streams.",
     min: 1, max: 9, int: true,
   }),
+
+  // --- Starting conditions: water ---
+  terrain("waterLevel", {
+    group: "Water", label: "Sea level",
+    tip: "Lakes start filled up to this height (1–16), so everything at or below it begins under water.",
+    min: 1, max: 14, int: true,
+  }),
   terrain("irrigationRange", {
-    group: "New world: terrain", label: "Starting wet-ground reach",
+    group: "Water", label: "Starting wet-ground reach",
     tip: "How far from the lakes the ground starts out damp, in squares. After that, the water cycle takes over.",
     min: 5, max: 150, int: true,
   }),
 
-  // --- New world: life ---
+  param("initialSoilWetness", {
+    group: "Water", label: "Starting soil wetness",
+    tip: "How wet the ground starts near the lakes (1 = the usual damp band, 0 = bone dry, above 1 = soggier). More soil water means more total water in the world.",
+    min: 0, max: 2, newWorld: true,
+  }),
+  param("initialCloud", {
+    group: "Water", label: "Starting cloud water",
+    tip: "Share of the world's water that starts in the clouds, on top of the lakes and soil. More cloud water means more total water in the world, and rain sooner.",
+    min: 0, max: 0.5, fmt: pct, newWorld: true,
+  }),
+
+  // --- Starting conditions: life ---
   param("landNutrients", {
-    group: "New world: life", label: "Starting nutrients in land",
+    group: "Life", label: "Starting nutrients in land",
     tip: "Average nutrients per land square at the start. Nutrients are never created or destroyed after that.",
     min: 0.05, max: 3, log: true, newWorld: true,
   }),
   param("waterNutrients", {
-    group: "New world: life", label: "Starting nutrients in water",
+    group: "Life", label: "Starting nutrients in water",
     tip: "Nutrients per water square at the start.",
     min: 0.01, max: 2, log: true, newWorld: true,
   }),
   param("initialSeeds", {
-    group: "New world: life", label: "Starting grass seeds",
+    group: "Life", label: "Starting grass seeds",
     tip: "Number of grass seeds scattered on land at the start.",
     min: 10, max: 5000, log: true, int: true, newWorld: true,
   }),
   param("initialAlgae", {
-    group: "New world: life", label: "Starting algae",
+    group: "Life", label: "Starting algae",
     tip: "Number of algae cells scattered in the water at the start.",
     min: 10, max: 3000, log: true, int: true, newWorld: true,
   }),
   param("initialWaterPrefSpread", {
-    group: "New world: life", label: "Spread of starting water preferences",
+    group: "Life", label: "Spread of starting water preferences",
     tip: "Starting seeds get random water preferences spread over this range around the starting water preference, so different moisture niches can be tried from the outset.",
     min: 0, max: 1, newWorld: true,
   }),
 
-  // --- New world: starting genes ---
-  gene("grass", G_GROWTH, { group: "New world: starting genes", label: "Grass: growth speed", tip: "Nutrients a grass plant takes up per tick while growing.", min: 0.0005, max: 0.05, log: true }),
-  gene("grass", G_BREED, { group: "New world: starting genes", label: "Grass: seeding chance", tip: "Chance per tick that a full-grown plant throws a seed.", min: 0.0005, max: 0.2, log: true }),
-  gene("grass", G_RANGE, { group: "New world: starting genes", label: "Grass: seed throw distance", tip: "Furthest a seed can be thrown, in squares.", min: 1, max: 40 }),
-  gene("grass", G_GERM, { group: "New world: starting genes", label: "Grass: germination wait", tip: "Ticks a seed lies dormant before sprouting.", min: 1, max: 800, log: true }),
-  gene("grass", G_MUTATION, { group: "New world: starting genes", label: "Grass: mutation size", tip: "How much each gene can change, either way, in each seed.", min: 0.002, max: 0.5, log: true, fmt: pct }),
-  gene("grass", G_LIFESPAN, { group: "New world: starting genes", label: "Grass: lifespan", tip: "Age in ticks at which a grass plant dies.", min: 100, max: 30000, log: true }),
-  gene("grass", G_WATER_PREF, { group: "New world: starting genes", label: "Grass: water preference", tip: "Soil wetness (0 = dry, 1 = soaked) grass works best at. Starting seeds are spread around this value.", min: 0.01, max: 1 }),
-  gene("grass", G_WATER_TOL, { group: "New world: starting genes", label: "Grass: water tolerance", tip: "How far from its preferred wetness grass still copes. Wider tolerance lowers peak efficiency.", min: 0.05, max: 1 }),
-  gene("algae", G_GROWTH, { group: "New world: starting genes", label: "Algae: growth speed", tip: "Nutrients an algae cell takes up per tick while growing.", min: 0.0005, max: 0.05, log: true }),
-  gene("algae", G_BREED, { group: "New world: starting genes", label: "Algae: budding chance", tip: "Chance per tick that full-grown algae buds a new cell next to it.", min: 0.0005, max: 0.2, log: true }),
-  gene("algae", G_MUTATION, { group: "New world: starting genes", label: "Algae: mutation size", tip: "How much each gene can change, either way, in each new cell.", min: 0.002, max: 0.5, log: true, fmt: pct }),
-  gene("algae", G_LIFESPAN, { group: "New world: starting genes", label: "Algae: lifespan", tip: "Age in ticks at which an algae cell dies.", min: 100, max: 30000, log: true }),
+  // --- Starting conditions: genes ---
+  gene("grass", G_GROWTH, { group: "Starting genes", label: "Grass: growth speed", tip: "Nutrients a grass plant takes up per tick while growing.", min: 0.0005, max: 0.05, log: true }),
+  gene("grass", G_BREED, { group: "Starting genes", label: "Grass: seeding chance", tip: "Chance per tick that a full-grown plant throws a seed.", min: 0.0005, max: 0.2, log: true }),
+  gene("grass", G_RANGE, { group: "Starting genes", label: "Grass: seed throw distance", tip: "Furthest a seed can be thrown, in squares.", min: 1, max: 40 }),
+  gene("grass", G_GERM, { group: "Starting genes", label: "Grass: germination wait", tip: "Ticks a seed lies dormant before sprouting.", min: 1, max: 800, log: true }),
+  gene("grass", G_MUTATION, { group: "Starting genes", label: "Grass: mutation size", tip: "How much each gene can change, either way, in each seed.", min: 0.002, max: 0.5, log: true, fmt: pct }),
+  gene("grass", G_LIFESPAN, { group: "Starting genes", label: "Grass: lifespan", tip: "Age in ticks at which a grass plant dies.", min: 100, max: 30000, log: true }),
+  gene("grass", G_WATER_PREF, { group: "Starting genes", label: "Grass: water preference", tip: "Soil wetness (0 = dry, 1 = soaked) grass works best at. Starting seeds are spread around this value.", min: 0.01, max: 1 }),
+  gene("grass", G_WATER_TOL, { group: "Starting genes", label: "Grass: water tolerance", tip: "How far from its preferred wetness grass still copes. Wider tolerance lowers peak efficiency.", min: 0.05, max: 1 }),
+  gene("algae", G_GROWTH, { group: "Starting genes", label: "Algae: growth speed", tip: "Nutrients an algae cell takes up per tick while growing.", min: 0.0005, max: 0.05, log: true }),
+  gene("algae", G_BREED, { group: "Starting genes", label: "Algae: budding chance", tip: "Chance per tick that full-grown algae buds a new cell next to it.", min: 0.0005, max: 0.2, log: true }),
+  gene("algae", G_MUTATION, { group: "Starting genes", label: "Algae: mutation size", tip: "How much each gene can change, either way, in each new cell.", min: 0.002, max: 0.5, log: true, fmt: pct }),
+  gene("algae", G_LIFESPAN, { group: "Starting genes", label: "Algae: lifespan", tip: "Age in ticks at which an algae cell dies.", min: 100, max: 30000, log: true }),
 ];
 
 for (const s of SETTINGS) s.defaultValue = s.get();

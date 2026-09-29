@@ -33,8 +33,7 @@ export const TICKS_PER_SECOND = 60;
  */
 export const PARAMS = {
   // --- Ground / water ---
-  energyPerTick: 0.02, // energy arriving in every square each tick
-  energyCap: 1.5, // max energy a square can bank
+  energyPerTick: 0.02, // sunlight arriving in every square each tick; only a plant there can use it (not stored)
   landNutrients: 0.6, // mean starting nutrients per land square
   waterNutrients: 0.15, // mean starting nutrients per water square
   waterDiffusion: 0.2, // nutrient exchange rate between neighbouring water squares
@@ -101,6 +100,7 @@ export const PARAMS = {
   // --- Initial population ---
   initialSeeds: 400,
   initialAlgae: 150,
+  initialSoilWetness: 1, // scales the starting damp band around the lakes
   initialWaterPrefSpread: 0.85, // starting seeds' water preference is spread over this range around the default
 };
 

@@ -13,6 +13,18 @@ npm run build      # typecheck + production build into dist/
 npm run sim -- [seed] [ticks] [reportEvery]   # headless run for tuning
 ```
 
+## Starting a world
+
+The page opens paused on the **Start** tab, with a preview of the map. Every
+starting condition is there: seed, terrain (landmass size, roughness), water
+(sea level, starting wet-ground reach, starting soil wetness, starting cloud
+water), life (starting nutrients, number of grass seeds and algae, spread of
+water preferences) and starting genes. The preview and a summary (land/lake
+split, total water and where it is, total nutrients, starting life) update as
+you change them. Nothing runs until you press **Start**. Later, **Restart**
+on the World tab rebuilds the same world, and *Set up a new world…* returns
+to a paused preview on the Start tab.
+
 ## Time
 
 The simulation runs on a real-time clock at 60 ticks per second of game time
@@ -116,14 +128,13 @@ it was raining.
 
 ## Settings
 
-Every simulation variable has a slider in the **Settings** panel, grouped
-into collapsible sections, with a plain-English name. Hover a name for a
-description. Settings you've changed are highlighted, and *Reset all to
-defaults* puts everything back. Most apply immediately. The *New world*
-sections (terrain, starting life and starting genes) take effect when you
-press **Restart** (same seed) or **New world** (typed or random seed). The
-slider table lives in `src/settings.ts`, and the underlying values are in
-`src/sim/config.ts` (`PARAMS`, `TERRAIN`) and `src/sim/genes.ts`.
+Every variable of the running simulation has a slider on the **Settings**
+tab, grouped into collapsible sections, with a plain-English name. Hover a
+name for a description. Changed settings are highlighted, and *Reset all to
+defaults* puts them back. They apply immediately. Starting conditions live
+on the Start tab. The slider table is in `src/settings.ts`, and the
+underlying values are in `src/sim/config.ts` (`PARAMS`, `TERRAIN`) and
+`src/sim/genes.ts`.
 
 ## Nutrients and energy
 
@@ -133,8 +144,9 @@ slider table lives in `src/settings.ts`, and the underlying values are in
 - Water squares exchange nutrients with neighbouring water quickly. Wet ground
   exchanges nutrients with its neighbours (and with the water) slowly, in
   proportion to its current saturation. Dry ground never moves nutrients.
-- **Energy** arrives in every square each tick (capped), the same everywhere.
-  Plants draw it from their square.
+- **Energy** (sunlight) arrives in every square each tick, the same
+  everywhere. The ground can't store it: only a plant or algae in the square
+  can use it that tick, up to its own uptake limit, and the rest is lost.
 - An organism dies when it can't pay its metabolism or reaches its genetic
   lifespan. All the nutrients it holds go back to its square.
 

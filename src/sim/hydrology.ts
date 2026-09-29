@@ -74,7 +74,7 @@ export class Hydrology {
       const depth = Math.max(0, TERRAIN.waterLevel + 1 - elevation[i]);
       this.surface[i] = depth;
       // Start the soil near its long-run profile so the world doesn't begin bone dry.
-      this.soil[i] = depth > 0 ? p.soilCap : p.soilCap * moisture[i];
+      this.soil[i] = depth > 0 ? p.soilCap : p.soilCap * Math.min(1, moisture[i] * p.initialSoilWetness);
       ground += this.surface[i] + this.soil[i];
     }
     // Some water starts in the sky, so the first rain comes soon and the

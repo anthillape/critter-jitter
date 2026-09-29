@@ -53,8 +53,6 @@ export class World {
 
   /** Nutrients in the ground (land squares) or dissolved in the water (water squares). */
   readonly nutrients = new Float64Array(CELL_COUNT);
-  /** Energy banked in each square, topped up every tick. */
-  readonly energy = new Float32Array(CELL_COUNT);
 
   // Flora layer (structure of arrays, indexed by square)
   readonly kind = new Uint8Array(CELL_COUNT);
@@ -91,7 +89,6 @@ export class World {
       this.nutrients[i] = water.isWater(i)
         ? this.p.waterNutrients
         : this.p.landNutrients * fertility[i] * (0.8 + 0.4 * rng());
-      this.energy[i] = this.p.energyCap * rng();
     }
     let placed = 0;
     for (let tries = 0; placed < this.p.initialSeeds && tries < 1e6; tries++) {
@@ -143,7 +140,6 @@ export class World {
 
   step(): void {
     this.tick++;
-    this.addEnergy();
     this.wind.step();
     this.water.step(this.tick);
     // Nutrients spread slowly; every other tick is plenty.
@@ -153,16 +149,6 @@ export class World {
       for (let i = 0; i < CELL_COUNT; i++) this.updateSquare(i);
     } else {
       for (let i = CELL_COUNT - 1; i >= 0; i--) this.updateSquare(i);
-    }
-  }
-
-  private addEnergy(): void {
-    const e = this.energy;
-    const add = this.p.energyPerTick;
-    const cap = this.p.energyCap;
-    for (let i = 0; i < CELL_COUNT; i++) {
-      const v = e[i] + add;
-      e[i] = v > cap ? cap : v;
     }
   }
 
@@ -237,11 +223,10 @@ export class World {
     const miss = (this.water.saturation(i) - genes[g + G_WATER_PREF]) / tol;
     const eff = Math.max(0, 1 - p.grassToleranceCost * tol) * Math.exp(-miss * miss);
     let e = this.floraE[i];
-    let take = Math.min(p.grassAbsorb * eff, p.grassMaxE - e, this.energy[i]);
-    if (take > 0) {
-      this.energy[i] -= take;
-      e += take;
-    }
+    // Sunlight can't be stored by the ground: a plant uses what arrives this
+    // tick (up to its own uptake limit) and the rest is lost.
+    const take = Math.min(p.grassAbsorb * eff, p.grassMaxE - e, p.energyPerTick);
+    if (take > 0) e += take;
 
     // Metabolise. If the plant can't pay, it dies.
     const size = this.floraN[i] / p.grassMaxN;
@@ -325,11 +310,8 @@ export class World {
     const depth = this.water.surface[i];
     const light = 1 - p.algaeDepthShade * Math.min(1, (depth - p.waterDepthMin) / 5.5);
     let e = this.floraE[i];
-    const take = Math.min(p.algaeAbsorb * light, p.algaeMaxE - e, this.energy[i]);
-    if (take > 0) {
-      this.energy[i] -= take;
-      e += take;
-    }
+    const take = Math.min(p.algaeAbsorb * light, p.algaeMaxE - e, p.energyPerTick);
+    if (take > 0) e += take;
 
     const size = this.floraN[i] / p.algaeMaxN;
     const cost = p.algaeMetaBase + p.algaeMetaSize * size
@@ -452,7 +434,7 @@ export class World {
 
   /**
    * Aggregates everything inside the inclusive rectangle (x0,y0)-(x1,y1):
-   * terrain, nutrients, energy, and per-kind organism stats with gene spread.
+   * terrain, water, nutrients and per-kind organism stats with gene spread.
    */
   regionStats(x0: number, y0: number, x1: number, y1: number): RegionStats {
     const { height } = this.terrain;
@@ -460,7 +442,7 @@ export class World {
     const r: RegionStats = {
       squares: 0, land: 0, water: 0,
       meanHeight: 0, meanLandMoisture: 0, meanWaterDepth: 0, waterVolume: 0, meanCloud: 0,
-      groundNutrients: 0, waterNutrients: 0, floraNutrients: 0, meanEnergy: 0,
+      groundNutrients: 0, waterNutrients: 0, floraNutrients: 0,
       grass: emptyGroup(), seeds: emptyGroup(), algae: emptyGroup(),
     };
     const sq = new Array<number>(GENE_COUNT);
@@ -471,7 +453,6 @@ export class World {
         const i = y * GRID_W + x;
         r.squares++;
         r.meanHeight += height[i];
-        r.meanEnergy += this.energy[i];
         r.waterVolume += water.surface[i] + water.soil[i];
         r.meanCloud += water.cloudAt(x, y);
         if (water.isWater(i)) {
@@ -504,7 +485,6 @@ export class World {
       }
     }
     r.meanHeight /= r.squares || 1;
-    r.meanEnergy /= r.squares || 1;
     r.meanLandMoisture /= r.land || 1;
     r.meanWaterDepth /= r.water || 1;
     r.meanCloud /= r.squares || 1;
@@ -554,7 +534,6 @@ export interface RegionStats {
   groundNutrients: number;
   waterNutrients: number;
   floraNutrients: number;
-  meanEnergy: number;
   grass: GroupStats;
   seeds: GroupStats;
   algae: GroupStats;

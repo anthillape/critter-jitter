@@ -125,3 +125,6 @@ td.muted { color: var(--muted); }
 .sw.surfacew { background: #4f94e0; }
 .sw.soilw { background: #b98548; }
 .sw.rainband { background: rgba(110, 150, 255, 0.35); }
+button.primary { background: #3a5a22; border-color: var(--accent); font-weight: 600; padding: 6px 18px; }
+button.primary:hover { background: #46702a; }
+.start-actions { margin-top: 10px; }

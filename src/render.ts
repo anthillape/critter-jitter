@@ -134,8 +134,11 @@ export class Renderer {
           const v = Math.min(1, n / (wet[i] ? 0.5 : 1.2));
           r = 255 * v; g = 200 * v * v; b = wet[i] ? 120 : 20;
         } else if (view === "energy") {
-          const v = w.energy[i] / p.energyCap;
-          r = 255 * v; g = 230 * v; b = wet[i] ? 90 : 30;
+          // Energy stored in the plant or algae on each square.
+          const k2 = w.kind[i];
+          const maxE = k2 === ALGAE ? p.algaeMaxE : p.grassMaxE;
+          const v = k2 === 0 ? 0 : Math.min(1, w.floraE[i] / maxE);
+          r = 40 + 215 * v; g = 35 + 195 * v; b = wet[i] ? 90 : 30;
         } else if (view === "moisture") {
           if (wet[i]) {
             const v = Math.min(1, surface[i] / WATER_ALPHA_DEPTH);
