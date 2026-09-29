@@ -132,7 +132,7 @@ export const PARAMS = {
   fishGrowthCost: 1, // energy per unit of body mass grown
 
   // --- Sharks (eat fish) ---
-  sharkMoveCost: 0.15,
+  sharkMoveCost: 0.04, // sharks are efficient swimmers
   sharkMetabolism: 0.00015,
   sharkFatMass: 0.3,
   sharkEnergyMax: 3,
@@ -149,10 +149,11 @@ export const PARAMS = {
   sharkGeneStrength: 0.35,
   sharkStartEnergy: 7,
   sharkStartNutrients: 0.3,
+  sharkBoostRange: 5, // squares from its locked-on prey at which a shark may boost
   sharkBoostDuration: 60, // ticks a boost lasts
   sharkBoostMetabolism: 3, // upkeep multiplier while boosting
   sharkTurnRate: 0.04, // most a shark can turn per tick (radians): smooth, gliding turns
-  sharkAccel: 0.002, // most its speed can change per tick
+  sharkAccel: 0.003, // most its speed can change per tick
   sharkWanderTurnChance: 0.004, // chance per tick of changing course while roaming
   sharkWanderTurnSize: 1.6, // size of those course changes (radians)
   sharkLookAhead: 6, // squares ahead it checks for land, turning away before it gets there
@@ -188,6 +189,8 @@ export const PARAMS = {
   sheepGrowthCost: 1,
   sheepBite: 0.008, // nutrients (with a matching share of energy) taken from grass per tick of grazing
   sheepGrazeFloor: 0.08, // grass grazed below this share of full size is eaten up entirely
+  sheepSwimEffort: 0.0005, // energy per tick per unit of mass spent swimming (for the worst swimmer; the best pay a quarter)
+  sheepSwimWalkCost: 1, // extra walking cost at full swimming ability (1 = twice the cost)
   sheepMeanderRate: 0.03, // how fast its path swings about within the meander arc (radians per tick)
 
   // --- Genetics ---

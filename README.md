@@ -98,12 +98,17 @@ families show up as colour groups.
 
 ### Sharks
 
-Sharks hunt fish. They have the same lifecycle as fish (fat, hunger,
-mates, breeding, old age, rotting bodies) and the same kind of genome: 23
-genes, each nudging a third of their traits. They have two extra traits:
+Sharks hunt fish (and sheep caught swimming). They have the same lifecycle
+as fish (fat, hunger, mates, breeding, old age, rotting bodies) and the same
+kind of genome: 23 genes, each nudging a third of their traits. A hungry
+shark locks on to the nearest prey it can see (up to 20 squares away) and
+follows it until it catches it, loses sight of it, or the prey escapes (a
+sheep reaching land). They're fast, efficient swimmers: moving costs them
+far less per unit of mass than it costs fish. They have two extra traits:
 
-- **Boost likelihood**: when a shark spots a fish (it can detect them up to
-  20 squares away), this is the chance it bursts into a boost.
+- **Boost likelihood**: once a shark has closed to within 5 squares of the
+  prey it's locked on to (*Boost range*), this is the chance it bursts into
+  a boost.
 - **Boost power**: the boost speed as a multiple of its top speed.
 
 While boosting, a shark burns several times its normal upkeep, on top of the
@@ -111,8 +116,7 @@ higher ½·m·v² cost of moving faster, for a set number of ticks. A caught fis
 is eaten whole: the shark gets its energy, fat and nutrients, plus extra
 energy from digesting its body. Sharks are bigger than fish and drawn
 shark-shaped (seen from above: tapered body, pectoral fins, and a forked
-tail that sweeps as they swim), with a pale streak behind them while
-boosting. Their colour is genetic too, defaulting to grey-blue.
+tail that sweeps as they swim). Their colour is genetic too, defaulting to grey-blue.
 
 Baby sharks are born at 15% of their adult size and grow into it while they
 have spare energy, paying energy for each unit of body mass they add. They
@@ -136,15 +140,15 @@ species.
 ### Sheep
 
 Sheep live on land and graze grass. They have the same lifecycle and kind
-of genome as fish and sharks (23 genes, each nudging a third of their 16
-traits). They are drawn as little rounded squares of fleece, 4 pixels
+of genome as fish and sharks (23 genes, each nudging a third of their 17
+traits, including *Swimming ability*). They are drawn as little rounded squares of fleece, 4 pixels
 across at the default size, with a black head at the front. Their colour
 genome has only a hue: sheep are always pastel shades.
 
 - **Meandering.** A sheep walks slowly in a general direction, and its path
   wanders to and fro within an arc around that direction. The arc is
   genetic (*Meander arc*, 20–90°). The general direction changes now and
-  then, and turns along the shore when the sheep looks ahead and sees water.
+  then.
 - **Grazing.** A hungry sheep (fat below its hunger threshold) that walks
   onto grass stops and grazes. Each tick it takes a bite (*Bite size*, in
   nutrients, with the same share of the plant's energy), so the grass shrinks
@@ -154,8 +158,15 @@ genome has only a hue: sheep are always pastel shades.
 - **Finding grass.** Every so often a hungry sheep looks over the grass
   within its genetic *Grass sight* (10–30 squares), and turns its general
   direction toward the grassiest of eight directions.
+- **Water.** When a sheep sees water ahead (or reaches the edge), it turns
+  right round, 170–190° to the left or right, and walks off that way.
+- **Swimming.** A sheep caught in water (by a flood, say) swims at half its
+  walking speed, always toward the nearest shore. Sharks can catch and eat
+  it while it's in the water. Swimming ability is genetic (0–1): better
+  swimmers spend less energy swimming (*Cost of swimming*, down to a
+  quarter at ability 1) but more walking (*Walking cost of swimming
+  ability*: up to twice the cost by default).
 - **Mates.** When ready to breed, it walks to the nearest other ready sheep.
-- Sheep caught in water (by a flood) wade on until they reach land.
 
 Fish, sharks and sheep run on the same code (`src/sim/critters.ts`). Each
 species has its own traits, settings (Settings → *Fish* / *Sharks* /

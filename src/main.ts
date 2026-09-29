@@ -403,20 +403,20 @@ function drawSheepShape(x: number, y: number, heading: number, mass: number, col
 /**
  * Sharks, seen from above: a tapered body with pectoral fins and a forked
  * tail that sweeps side to side as they swim. Length grows with body size.
- * A pale streak trails behind a boosting shark. Dead sharks lie still,
+ * Dead sharks lie still,
  * grey, fading as they rot.
  */
 function drawSharks(): void {
   const sh = world.sharks;
-  for (const c of sh.corpses) drawSharkShape(c.x, c.y, c.heading, c.mass, 0, corpseColour(c), false);
+  for (const c of sh.corpses) drawSharkShape(c.x, c.y, c.heading, c.mass, 0, corpseColour(c));
   for (const s of sh.critters) {
     if (!s.alive) continue;
-    drawSharkShape(s.x, s.y, s.heading, bodyMass(s), s.speed > 0 ? Math.sin(s.phase * 0.7) : 0, s.colour, s.boostLeft > 0 && s.speed > 0);
+    drawSharkShape(s.x, s.y, s.heading, bodyMass(s), s.speed > 0 ? Math.sin(s.phase * 0.7) : 0, s.colour);
   }
 }
 
 /** `wiggle` is -1..1 (tail sweep); the shape is centred on (x, y). */
-function drawSharkShape(x: number, y: number, heading: number, mass: number, wiggle: number, colour: string, boosting: boolean): void {
+function drawSharkShape(x: number, y: number, heading: number, mass: number, wiggle: number, colour: string): void {
   const L = 4 + 3 * mass; // pixels nose to tail: grows with the shark
   const W = L * 0.26;
   const w = wiggle * W * 0.55;
@@ -425,14 +425,6 @@ function drawSharkShape(x: number, y: number, heading: number, mass: number, wig
   ctx.rotate(heading);
   // Its position is the middle of the body, so it turns about its centre.
   ctx.translate(0.5 * L, 0);
-  if (boosting) {
-    ctx.strokeStyle = "rgba(255,255,255,0.35)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(-L, 0);
-    ctx.lineTo(-L * 2, 0);
-    ctx.stroke();
-  }
   ctx.fillStyle = colour;
   ctx.beginPath();
   // Body: pointed nose, widest a third of the way back, narrowing to the tail.
@@ -565,7 +557,7 @@ function refreshStats(): void {
   ]);
   critterCard(world.fish, s.fish, statsFish, fishTraits, "Fish", "Eaten by sharks");
   critterCard(world.sharks, s.sharks, statsSharks, sharkTraits, "Sharks", null);
-  critterCard(world.sheep, s.sheep, statsSheep, sheepTraits, "Sheep", null);
+  critterCard(world.sheep, s.sheep, statsSheep, sheepTraits, "Sheep", "Eaten by sharks (while swimming)");
   drawLineChart(fishChartCtx, fishChart, [["fish", "#e07a5f"]]);
   drawLineChart(sharkChartCtx, sharkChart, [["sharks", "#aabed7"]]);
   drawLineChart(sheepChartCtx, sheepChart, [["sheep", "#f0e6d8"]]);

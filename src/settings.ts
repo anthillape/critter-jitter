@@ -416,10 +416,15 @@ export const SETTINGS: Setting[] = [
     min: 0, max: 1, fmt: pct,
   }),
   ...critterTraitSettings(FISH, "Fish traits (defaults)"),
-  ...critterSettings(SHARK, "Sharks", "shark", "fish"),
+  ...critterSettings(SHARK, "Sharks", "shark", "fish (or swimming sheep)"),
+  param("sharkBoostRange", {
+    group: "Sharks", label: "Boost range",
+    tip: "How close (squares) a shark gets to the prey it's locked on to before it may boost at it.",
+    min: 1, max: 30, log: true,
+  }),
   param("sharkBoostDuration", {
     group: "Sharks", label: "Boost length",
-    tip: "Ticks a shark's boost lasts once it bursts after a fish.",
+    tip: "Ticks a shark's boost lasts once it bursts at its prey.",
     min: 5, max: 600, int: true, log: true,
   }),
   param("sharkBoostMetabolism", {
@@ -428,8 +433,8 @@ export const SETTINGS: Setting[] = [
     min: 1, max: 20, log: true,
   }),
   param("sharkPreyEnergy", {
-    group: "Sharks", label: "Energy from digesting a fish",
-    tip: "Energy a shark gets per unit of a fish's body size when it eats it, on top of the fish's own stored energy and fat.",
+    group: "Sharks", label: "Energy from digesting prey",
+    tip: "Energy a shark gets per unit of its prey's body size (fish, or a swimming sheep) when it eats it, on top of the prey's own stored energy and fat.",
     min: 0, max: 10,
   }),
   ...critterTraitSettings(SHARK, "Shark traits (defaults)"),
@@ -443,6 +448,16 @@ export const SETTINGS: Setting[] = [
     group: "Sheep", label: "Grazed down to",
     tip: "Once grass is grazed below this share of full size, the sheep eats the rest and the plant is gone.",
     min: 0, max: 0.9, fmt: pct,
+  }),
+  param("sheepSwimEffort", {
+    group: "Sheep", label: "Cost of swimming",
+    tip: "Energy a sheep spends each tick swimming, per unit of body mass, if it's the worst possible swimmer. The best swimmers (swimming ability 1) pay a quarter of this." + PER_SEC,
+    min: 0.0001, max: 0.05, log: true,
+  }),
+  param("sheepSwimWalkCost", {
+    group: "Sheep", label: "Walking cost of swimming ability",
+    tip: "Extra walking cost a perfect swimmer pays (1 = walking costs twice as much); scaled by swimming ability.",
+    min: 0, max: 5,
   }),
   param("sheepMeanderRate", {
     group: "Sheep", label: "Meander speed",

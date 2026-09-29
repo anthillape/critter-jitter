@@ -126,8 +126,8 @@ export class World {
       },
     };
     this.fish = new CritterSystem(host, FISH);
-    this.sharks = new CritterSystem(host, SHARK, this.fish);
     this.sheep = new CritterSystem(host, SHEEP);
+    this.sharks = new CritterSystem(host, SHARK, [this.fish, this.sheep]);
     this.seedInitialState();
   }
 
