@@ -282,8 +282,10 @@ speed.
   and cats only on land, and they gather their body nutrients from the squares
   around them. Anything that can't be
   supplied is skipped, so nutrients stay conserved. Sprayed seeds and algae
-  get the starting genes. Keys S / R / D / G / A / F / K / H / C switch between the
-  tools.
+  get the starting genes. The *Destructor* (hold) removes all life under
+  the cursor at once: grass, seeds, algae, animals and their bodies, not
+  counted as deaths, with their nutrients returned to the square. Keys
+  S / R / D / X / G / A / F / K / H / C switch between the tools.
   *Rate* and *Size* set the brush strength (water per second at the
   centre, or particles sprayed per second) and its radius. Rain and Dryer
   fade toward the edge of the circle. The tools work while paused too.

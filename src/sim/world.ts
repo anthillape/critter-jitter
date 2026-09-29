@@ -207,6 +207,29 @@ export class World {
     return true;
   }
 
+  /**
+   * Destructor tool: removes all life within `r` squares of (x, y): grass,
+   * seeds, algae, animals and their bodies. Nothing is counted as a death;
+   * every nutrient goes back to its square, so nutrients stay conserved.
+   */
+  destroyLife(x: number, y: number, r: number): void {
+    const r2 = r * r;
+    for (let sy = Math.max(0, Math.floor(y - r)); sy <= Math.min(GRID_H - 1, Math.ceil(y + r)); sy++) {
+      for (let sx = Math.max(0, Math.floor(x - r)); sx <= Math.min(GRID_W - 1, Math.ceil(x + r)); sx++) {
+        if ((sx - x) ** 2 + (sy - y) ** 2 > r2) continue;
+        const i = sy * GRID_W + sx;
+        if (this.kind[i] === EMPTY) continue;
+        this.nutrients[i] += this.floraN[i];
+        this.kind[i] = EMPTY;
+        this.floraN[i] = 0;
+        this.floraE[i] = 0;
+        this.age[i] = 0;
+      }
+    }
+    // Animals by position (centred on the square, matching the brush).
+    for (const sys of [this.fish, this.sharks, this.sheep, this.cats]) sys.removeWithin(x + 0.5, y + 0.5, r);
+  }
+
   step(): void {
     this.tick++;
     this.wind.step();

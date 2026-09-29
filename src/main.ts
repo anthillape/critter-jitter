@@ -86,8 +86,8 @@ let history: Sample[] = [];
 /** Set whenever a tick rains; cleared each time a sample is taken. */
 let rainedSinceSample = false;
 
-type Tool = "select" | "rain" | "dryer" | "seeds" | "algae" | "fish" | "sharks" | "sheep" | "cats";
-const TOOL_KEYS: Record<string, Tool> = { s: "select", r: "rain", d: "dryer", g: "seeds", a: "algae", f: "fish", k: "sharks", h: "sheep", c: "cats" };
+type Tool = "select" | "rain" | "dryer" | "seeds" | "algae" | "fish" | "sharks" | "sheep" | "cats" | "destroy";
+const TOOL_KEYS: Record<string, Tool> = { s: "select", r: "rain", d: "dryer", g: "seeds", a: "algae", f: "fish", k: "sharks", h: "sheep", c: "cats", x: "destroy" };
 const SPRAY_TOOLS: ReadonlySet<Tool> = new Set(["seeds", "algae", "fish", "sharks", "sheep", "cats"]);
 const BRUSH_COLOURS: Record<Exclude<Tool, "select">, string> = {
   rain: "rgba(120,180,255,0.9)",
@@ -98,6 +98,7 @@ const BRUSH_COLOURS: Record<Exclude<Tool, "select">, string> = {
   sharks: "rgba(170,190,215,0.9)",
   sheep: "rgba(245,240,230,0.9)",
   cats: "rgba(200,150,110,0.9)",
+  destroy: "rgba(255,80,70,0.95)",
 };
 /** Fractional sprays owed but not yet placed (so low rates still spray). */
 let sprayOwed = 0;
@@ -124,6 +125,10 @@ function sprayPerSecond(): number {
 /** Applies the current brush for `ticks` ticks' worth of time. */
 function applyBrush(ticks: number): void {
   if (!painting || !mouse || tool === "select") return;
+  if (tool === "destroy") {
+    world.destroyLife(mouse.x, mouse.y, brushSize());
+    return;
+  }
   if (tool === "rain" || tool === "dryer") {
     const amount = brushRate() * ticks;
     if (tool === "rain") world.water.addWater(mouse.x, mouse.y, brushSize(), amount);
@@ -156,13 +161,14 @@ function setTool(t: Tool): void {
   for (const b of toolButtons) b.setAttribute("aria-pressed", String(b.dataset.tool === t));
   brushEl.classList.toggle("disabled", t === "select");
   rateInput.disabled = sizeInput.disabled = t === "select";
+  if (t === "destroy") rateInput.disabled = true; // it clears everything under it at once
   sprayOwed = 0;
   refreshBrushLabels();
   draw();
 }
 
 function refreshBrushLabels(): void {
-  rateVal.textContent = SPRAY_TOOLS.has(tool)
+  rateVal.textContent = tool === "destroy" ? "–" : SPRAY_TOOLS.has(tool)
     ? `${Math.round(sprayPerSecond())} per s`
     : `${(brushRate() * TICKS_PER_SECOND).toFixed(3)}/s`;
   sizeVal.textContent = `${brushSize()} sq`;

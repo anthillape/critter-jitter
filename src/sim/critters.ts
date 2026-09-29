@@ -442,6 +442,28 @@ export class CritterSystem {
     this.rot();
   }
 
+  /**
+   * Destructor tool: removes every critter and body within `r` squares of
+   * (x, y) outright (not counted as deaths). Their nutrients go back to the
+   * square each was on, so nutrients stay conserved.
+   */
+  removeWithin(x: number, y: number, r: number): void {
+    const r2 = r * r;
+    const n = this.host.nutrients;
+    for (const c of this.critters) {
+      if (!c.alive || (c.x - x) ** 2 + (c.y - y) ** 2 > r2) continue;
+      c.alive = false;
+      n[squareOf(c)] += c.nutrients;
+      c.nutrients = 0;
+    }
+    this.removeDead();
+    this.corpses = this.corpses.filter((k) => {
+      if ((k.x - x) ** 2 + (k.y - y) ** 2 > r2) return true;
+      n[Math.floor(k.y) * GRID_W + Math.floor(k.x)] += k.nutrients;
+      return false;
+    });
+  }
+
   /** Drops dead critters from the list (also those eaten by predators). */
   removeDead(): void {
     if (this.critters.some((c) => !c.alive)) this.critters = this.critters.filter((c) => c.alive);
