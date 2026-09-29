@@ -129,10 +129,13 @@ export const PARAMS = {
   swimWanderTurnChance: 1, // chance per tick of changing course while roaming (1 = constant jitter)
   swimWanderTurnSize: 0.5, // size of those course changes (radians)
   swimLookAhead: 0, // squares ahead it checks for land (0 = just bumps into the shore)
+  swimBirthSize: 1, // newborn size as a share of adult body size (1 = born full size)
+  swimGrowthRate: 0.001, // share of adult size grown per tick while it has spare energy
+  swimGrowthCost: 1, // energy per unit of body mass grown
 
   // --- Sharks (eat swimmers) ---
-  sharkMoveCost: 0.3,
-  sharkMetabolism: 0.0003,
+  sharkMoveCost: 0.15,
+  sharkMetabolism: 0.00015,
   sharkFatMass: 0.3,
   sharkEnergyMax: 3,
   sharkNutrientLoss: 0.0002,
@@ -155,6 +158,9 @@ export const PARAMS = {
   sharkWanderTurnChance: 0.004, // chance per tick of changing course while roaming
   sharkWanderTurnSize: 1.6, // size of those course changes (radians)
   sharkLookAhead: 6, // squares ahead it checks for land, turning away before it gets there
+  sharkBirthSize: 0.15, // newborn sharks are this share of their adult size...
+  sharkGrowthRate: 0.0004, // ...and grow by this share per tick while they have spare energy
+  sharkGrowthCost: 1, // energy per unit of body mass grown
   sharkPreyEnergy: 2, // extra energy per unit of a fish's body size when a shark digests it
 
   // --- Genetics ---

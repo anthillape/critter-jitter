@@ -112,6 +112,15 @@ shark-shaped (seen from above: tapered body, pectoral fins, and a forked
 tail that sweeps as they swim), with a pale streak behind them while
 boosting. Their colour is genetic too, defaulting to grey-blue.
 
+Baby sharks are born at 15% of their adult size and grow into it while they
+have spare energy, paying energy for each unit of body mass they add. They
+can breed once nearly full-grown. Adult size is genetic (*Body size*,
+default 6, up to 20). A shark's current mass sets how much energy it spends
+moving (½·m·v²) and staying alive, and how much energy it gives when eaten,
+so big sharks cost more to run. Sharks are drawn in proportion to their
+current size. Birth size, growth speed and growth cost are settings for each
+species; swimmers are born full-size by default.
+
 Sharks glide. They turn gradually (a slow turn rate), speed up and slow down
 smoothly, keep a steady course while roaming and only change course now and
 then. They look ahead for land and turn away before reaching the shore, and

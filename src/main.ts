@@ -3,7 +3,7 @@ import { ALGAE_UNUSED_GENES, GENE_COUNT, GENE_NAMES } from "./sim/genes";
 import { ALGAE, GRASS, SEED, World, type GroupStats, type RegionStats } from "./sim/world";
 import { Renderer, type View } from "./render";
 import { formatSetting, fromSlider, SETTINGS, setCritterTraitsHook, SLIDER_STEPS, toSlider, type Setting } from "./settings";
-import { CritterSystem, MODE_NAMES, T_BODY, T_LITTER, type Critter } from "./sim/critters";
+import { bodyMass, CritterSystem, MODE_NAMES, T_LITTER, type Critter } from "./sim/critters";
 import type { CritterCounts } from "./sim/world";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -366,7 +366,7 @@ function drawSharks(): void {
   for (const c of sh.corpses) ctx.fillRect(c.x * CELL_PX - 1.5, c.y * CELL_PX - 1.5, 3, 3);
   for (const s of sh.critters) {
     if (!s.alive) continue;
-    const L = 9 + 2 * s.traits[T_BODY]; // pixels, nose to tail tip
+    const L = 4 + 3 * bodyMass(s); // pixels nose to tail: grows with the shark
     const W = L * 0.26;
     const w = s.speed > 0 ? Math.sin(s.phase * 0.7) * W * 0.55 : 0;
     ctx.save();
@@ -697,7 +697,7 @@ function showInspect(): void {
     if (!c) continue;
     const tr = sys.species.traits.map((d, j) => `${d.label.toLowerCase()} ${j === T_LITTER ? c.traits[j].toFixed(1) : fmtNum(c.traits[j])}`).join(", ");
     line2 += (line2 ? "\n" : "") +
-      `${sys.species.name} #${c.id} (${MODE_NAMES[c.mode]}${c.boostLeft > 0 ? ", boosting" : ""}): age ${c.age} · energy ${c.energy.toFixed(2)} · fat ${c.fat.toFixed(2)} · nutrients ${c.nutrients.toFixed(3)}` +
+      `${sys.species.name} #${c.id} (${MODE_NAMES[c.mode]}${c.boostLeft > 0 ? ", boosting" : ""}): age ${c.age} · size ${bodyMass(c).toFixed(2)}${c.grown < 1 ? ` (${Math.round(c.grown * 100)}% grown)` : ""} · energy ${c.energy.toFixed(2)} · fat ${c.fat.toFixed(2)} · nutrients ${c.nutrients.toFixed(3)}` +
       (c.parents[0] ? ` · parents #${c.parents[0]} & #${c.parents[1]}` : " · founder") + `\n  traits: ${tr}`;
     break;
   }

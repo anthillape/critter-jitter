@@ -103,6 +103,9 @@ function critterSettings(sp: SpeciesDef, group: string, noun: string, food: stri
     e("Accel", "Acceleration", `Most a ${noun}'s speed can change each tick. Low values make it glide up to speed and coast to a stop.`, { min: 0.0002, max: 0.5, log: true }),
     e("WanderTurnChance", "Course changes while roaming", `Chance each tick that a roaming ${noun} picks a new course (1 = constant small jitters).`, { min: 0.0005, max: 1, log: true }),
     e("WanderTurnSize", "Size of course changes", `How far a roaming ${noun} turns when it changes course, in radians.`, { min: 0.05, max: 6.3 }),
+    e("BirthSize", "Size at birth", `How big a newborn ${noun} is, as a share of its adult body size (100% = born full size). It grows into its adult size and can breed once nearly full-grown.`, { min: 0.05, max: 1 }),
+    e("GrowthRate", "Growth speed", `Share of its adult size a young ${noun} grows each tick while it has spare energy.`, { min: 0.00005, max: 0.02, log: true }),
+    e("GrowthCost", "Energy cost of growing", `Energy a young ${noun} spends for each unit of body mass it grows.`, { min: 0, max: 10 }),
     e("LookAhead", "Looks ahead for land", `How many squares ahead a ${noun} checks for land, so it turns away before reaching the shore (0 = it just bumps into it).`, { min: 0, max: 20, int: true }),
   ];
 }

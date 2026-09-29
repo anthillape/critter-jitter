@@ -92,7 +92,7 @@ export const SHARK: SpeciesDef = {
       hungerFat: { def: 2 },
       lifespan: { def: 15000 },
       litterSize: { def: 1.5 },
-      bodySize: { def: 3 },
+      bodySize: { def: 6, max: 20, tip: "Adult body mass (babies start small and grow into it). Bigger sharks cost more to move and to keep alive." },
     }),
     { key: "boostChance", label: "Boost likelihood", tip: "Chance a shark bursts into a boost when it spots a fish.", def: 0.5, min: 0, max: 1, mode: "add", spread: 0.3 },
     { key: "boostPower", label: "Boost power", tip: "Boost speed as a multiple of top speed.", def: 2, min: 1, max: 5, mode: "mul", spread: 0.3 },
@@ -139,6 +139,8 @@ export interface Critter {
   boostLeft: number;
   /** Direction it's turning toward (it turns gradually, at the species' turn rate). */
   desired: number;
+  /** How grown it is: its current size as a share of its genetic adult body size (0..1). */
+  grown: number;
   phase: number;
   alive: boolean;
   /** CSS colour from the hue / saturation / lightness traits. */
@@ -165,6 +167,11 @@ export interface CritterHost {
 }
 
 const ALGAE_KIND = 3;
+
+/** Current body mass: the genetic adult body size scaled by how grown it is. */
+export function bodyMass(c: Critter): number {
+  return c.traits[T_BODY] * c.grown;
+}
 
 export function colourOf(t: Float32Array): string {
   return `hsl(${t[T_HUE].toFixed(0)} ${(t[T_SAT] * 100).toFixed(0)}% ${(t[T_LUM] * 100).toFixed(0)}%)`;
@@ -209,6 +216,7 @@ const PARAM_NAMES = [
   "FoodInterval", "MateInterval", "BreedCooldown", "MinChildEnergy", "MinChildNutrients", "RotRate",
   "GeneStrength", "StartEnergy", "StartNutrients",
   "TurnRate", "Accel", "WanderTurnChance", "WanderTurnSize", "LookAhead",
+  "BirthSize", "GrowthRate", "GrowthCost",
 ] as const;
 type ParamName = (typeof PARAM_NAMES)[number];
 
@@ -298,7 +306,7 @@ export class CritterSystem {
     const c: Critter = {
       id: this.nextId++, x, y, heading: this.host.rng() * Math.PI * 2, speed: 0,
       energy, fat, nutrients, age: 0, cooldown: 0, parents, genes, traits,
-      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, desired: 0,
+      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, desired: 0, grown: 1,
       phase: this.host.rng() * Math.PI * 2, alive: true, colour: colourOf(traits),
     };
     c.desired = c.heading;
@@ -322,7 +330,7 @@ export class CritterSystem {
 
   private isReady(c: Critter): boolean {
     const t = c.traits;
-    return c.alive && c.cooldown === 0 && c.age >= t[T_BREED_AGE] && c.fat >= t[T_BREED_FAT] && c.fat >= t[T_HUNGER_FAT];
+    return c.alive && c.cooldown === 0 && c.grown >= 0.9 && c.age >= t[T_BREED_AGE] && c.fat >= t[T_BREED_FAT] && c.fat >= t[T_HUNGER_FAT];
   }
 
   private buildBuckets(): void {
@@ -462,7 +470,7 @@ export class CritterSystem {
 
     // Energy: moving costs ½·m·v² (fat adds mass), living costs energy per unit
     // of mass, and boosting multiplies the living cost while it lasts.
-    const mass = t[T_BODY] + c.fat * this.sp("FatMass");
+    const mass = bodyMass(c) + c.fat * this.sp("FatMass");
     const upkeep = this.sp("Metabolism") * mass * (boosting ? this.host.p.sharkBoostMetabolism : 1);
     c.energy -= this.sp("MoveCost") * 0.5 * mass * speed * speed + upkeep;
     // Fat: store spare energy, or draw on fat when running low.
@@ -475,6 +483,16 @@ export class CritterSystem {
       const take = Math.min(0.3 * eMax - c.energy, c.fat);
       c.energy += take;
       c.fat -= take;
+    }
+    // Growing up: while it has spare energy it grows toward its adult size,
+    // paying energy for each unit of body mass it adds.
+    if (c.grown < 1 && c.energy > 0.5 * eMax) {
+      const step = Math.min(this.sp("GrowthRate"), 1 - c.grown);
+      const cost = step * t[T_BODY] * this.sp("GrowthCost");
+      if (c.energy - cost > 0.3 * eMax) {
+        c.grown += step;
+        c.energy -= cost;
+      }
     }
     if (c.energy > eMax) c.energy = eMax; // anything beyond both stores is lost
 
@@ -595,7 +613,7 @@ export class CritterSystem {
       if (!p.alive) return;
       p.alive = false;
       // Its stored energy plus what its body yields when digested.
-      c.energy += p.energy + p.fat + p.traits[T_BODY] * this.host.p.sharkPreyEnergy;
+      c.energy += p.energy + p.fat + bodyMass(p) * this.host.p.sharkPreyEnergy;
       c.nutrients += p.nutrients;
       p.nutrients = 0;
       this.prey!.eaten++;
@@ -646,6 +664,7 @@ export class CritterSystem {
       b.nutrients -= nB;
       const e = eA + eB;
       const child = this.add((a.x + b.x) / 2, (a.y + b.y) / 2, this.childGenes(a, b), [a.id, b.id], Math.min(e, eMax), nA + nB, 0);
+      child.grown = Math.min(1, this.sp("BirthSize")); // babies start small and grow
       child.fat = Math.min(Math.max(0, e - eMax), child.traits[T_MAX_FAT]); // any remainder beyond fat is lost
       made++;
     }
