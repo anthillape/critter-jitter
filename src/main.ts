@@ -11,6 +11,8 @@ const ctx = canvas.getContext("2d")!;
 ctx.imageSmoothingEnabled = false;
 const chart = $<HTMLCanvasElement>("chart");
 const chartCtx = chart.getContext("2d")!;
+const waterChart = $<HTMLCanvasElement>("waterChart");
+const waterChartCtx = waterChart.getContext("2d")!;
 const playBtn = $<HTMLButtonElement>("play");
 const speedSel = $<HTMLSelectElement>("speed");
 const viewSel = $<HTMLSelectElement>("view");
@@ -43,7 +45,19 @@ let hover = -1;
 /** Selected rectangle in grid squares (inclusive corners), or null. */
 let selection: { x0: number; y0: number; x1: number; y1: number } | null = null;
 let dragStart: { x: number; y: number } | null = null;
-let history: Array<{ grass: number; seeds: number; algae: number }> = [];
+interface Sample {
+  grass: number;
+  seeds: number;
+  algae: number;
+  cloud: number;
+  surface: number;
+  soil: number;
+  /** It rained at some point since the previous sample. */
+  rained: boolean;
+}
+let history: Sample[] = [];
+/** Set whenever a tick rains; cleared each time a sample is taken. */
+let rainedSinceSample = false;
 
 type Tool = "select" | "rain" | "dryer" | "seeds" | "algae";
 const TOOL_KEYS: Record<string, Tool> = { s: "select", r: "rain", d: "dryer", g: "seeds", a: "algae" };
@@ -244,6 +258,7 @@ function loop(now: number): void {
     while (owed >= 1) {
       applyBrush(1);
       world.step();
+      if (world.water.raining) rainedSinceSample = true;
       owed--;
       rateWindow.ticks++;
       if (performance.now() - start > FRAME_BUDGET_MS) {
@@ -277,7 +292,12 @@ function formatGameTime(tick: number): string {
 
 function refreshStats(): void {
   const s = world.stats();
-  history.push({ grass: s.grass, seeds: s.seeds, algae: s.algae });
+  history.push({
+    grass: s.grass, seeds: s.seeds, algae: s.algae,
+    cloud: s.waterCloud, surface: s.waterSurface, soil: s.waterSoil,
+    rained: rainedSinceSample || s.raining,
+  });
+  rainedSinceSample = false;
   if (history.length > HISTORY) history.shift();
 
   const table = (rows: Array<[string, string]>) =>
@@ -312,7 +332,16 @@ function refreshStats(): void {
   const all = world.regionStats(0, 0, GRID_W - 1, GRID_H - 1);
   genesTable.innerHTML = geneRows(all.grass, all.algae);
   refreshSelection();
-  drawChart();
+  drawLineChart(chartCtx, chart, [
+    ["grass", "#6fbf3a"],
+    ["seeds", "#e3cf7a"],
+    ["algae", "#3fa7a0"],
+  ]);
+  drawLineChart(waterChartCtx, waterChart, [
+    ["cloud", "#e4ded2"],
+    ["surface", "#4f94e0"],
+    ["soil", "#b98548"],
+  ], true);
 }
 
 const COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
@@ -385,30 +414,47 @@ function refreshSelection(): void {
     `<table>${geneRows(r.grass, r.algae, true)}</table>`;
 }
 
-function drawChart(): void {
-  const w = chart.width;
-  const h = chart.height;
-  chartCtx.clearRect(0, 0, w, h);
+/**
+ * Draws the recent history as lines on a shared scale from zero. With
+ * `rainBands`, samples where it rained are shaded as vertical bands.
+ */
+function drawLineChart(
+  ctx2: CanvasRenderingContext2D,
+  canvas2: HTMLCanvasElement,
+  series: Array<[keyof Omit<Sample, "rained">, string]>,
+  rainBands = false,
+): void {
+  const w = canvas2.width;
+  const h = canvas2.height;
+  ctx2.clearRect(0, 0, w, h);
   if (history.length < 2) return;
-  let max = 1;
-  for (const p of history) max = Math.max(max, p.grass, p.seeds, p.algae);
-  const series: Array<[keyof (typeof history)[number], string]> = [
-    ["grass", "#6fbf3a"],
-    ["seeds", "#e3cf7a"],
-    ["algae", "#3fa7a0"],
-  ];
-  for (const [key, color] of series) {
-    chartCtx.strokeStyle = color;
-    chartCtx.lineWidth = 1.5;
-    chartCtx.beginPath();
+  // Stretch to the full width while the history is still filling up.
+  const span = history.length - 1;
+  const xAt = (i: number) => (i / span) * w;
+  if (rainBands) {
+    ctx2.fillStyle = "rgba(110, 150, 255, 0.22)";
+    const step = w / span;
     history.forEach((p, i) => {
-      const x = (i / (HISTORY - 1)) * w;
-      const y = h - 4 - (p[key] / max) * (h - 8);
-      if (i === 0) chartCtx.moveTo(x, y);
-      else chartCtx.lineTo(x, y);
+      if (p.rained) ctx2.fillRect(xAt(i) - step / 2, 0, step + 0.5, h);
     });
-    chartCtx.stroke();
   }
+  let max = 1;
+  for (const p of history) for (const [key] of series) max = Math.max(max, p[key]);
+  for (const [key, color] of series) {
+    ctx2.strokeStyle = color;
+    ctx2.lineWidth = 1.5;
+    ctx2.beginPath();
+    history.forEach((p, i) => {
+      const y = h - 4 - (p[key] / max) * (h - 8);
+      if (i === 0) ctx2.moveTo(xAt(i), y);
+      else ctx2.lineTo(xAt(i), y);
+    });
+    ctx2.stroke();
+  }
+  // Scale label: the top of the chart.
+  ctx2.fillStyle = "rgba(233, 225, 211, 0.55)";
+  ctx2.font = "10px system-ui, sans-serif";
+  ctx2.fillText(Math.round(max).toLocaleString(), 4, 11);
 }
 
 function showInspect(): void {

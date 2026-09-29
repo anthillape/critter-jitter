@@ -96,7 +96,7 @@ button, select, input {
 button { cursor: pointer; }
 button:hover { border-color: var(--accent); }
 input[type="number"] { width: 90px; }
-#chart { width: 100%; height: auto; background: #1a1611; border: 1px solid var(--line); border-radius: 4px; margin-top: 4px; }
+.chart { width: 100%; height: auto; background: #1a1611; border: 1px solid var(--line); border-radius: 4px; margin-top: 4px; }
 .legend { color: var(--muted); font-size: 12px; margin: 2px 0 8px; }
 .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 4px 0 8px; vertical-align: -1px; }
 .sw.grass { background: #6fbf3a; margin-left: 0; }
@@ -121,3 +121,7 @@ td.muted { color: var(--muted); }
 .setting-value { font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
 .setting.changed .setting-name, .setting.changed .setting-value { color: var(--accent); }
 .settings-actions { margin-top: 6px; }
+.sw.cloudw { background: #e4ded2; }
+.sw.surfacew { background: #4f94e0; }
+.sw.soilw { background: #b98548; }
+.sw.rainband { background: rgba(110, 150, 255, 0.35); }

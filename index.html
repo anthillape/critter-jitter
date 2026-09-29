@@ -15,7 +15,7 @@
         <div class="cards">
           <section class="card">
             <h2>Population</h2>
-            <canvas id="chart" width="360" height="130"></canvas>
+            <canvas id="chart" class="chart" width="360" height="130"></canvas>
             <div class="legend">
               <span class="sw grass"></span>grass <span class="sw seeds"></span>seeds <span class="sw algae"></span>algae
             </div>
@@ -24,7 +24,13 @@
           <section class="card">
             <h2>World</h2>
             <table id="statsWorld"></table>
+          </section>
+          <section class="card">
             <h2>Water</h2>
+            <canvas id="waterChart" class="chart" width="360" height="130"></canvas>
+            <div class="legend">
+              <span class="sw cloudw"></span>clouds <span class="sw surfacew"></span>free water <span class="sw soilw"></span>in the ground <span class="sw rainband"></span>raining
+            </div>
             <table id="statsWater"></table>
           </section>
           <section class="card">

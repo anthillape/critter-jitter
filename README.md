@@ -110,6 +110,10 @@ speed.
 Total water is conserved apart from what the Rain and Dryer tools add and
 remove.
 
+The **Water** card charts cloud water, free water (lakes, puddles and
+streams) and water in the ground over time. Shaded vertical bands mark when
+it was raining.
+
 ## Settings
 
 Every simulation variable has a slider in the **Settings** panel, grouped
