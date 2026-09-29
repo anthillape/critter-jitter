@@ -5,7 +5,7 @@ import { Renderer, type View } from "./render";
 import { formatSetting, fromSlider, SETTINGS, setCritterTraitsHook, SLIDER_STEPS, toSlider, type Setting } from "./settings";
 import { bodyMass, CritterSystem, Mode, MODE_NAMES, T_LITTER, type Corpse, type Critter } from "./sim/critters";
 import type { CritterCounts } from "./sim/world";
-import { Sound, type SoundName } from "./sound";
+import { Sound, SOUNDS, type SoundName } from "./sound";
 import { setupCards } from "./cards";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -501,6 +501,60 @@ function setSound(on: boolean): void {
   soundBtn.setAttribute("aria-pressed", String(on));
 }
 soundBtn.addEventListener("click", () => setSound(!sound.enabled));
+
+/** Tools & weather tab: a switch, volume slider and ▶ preview for each sound. */
+function buildSoundControls(): void {
+  const box = $<HTMLDivElement>("soundSettings");
+  box.textContent = "";
+  for (const { key, label, tip } of SOUNDS) {
+    const s = sound.settings[key];
+    const row = document.createElement("div");
+    row.className = "sound-row";
+    row.title = tip;
+    const name = document.createElement("label");
+    name.className = "sound-name";
+    const on = document.createElement("input");
+    on.type = "checkbox";
+    on.checked = s.on;
+    name.append(on, ` ${label}`);
+    const vol = document.createElement("input");
+    vol.type = "range";
+    vol.min = "0";
+    vol.max = "100";
+    vol.value = String(Math.round(s.volume * 100));
+    vol.setAttribute("aria-label", `${label} volume`);
+    const val = document.createElement("span");
+    val.className = "setting-value";
+    const show = () => {
+      val.textContent = `${vol.value}%`;
+      row.classList.toggle("off", !on.checked);
+    };
+    on.addEventListener("change", () => {
+      sound.setSound(key, { on: on.checked });
+      show();
+    });
+    vol.addEventListener("input", () => {
+      sound.setSound(key, { volume: Number(vol.value) / 100 });
+      show();
+    });
+    const play = document.createElement("button");
+    play.textContent = "▶";
+    play.title = `Play the ${label.toLowerCase()} sound`;
+    play.addEventListener("click", () => sound.preview(key));
+    show();
+    row.append(name, vol, val, play);
+    box.append(row);
+  }
+  const reset = document.createElement("button");
+  reset.textContent = "Reset sounds";
+  reset.title = "Switch every sound back on at its default volume (rain loudest)";
+  reset.addEventListener("click", () => {
+    sound.resetSounds();
+    buildSoundControls();
+  });
+  box.append(reset);
+}
+buildSoundControls();
 
 /** Plays sounds for what the animals did since the last frame, then clears their event counts. */
 function playAnimalSounds(dt: number): void {

@@ -318,6 +318,11 @@ Grass and algae make no sound. In a busy world each sound plays at most every
 so often (a plop every 70 ms, the Jaws theme every 6 s), so it doesn't turn
 into noise.
 
+Each sound can be switched on or off and has its own volume slider (Tools &
+weather → *Sounds*), with a ▶ button to hear it once. By default the rain is
+the loudest sound (100%) and the animal calls sit at 38–50%. *Reset sounds*
+restores the defaults. These choices are remembered in the browser.
+
 ## Settings
 
 Every variable of the running simulation has a slider on the **Settings**

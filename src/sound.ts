@@ -5,6 +5,33 @@
  */
 
 export type SoundName = "plop" | "unplop" | "chomp" | "roar" | "sadBaa" | "highBaa" | "meow" | "jaws";
+export type SoundKey = SoundName | "rain";
+
+/** Every sound, in the order the controls list them. */
+export const SOUNDS: Array<{ key: SoundKey; label: string; tip: string }> = [
+  { key: "rain", label: "Rain", tip: "Rain falling from the clouds: a hiss with pattering drops." },
+  { key: "plop", label: "Fish dies", tip: "A plop." },
+  { key: "unplop", label: "Fish breed", tip: "A reversed plop." },
+  { key: "chomp", label: "Shark catches prey", tip: "A two-bite chomp." },
+  { key: "jaws", label: "Sharks breed", tip: "The two-note shark theme (at most every 6 s)." },
+  { key: "sadBaa", label: "Sheep dies", tip: "A sad, falling baa (also when eaten)." },
+  { key: "highBaa", label: "Sheep breed", tip: "A high baa." },
+  { key: "roar", label: "Cat catches sheep", tip: "A growling roar." },
+  { key: "meow", label: "Cats breed", tip: "A meow." },
+];
+
+export interface SoundSetting {
+  on: boolean;
+  /** 0..1 */
+  volume: number;
+}
+
+/** Default volumes: the rain is the loudest sound; animal calls sit well under it. */
+const DEFAULT_VOLUME: Record<SoundKey, number> = {
+  rain: 1, plop: 0.4, unplop: 0.4, chomp: 0.5, jaws: 0.5, sadBaa: 0.5, highBaa: 0.45, roar: 0.38, meow: 0.5,
+};
+
+const STORAGE_KEY = "critterJitterSounds";
 
 /** Least time (ms) between two plays of the same sound, so busy worlds don't turn into noise. */
 const MIN_GAP: Record<SoundName, number> = {
@@ -13,12 +40,46 @@ const MIN_GAP: Record<SoundName, number> = {
 
 export class Sound {
   enabled = false;
+  /** Each sound's own switch and volume (remembered in this browser). */
+  readonly settings: Record<SoundKey, SoundSetting>;
   private ctx: BaseAudioContext | null = null;
   private master!: GainNode;
   private rainGain!: GainNode;
   private noise!: AudioBuffer;
   private last = new Map<SoundName, number>();
   private rainLevel = 0;
+  /** Audio time until which the rain is being previewed. */
+  private rainPreviewUntil = 0;
+
+  constructor() {
+    this.settings = Object.fromEntries(
+      SOUNDS.map(({ key }) => [key, { on: true, volume: DEFAULT_VOLUME[key] }]),
+    ) as Record<SoundKey, SoundSetting>;
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Partial<Record<SoundKey, SoundSetting>>;
+      for (const { key } of SOUNDS) {
+        const s = saved[key];
+        if (s && typeof s.on === "boolean" && typeof s.volume === "number") this.settings[key] = { on: s.on, volume: s.volume };
+      }
+    } catch {
+      // Nothing saved (or storage unavailable): defaults.
+    }
+  }
+
+  /** Changes one sound's switch or volume and remembers it. */
+  setSound(key: SoundKey, change: Partial<SoundSetting>): void {
+    Object.assign(this.settings[key], change);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.settings));
+    } catch {
+      // Storage unavailable: the settings just aren't remembered.
+    }
+  }
+
+  /** Puts every sound back to its default switch and volume. */
+  resetSounds(): void {
+    for (const { key } of SOUNDS) this.setSound(key, { on: true, volume: DEFAULT_VOLUME[key] });
+  }
 
   setEnabled(on: boolean): void {
     this.enabled = on;
@@ -31,6 +92,24 @@ export class Sound {
 
   private init(): void {
     if (!this.ctx) this.attach(new AudioContext());
+  }
+
+  /** Plays one sound now at its set volume (even if it or all sound is switched off), to try it. */
+  preview(key: SoundKey): void {
+    this.init();
+    if (this.ctx instanceof AudioContext) void this.ctx.resume();
+    const t = this.ctx!.currentTime + 0.01;
+    if (key === "rain") {
+      this.rainPreviewUntil = t + 2;
+      const vol = this.settings.rain.volume;
+      this.rainGain.gain.cancelScheduledValues(t);
+      this.rainGain.gain.setTargetAtTime(0.2 * vol, t, 0.1);
+      this.rainGain.gain.setTargetAtTime(0, t + 2, 0.3);
+      this.rainLevel = 1;
+      for (let k = 0; k < 80; k++) this.drop(t + Math.random() * 2, Math.random() * 1.6 - 0.8, vol);
+      return;
+    }
+    this.voice(key, t, 0, this.settings[key].volume);
   }
 
   /** Builds the sound graph on `ctx` (a live context, or an offline one to render sounds to a file). */
@@ -66,24 +145,35 @@ export class Sound {
   update(rain: number, dt: number): void {
     if (!this.enabled || !this.ctx) return;
     const t = this.ctx.currentTime;
+    if (t < this.rainPreviewUntil) return; // let a preview play out
+    const { on, volume } = this.settings.rain;
+    const level = on ? rain * volume : 0;
     this.rainLevel = rain;
-    this.rainGain.gain.setTargetAtTime(0.2 * rain, t, 0.3);
+    this.rainGain.gain.setTargetAtTime(0.2 * level, t, 0.3);
     // Individual drops pattering, more of them the harder it rains.
-    let drops = rain * 40 * dt;
+    let drops = level > 0 ? rain * 40 * dt : 0;
     while (drops > 0) {
-      if (Math.random() < drops) this.drop(t + Math.random() * dt, Math.random() * 1.6 - 0.8);
+      if (Math.random() < drops) this.drop(t + Math.random() * dt, Math.random() * 1.6 - 0.8, volume);
       drops--;
     }
   }
 
-  /** Plays a sound at map position `pan` (-1 left .. 1 right), unless it played very recently. */
+  /**
+   * Plays a sound at map position `pan` (-1 left .. 1 right), unless it's
+   * switched off or played very recently.
+   */
   play(name: SoundName, pan: number): void {
     if (!this.enabled || !this.ctx) return;
+    const { on, volume } = this.settings[name];
+    if (!on || volume <= 0) return;
     const now = performance.now();
     if (now - (this.last.get(name) ?? -Infinity) < MIN_GAP[name]) return;
     this.last.set(name, now);
-    const t = this.ctx.currentTime + 0.01;
-    const out = this.panner(pan);
+    this.voice(name, this.ctx.currentTime + 0.01, pan, volume);
+  }
+
+  private voice(name: SoundName, t: number, pan: number, volume: number): void {
+    const out = this.panner(pan, volume);
     switch (name) {
       case "plop": return this.plop(t, out, 260, 1100);
       case "unplop": return this.plop(t, out, 1100, 260);
@@ -96,11 +186,16 @@ export class Sound {
     }
   }
 
-  private panner(pan: number): AudioNode {
-    const p = this.ctx!.createStereoPanner();
+  /** A volume control feeding a stereo position, into the master volume. */
+  private panner(pan: number, volume: number): AudioNode {
+    const ctx = this.ctx!;
+    const p = ctx.createStereoPanner();
     p.pan.value = Math.max(-1, Math.min(1, pan));
     p.connect(this.master);
-    return p;
+    const v = ctx.createGain();
+    v.gain.value = volume;
+    v.connect(p);
+    return v;
   }
 
   /** Gain node with an attack / decay envelope, connected to `out`. */
@@ -131,8 +226,8 @@ export class Sound {
   }
 
   /** A raindrop: a tiny, bright tick. */
-  private drop(t: number, pan: number): void {
-    const out = this.panner(pan);
+  private drop(t: number, pan: number, volume: number): void {
+    const out = this.panner(pan, volume);
     const g = this.env(out, t, 0.05 + 0.1 * Math.random() * this.rainLevel, 0.002, 0.03);
     const o = this.osc("sine", t, 0.04, g);
     o.frequency.setValueAtTime(2500 + Math.random() * 2500, t);
