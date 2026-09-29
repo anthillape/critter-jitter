@@ -9,6 +9,8 @@ import type { Rng } from "./rng";
  * - Sharks are bigger and eat fish. They can boost after spotting prey.
  * - Sheep live on land and graze grass, meandering about. Caught in water,
  *   they swim for the shore, and sharks can catch them there.
+ * - Cats live on land and hunt sheep: they stalk the nearest one slowly,
+ *   then pounce when close enough.
  *
  * All share one lifecycle. They store fat, hunt when hungry, find a ready
  * partner to breed, grow old, and die, leaving rotting bodies. Each has a
@@ -38,8 +40,9 @@ export const T_MAX_FAT = 0, T_FAT_TEND = 1, T_MIN_SPEED = 2, T_MAX_SPEED = 3, T_
 // Species-specific traits follow the shared ones. Fish and sharks: full
 // colour (saturation, lightness); sharks also boosting.
 export const T_SAT = 14, T_LUM = 15, T_BOOST_CHANCE = 16, T_BOOST_POWER = 17;
-// Sheep (always pastel, so no saturation / lightness): meandering, grass sight and swimming.
-export const T_WANDER_ARC = 14, T_GRASS_SIGHT = 15, T_SWIM = 16;
+// Land animals (hue-only colour, so no saturation / lightness): meandering and
+// swimming; sheep also have grass sight, cats pounce distance, in the same slot.
+export const T_WANDER_ARC = 14, T_GRASS_SIGHT = 15, T_POUNCE = 15, T_SWIM = 16;
 
 type TraitDefaults = Partial<Record<string, Partial<TraitDef>>>;
 
@@ -76,18 +79,20 @@ function traitList(o: TraitDefaults, colour: boolean, extras: TraitDef[] = []): 
 }
 
 export interface SpeciesDef {
-  key: "fish" | "shark" | "sheep";
+  key: "fish" | "shark" | "sheep" | "cat";
   /** Singular / plural names for the UI. */
   name: string;
   plural: string;
   /** Prefix of this species' settings in PARAMS (e.g. "fish" -> fishMoveCost). */
-  prefix: "fish" | "shark" | "sheep";
+  prefix: "fish" | "shark" | "sheep" | "cat";
   /** What it eats: algae on the grid, the prey species, or grass (grazed a bite at a time). */
   diet: "algae" | "prey" | "grass";
   /** Where it lives. Land critters caught in water swim for the shore; water critters on land are stuck. */
   habitat: "water" | "land";
-  /** Colour comes from hue alone, always a pastel shade. */
-  pastel?: boolean;
+  /** Colour comes from hue alone, always a pastel (light) or dark shade. */
+  shade?: "pastel" | "dark";
+  /** Predators: how they close in, a boost (sharks) or a pounce (cats). */
+  hunt?: "boost" | "pounce";
   /** Describes it when it's out of its habitat. */
   stranded: string;
   traits: TraitDef[];
@@ -99,7 +104,7 @@ export const FISH: SpeciesDef = {
 };
 
 export const SHARK: SpeciesDef = {
-  key: "shark", name: "shark", plural: "sharks", prefix: "shark", diet: "prey", habitat: "water", stranded: "stranded on land",
+  key: "shark", name: "shark", plural: "sharks", prefix: "shark", diet: "prey", hunt: "boost", habitat: "water", stranded: "stranded on land",
   traits: traitList({
       maxFat: { def: 6 },
       minSpeed: { def: 0.015 },
@@ -121,7 +126,7 @@ export const SHARK: SpeciesDef = {
 };
 
 export const SHEEP: SpeciesDef = {
-  key: "sheep", name: "sheep", plural: "sheep", prefix: "sheep", diet: "grass", habitat: "land", pastel: true, stranded: "swimming to shore",
+  key: "sheep", name: "sheep", plural: "sheep", prefix: "sheep", diet: "grass", habitat: "land", shade: "pastel", stranded: "swimming to shore",
   traits: traitList({
     maxFat: { def: 4 },
     minSpeed: { def: 0.004 },
@@ -141,7 +146,30 @@ export const SHEEP: SpeciesDef = {
   ]),
 };
 
-export const SPECIES = [FISH, SHARK, SHEEP];
+const SWIM_ABILITY: TraitDef = { key: "swimAbility", label: "Swimming ability", tip: "0..1. Better swimmers spend less energy swimming but more walking.", def: 0.3, min: 0, max: 1, mode: "add", spread: 0.3 };
+
+export const CAT: SpeciesDef = {
+  key: "cat", name: "cat", plural: "cats", prefix: "cat", diet: "prey", hunt: "pounce", habitat: "land", shade: "dark", stranded: "swimming to shore",
+  traits: traitList({
+    maxFat: { def: 6 },
+    minSpeed: { def: 0.004 },
+    maxSpeed: { def: 0.02, label: "Stalking speed", tip: "Speed while following the sheep it's locked on to (or heading for a mate), in squares per tick." },
+    roamSpeed: { def: 0.01, tip: "Walking speed while meandering, in squares per tick. Kept between the minimum and stalking speeds." },
+    hue: { def: 20, spread: 180, tip: "Hue of its (always dark) fur, in degrees." },
+    breedAge: { def: 3000 },
+    breedFat: { def: 2.5 },
+    hungerFat: { def: 2 },
+    lifespan: { def: 15000 },
+    litterSize: { def: 1.5 },
+    bodySize: { def: 4 },
+  }, false, [
+    { key: "wanderArc", label: "Meander arc", tip: "Width of the arc (degrees) its path wanders within, around its general direction.", def: 60, min: 20, max: 90, mode: "add", spread: 25 },
+    { key: "pounceDistance", label: "Pounce distance", tip: "How close (squares) it stalks a sheep before pouncing at it.", def: 5, min: 1.5, max: 15, mode: "mul", spread: 0.4 },
+    { ...SWIM_ABILITY, def: 0.2 },
+  ]),
+};
+
+export const SPECIES = [FISH, SHARK, SHEEP, CAT];
 
 export const GENE_COUNT_CRITTER = 23;
 /** Genes taken from each parent (the child also gets one brand-new gene). */
@@ -182,6 +210,10 @@ export interface Critter {
   boostLeft: number;
   /** Whether it has already decided whether to boost at its current prey. */
   boostTried: boolean;
+  /** Ticks of pounce left (cats), the direction of the pounce, and ticks before it can pounce again. */
+  pounceLeft: number;
+  pounceDir: number;
+  pounceRest: number;
   /** Direction it's turning toward (it turns gradually, at the species' turn rate). */
   desired: number;
   /** Meandering critters (sheep): the general direction they're walking in... */
@@ -236,7 +268,8 @@ export function bodyMass(c: Critter): number {
 }
 
 export function colourOf(t: Float32Array, sp: SpeciesDef): string {
-  if (sp.pastel) return `hsl(${t[T_HUE].toFixed(0)} 75% 86%)`;
+  if (sp.shade === "pastel") return `hsl(${t[T_HUE].toFixed(0)} 75% 86%)`;
+  if (sp.shade === "dark") return `hsl(${t[T_HUE].toFixed(0)} 40% 24%)`;
   return `hsl(${t[T_HUE].toFixed(0)} ${(t[T_SAT] * 100).toFixed(0)}% ${(t[T_LUM] * 100).toFixed(0)}%)`;
 }
 
@@ -281,6 +314,8 @@ const PARAM_NAMES = [
   "TurnRate", "Accel", "WanderTurnChance", "WanderTurnSize", "LookAhead",
   // Sheep have no FoodRadius (grass sight is genetic) and use these instead:
   "Bite", "GrazeFloor", "MeanderRate",
+  // Land animals caught in water; predators.
+  "SwimEffort", "SwimWalkCost", "PreyEnergy", "PounceSpeed", "PounceRest",
   "BirthSize", "GrowthRate", "GrowthCost",
 ] as const;
 type ParamName = (typeof PARAM_NAMES)[number];
@@ -376,7 +411,7 @@ export class CritterSystem {
     const c: Critter = {
       id: this.nextId++, x, y, heading: this.host.rng() * Math.PI * 2, speed: 0,
       energy, fat, nutrients, age: 0, cooldown: 0, parents, genes, traits,
-      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, boostTried: false, desired: 0, general: 0, wander: 0, avoid: 0, shore: false, species: this.species, grown: 1,
+      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, boostTried: false, pounceLeft: 0, pounceDir: 0, pounceRest: 0, desired: 0, general: 0, wander: 0, avoid: 0, shore: false, species: this.species, grown: 1,
       phase: this.host.rng() * Math.PI * 2, alive: true, colour: colourOf(traits, this.species),
     };
     c.desired = c.general = c.heading;
@@ -419,8 +454,8 @@ export class CritterSystem {
     this.preyBuckets.clear();
     const size = this.sp("FoodRadius");
     for (const sys of this.preySystems) for (const c of sys.critters) {
-      // Land animals can only be caught while swimming.
-      if (!c.alive || (sys.species.habitat === "land" && c.mode !== Mode.Stranded)) continue;
+      // Prey can only be caught in the predator's own habitat (sheep by sharks only while swimming).
+      if (!c.alive || !this.home(squareOf(c))) continue;
       const key = Math.floor(c.x / size) * 1000 + Math.floor(c.y / size);
       let b = this.preyBuckets.get(key);
       if (!b) this.preyBuckets.set(key, (b = []));
@@ -485,8 +520,8 @@ export class CritterSystem {
     } else if (c.hasTarget) {
       const other = c.mate ?? c.prey;
       if (other) {
-        // Prey that's gone, or a land animal that's made it out of the water, is lost.
-        if (!other.alive || (other === c.prey && other.species.habitat === "land" && other.mode !== Mode.Stranded)) {
+        // Prey that's gone, or has left the predator's habitat, is lost.
+        if (!other.alive || (other === c.prey && !this.home(squareOf(other)))) {
           this.dropTarget(c);
         } else {
           c.targetX = other.x;
@@ -497,8 +532,20 @@ export class CritterSystem {
     // Work out where it wants to head and how fast; it then turns and
     // speeds up or slows down gradually (species turn rate / acceleration).
     let turnRate = this.sp("TurnRate");
+    let pouncing = false;
     if (c.avoid > 0) c.avoid--;
-    if (moving && land && !atHome) {
+    if (c.pounceRest > 0) c.pounceRest--;
+    if (!moving || !atHome) c.pounceLeft = 0;
+    if (moving && c.pounceLeft > 0) {
+      // Pouncing: a fast dash in a fixed direction, catching the prey if it gets close enough.
+      pouncing = true;
+      c.pounceLeft--;
+      c.heading = c.desired = c.pounceDir;
+      speed = this.sp("PounceSpeed");
+      const p = c.prey;
+      if (p && p.alive && (p.x - c.x) ** 2 + (p.y - c.y) ** 2 < 1) this.arrive(c);
+      if (c.pounceLeft === 0) c.pounceRest = this.sp("PounceRest");
+    } else if (moving && land && !atHome) {
       // Swimming: head for the nearest shore at half walking speed.
       if (!c.shore || (this.tick + c.id) % 30 === 0) this.findShore(c);
       if (c.shore) c.desired = Math.atan2(c.targetY - c.y, c.targetX - c.x);
@@ -512,8 +559,13 @@ export class CritterSystem {
       if (dist < 3) turnRate *= 3;
       // Heading for something it has spotted: top speed (or boost), easing off at the end.
       let top = t[T_MAX_SPEED];
-      // Closing in on locked-on prey: the genetic boost likelihood decides (once) whether to burst.
-      if (c.prey && !c.boostTried && dist < h.p.sharkBoostRange) {
+      // Close to locked-on prey: pouncers pounce (a fast dash toward where it is now)...
+      if (this.species.hunt === "pounce" && c.prey && c.pounceRest === 0 && dist < t[T_POUNCE] && dist >= 1) {
+        c.pounceDir = c.heading = c.desired;
+        c.pounceLeft = Math.ceil(dist / this.sp("PounceSpeed")) + 3;
+      }
+      // ...and boosters decide (once, by their genetic boost likelihood) whether to burst.
+      if (this.species.hunt === "boost" && c.prey && !c.boostTried && dist < h.p.sharkBoostRange) {
         c.boostTried = true;
         if (h.rng() < t[T_BOOST_CHANCE]) c.boostLeft = h.p.sharkBoostDuration;
       }
@@ -538,7 +590,7 @@ export class CritterSystem {
       speed = t[T_ROAM_SPEED];
       c.boostLeft = 0;
     }
-    if (moving) {
+    if (moving && !pouncing) {
       const look = this.sp("LookAhead");
       if (land) {
         // Water ahead: a land animal turns right round (170-190°, left or right).
@@ -570,6 +622,10 @@ export class CritterSystem {
         c.y = ny;
       } else if (land) {
         // Reached the water's edge anyway: stop and turn right round (once, while it turns).
+        if (c.pounceLeft > 0) {
+          c.pounceLeft = 0;
+          c.pounceRest = this.sp("PounceRest");
+        }
         if (c.avoid === 0) this.turnAround(c);
         speed = 0;
       } else {
@@ -592,8 +648,8 @@ export class CritterSystem {
     if (land) {
       // Swimming ability trades off: good swimmers swim cheaply but pay more to walk.
       const a = t[T_SWIM];
-      if (atHome) move *= 1 + a * h.p.sheepSwimWalkCost;
-      else move = h.p.sheepSwimEffort * mass * (1 - 0.75 * a);
+      if (atHome) move *= 1 + a * this.sp("SwimWalkCost");
+      else move = this.sp("SwimEffort") * mass * (1 - 0.75 * a);
     }
     c.energy -= move + upkeep;
     // Fat: store spare energy, or draw on fat when running low.
@@ -826,10 +882,11 @@ export class CritterSystem {
       const p = c.prey;
       this.dropTarget(c);
       c.boostLeft = 0;
+      c.pounceLeft = 0;
       if (!p.alive) return;
       p.alive = false;
       // Its stored energy plus what its body yields when digested.
-      c.energy += p.energy + p.fat + bodyMass(p) * this.host.p.sharkPreyEnergy;
+      c.energy += p.energy + p.fat + bodyMass(p) * this.sp("PreyEnergy");
       c.nutrients += p.nutrients;
       p.nutrients = 0;
       const sys = this.preySystems.find((sy) => sy.species === p.species)!;
@@ -998,6 +1055,10 @@ export class CritterSystem {
       return { mean, sd: Math.sqrt(Math.max(0, sq / list.length - mean * mean)) };
     });
   }
+}
+
+function squareOf(c: Critter): number {
+  return Math.floor(c.y) * GRID_W + Math.floor(c.x);
 }
 
 /** Nearest critter to `c` in a bucket map (bucket size = r), within r, passing `ok`. */

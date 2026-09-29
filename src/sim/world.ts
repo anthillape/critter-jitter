@@ -5,7 +5,7 @@ import {
 } from "./genes";
 import { Hydrology } from "./hydrology";
 import { Wind } from "./wind";
-import { CritterSystem, FISH, SHARK, SHEEP, type CritterHost } from "./critters";
+import { CAT, CritterSystem, FISH, SHARK, SHEEP, type CritterHost } from "./critters";
 import { mulberry32, type Rng } from "./rng";
 import { generateTerrain, type Terrain } from "./terrain";
 
@@ -34,12 +34,13 @@ export interface Stats {
   nutrientsGround: number;
   nutrientsWater: number;
   nutrientsFlora: number;
-  /** Nutrients in living animals (fish, sharks, sheep) and their rotting bodies. */
+  /** Nutrients in living animals (fish, sharks, sheep, cats) and their rotting bodies. */
   nutrientsAnimals: number;
   nutrientsTotal: number;
   fish: CritterCounts;
   sharks: CritterCounts;
   sheep: CritterCounts;
+  cats: CritterCounts;
   waterSurface: number;
   waterSoil: number;
   waterCloud: number;
@@ -78,6 +79,7 @@ export class World {
   readonly fish: CritterSystem;
   readonly sharks: CritterSystem;
   readonly sheep: CritterSystem;
+  readonly cats: CritterSystem;
   readonly p: Params;
   readonly rng: Rng;
   tick = 0;
@@ -128,6 +130,7 @@ export class World {
     this.fish = new CritterSystem(host, FISH);
     this.sheep = new CritterSystem(host, SHEEP);
     this.sharks = new CritterSystem(host, SHARK, [this.fish, this.sheep]);
+    this.cats = new CritterSystem(host, CAT, [this.sheep]);
     this.seedInitialState();
   }
 
@@ -159,6 +162,10 @@ export class World {
     placed = 0;
     for (let tries = 0; placed < this.p.initialSheep && tries < 1e6; tries++) {
       if (this.sheep.spawnRandom(rng() * GRID_W, rng() * GRID_H)) placed++;
+    }
+    placed = 0;
+    for (let tries = 0; placed < this.p.initialCats && tries < 1e6; tries++) {
+      if (this.cats.spawnRandom(rng() * GRID_W, rng() * GRID_H)) placed++;
     }
   }
 
@@ -215,7 +222,9 @@ export class World {
     this.fish.step();
     this.sharks.step();
     this.sheep.step();
-    this.fish.removeDead(); // fish eaten by sharks this tick
+    this.cats.step();
+    this.fish.removeDead();
+    this.sheep.removeDead(); // sheep eaten by cats this tick // fish eaten by sharks this tick
   }
 
   /**
@@ -473,7 +482,7 @@ export class World {
       } else ground += this.nutrients[i];
       flora += this.floraN[i];
     }
-    const animals = sw.nutrientTotal() + sh.nutrientTotal() + this.sheep.nutrientTotal();
+    const animals = sw.nutrientTotal() + sh.nutrientTotal() + this.sheep.nutrientTotal() + this.cats.nutrientTotal();
     const s: Stats = {
       tick: this.tick,
       seeds, grass, algae,
@@ -491,6 +500,7 @@ export class World {
       fish: counts(sw),
       sharks: counts(sh),
       sheep: counts(this.sheep),
+      cats: counts(this.cats),
       habitatLost: this.habitatLost,
       ...(() => {
         const m = water.measure();
@@ -504,7 +514,7 @@ export class World {
     this.starved = 0;
     this.oldAge = 0;
     this.habitatLost = 0;
-    for (const c of [sw, sh, this.sheep]) c.births = c.deaths = c.starved = c.oldAge = c.eaten = 0;
+    for (const c of [sw, sh, this.sheep, this.cats]) c.births = c.deaths = c.starved = c.oldAge = c.eaten = 0;
     return s;
   }
 

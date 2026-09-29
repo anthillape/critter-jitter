@@ -1,5 +1,5 @@
 import { PARAMS, TERRAIN, TICKS_PER_SECOND, WORLD_SIZE, type Params } from "./sim/config";
-import { FISH, SHARK, SHEEP, type SpeciesDef } from "./sim/critters";
+import { CAT, FISH, SHARK, SHEEP, type SpeciesDef } from "./sim/critters";
 import {
   ALGAE_DEFAULTS, G_BREED, G_GERM, G_GROWTH, G_LIFESPAN, G_MUTATION, G_RANGE, G_WATER_PREF,
   G_WATER_TOL, GRASS_DEFAULTS,
@@ -408,7 +408,7 @@ export const SETTINGS: Setting[] = [
     min: 0, max: 2,
   }),
 
-  // --- Animals: fish, sharks and sheep ---
+  // --- Animals: fish, sharks, sheep and cats ---
   ...critterSettings(FISH, "Fish", "fish", "algae"),
   param("fishMinAlgaeSize", {
     group: "Fish", label: "Smallest algae worth eating",
@@ -465,6 +465,38 @@ export const SETTINGS: Setting[] = [
     min: 0.001, max: 0.3, log: true,
   }),
   ...critterTraitSettings(SHEEP, "Sheep traits (defaults)"),
+  ...critterSettings(CAT, "Cats", "cat", "sheep"),
+  param("catPreyEnergy", {
+    group: "Cats", label: "Energy from digesting a sheep",
+    tip: "Energy a cat gets per unit of a sheep's body size when it eats it, on top of the sheep's own stored energy and fat.",
+    min: 0, max: 10,
+  }),
+  param("catPounceSpeed", {
+    group: "Cats", label: "Pounce speed",
+    tip: "How fast a cat dashes when it pounces, in squares per tick. It pounces straight at where the sheep was, so fast pounces are more likely to land.",
+    min: 0.02, max: 1, log: true,
+  }),
+  param("catPounceRest", {
+    group: "Cats", label: "Rest after pouncing",
+    tip: "Ticks after a pounce before a cat can pounce again (it keeps stalking meanwhile).",
+    min: 0, max: 2000, int: true,
+  }),
+  param("catSwimEffort", {
+    group: "Cats", label: "Cost of swimming",
+    tip: "Energy a cat caught in water spends each tick swimming for the shore, per unit of body mass, if it's the worst possible swimmer. The best swimmers pay a quarter of this." + PER_SEC,
+    min: 0.0001, max: 0.05, log: true,
+  }),
+  param("catSwimWalkCost", {
+    group: "Cats", label: "Walking cost of swimming ability",
+    tip: "Extra walking cost a perfect swimmer pays (1 = walking costs twice as much); scaled by swimming ability.",
+    min: 0, max: 5,
+  }),
+  param("catMeanderRate", {
+    group: "Cats", label: "Meander speed",
+    tip: "How quickly a cat's path swings about within its meander arc, in radians per tick.",
+    min: 0.001, max: 0.3, log: true,
+  }),
+  ...critterTraitSettings(CAT, "Cat traits (defaults)"),
 
   // --- Both plants ---
   param("growEnergyPerN", {
@@ -598,6 +630,21 @@ export const SETTINGS: Setting[] = [
     group: "Life", label: "Starting sheep nutrients",
     tip: "Nutrients each starting sheep gathers from the ground to build its body.",
     min: 0.01, max: 1, log: true, newWorld: true,
+  }),
+  param("initialCats", {
+    group: "Life", label: "Starting cats",
+    tip: "Number of cats (with random genomes) released on land at the start. Each gathers a few nutrients from the ground around it.",
+    min: 0, max: 500, int: true, newWorld: true,
+  }),
+  param("catStartEnergy", {
+    group: "Life", label: "Starting cat energy",
+    tip: "Energy each starting cat begins with (beyond its short-term store it starts as fat).",
+    min: 0.5, max: 30, log: true, newWorld: true,
+  }),
+  param("catStartNutrients", {
+    group: "Life", label: "Starting cat nutrients",
+    tip: "Nutrients each starting cat gathers from the ground to build its body.",
+    min: 0.02, max: 2, log: true, newWorld: true,
   }),
   param("initialWaterPrefSpread", {
     group: "Life", label: "Spread of starting water preferences",

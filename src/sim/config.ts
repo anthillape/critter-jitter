@@ -193,6 +193,39 @@ export const PARAMS = {
   sheepSwimWalkCost: 1, // extra walking cost at full swimming ability (1 = twice the cost)
   sheepMeanderRate: 0.03, // how fast its path swings about within the meander arc (radians per tick)
 
+  // --- Cats (hunt sheep on land) ---
+  catMoveCost: 0.3,
+  catMetabolism: 0.0002,
+  catFatMass: 0.3,
+  catEnergyMax: 3,
+  catNutrientLoss: 0.0002,
+  catMinNutrients: 0.02,
+  catFoodRadius: 40, // squares within which a hungry cat can spot a sheep
+  catMateRadius: 60,
+  catFoodInterval: 30,
+  catMateInterval: 60,
+  catBreedCooldown: 2500,
+  catMinChildEnergy: 1,
+  catMinChildNutrients: 0.1,
+  catRotRate: 0.003,
+  catGeneStrength: 0.35,
+  catStartEnergy: 10,
+  catStartNutrients: 0.3,
+  catTurnRate: 0.1,
+  catAccel: 0.002,
+  catWanderTurnChance: 0.003,
+  catWanderTurnSize: 1.2,
+  catLookAhead: 3,
+  catBirthSize: 0.3,
+  catGrowthRate: 0.0004,
+  catGrowthCost: 1,
+  catPreyEnergy: 2, // extra energy per unit of a sheep's body size when a cat eats it
+  catPounceSpeed: 0.25, // squares per tick while pouncing
+  catPounceRest: 180, // ticks after a pounce before it can pounce again
+  catSwimEffort: 0.0005,
+  catSwimWalkCost: 1,
+  catMeanderRate: 0.03,
+
   // --- Genetics ---
   fullGrowth: 0.98, // fraction of max nutrients considered "fully grown"
 
@@ -202,6 +235,7 @@ export const PARAMS = {
   initialFish: 80,
   initialSharks: 12,
   initialSheep: 40,
+  initialCats: 20,
   startingSurfaceWater: 1.3, // standing water at the start, as an average depth over the whole world
   initialSoilWetness: 0.4, // how full the soil starts (0..1); full under the starting lakes
   initialWaterPrefSpread: 0.85, // starting seeds' water preference is spread over this range around the default

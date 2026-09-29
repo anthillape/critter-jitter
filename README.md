@@ -54,7 +54,7 @@ is shown next to the speed control. All rates in `PARAMS` are per tick.
      water and buds live algae into a free adjacent water square. If no square
      is free, it doesn't breed. Deeper water gets less light.
 
-## Animals: fish, sharks and sheep
+## Animals: fish, sharks, sheep and cats
 
 Fish are small, drawn as 3-pixel lines that wiggle while they move.
 Their colour comes from their hue, saturation and lightness genes, so
@@ -168,12 +168,40 @@ genome has only a hue: sheep are always pastel shades.
   ability*: up to twice the cost by default).
 - **Mates.** When ready to breed, it walks to the nearest other ready sheep.
 
-Fish, sharks and sheep run on the same code (`src/sim/critters.ts`). Each
-species has its own traits, settings (Settings → *Fish* / *Sharks* /
-*Sheep*, and their trait defaults), diet and habitat.
+### Cats
+
+Cats hunt sheep on land. They're based on sheep: the same lifecycle,
+meandering walk (with its genetic *Meander arc*), turning right round at
+water, swimming for the shore when caught in water, and genetic *Swimming
+ability*. They are bigger (body size 4 against the sheep's 2) and longer,
+drawn as a long rounded body with a round head of the same colour, and their
+hue-only colour is always a dark shade.
+
+- **Stalking.** A hungry cat locks on to the nearest sheep it can see (up
+  to 40 squares away) and walks slowly after it at its *Stalking speed*.
+- **Pouncing.** Once the sheep is within the cat's genetic *Pounce
+  distance* (default 5 squares), the cat pounces: a fast dash (*Pounce
+  speed*) in a fixed direction, toward where the sheep was. If it comes
+  within a square of the sheep on the way, it catches and eats it (its
+  energy, fat and nutrients, plus extra energy from its body). A missed
+  pounce ends after the distance to the sheep, and the cat must rest
+  (*Rest after pouncing*) before it can pounce again, though it keeps
+  stalking. Pouncing costs energy like any movement (½·m·v²), so it's
+  expensive.
+- Sheep in water are out of a cat's reach, and so are sheep that reach
+  water: a cat loses a sheep that isn't on land.
+
+With the default settings, 20 cats and 40 sheep start spread over the whole
+map, and cats often starve before the sheep become plentiful. Starting
+with more sheep, or adding cats later with the spray tool, gives them a
+better chance.
+
+Fish, sharks, sheep and cats run on the same code (`src/sim/critters.ts`).
+Each species has its own traits, settings (Settings → *Fish* / *Sharks* /
+*Sheep* / *Cats*, and their trait defaults), diet and habitat.
 
 Nutrients stay conserved: starting fish and sharks gather theirs from
-the water and starting sheep from the ground, and everything a critter eats, sheds or leaves behind is
+the water and starting sheep and cats from the ground, and everything a critter eats, sheds or leaves behind is
 accounted for.
 
 ## Water cycle
@@ -233,14 +261,14 @@ speed.
 - **Cursor**: *Select* (drag a rectangle for area stats), *Rain* (hold to
   rain under the cursor, adding new water to the world), *Dryer* (hold to
   remove standing water, then soil water, under the cursor), and the sprays
-  *Seeds*, *Algae*, *Fish*, *Sharks* and *Sheep*, which drop things at random
+  *Seeds*, *Algae*, *Fish*, *Sharks*, *Sheep* and *Cats*, which drop things at random
   points inside the brush circle. Seeds only take on empty land and algae
   only in empty water, each taking its nutrients from the square it lands on.
-  Animals get random genomes. Fish and sharks land only in water and sheep
-  only on land, and they gather their body nutrients from the squares
+  Animals get random genomes. Fish and sharks land only in water, and sheep
+  and cats only on land, and they gather their body nutrients from the squares
   around them. Anything that can't be
   supplied is skipped, so nutrients stay conserved. Sprayed seeds and algae
-  get the starting genes. Keys S / R / D / G / A / F / K / H switch between the
+  get the starting genes. Keys S / R / D / G / A / F / K / H / C switch between the
   tools.
   *Rate* and *Size* set the brush strength (water per second at the
   centre, or particles sprayed per second) and its radius. Rain and Dryer
