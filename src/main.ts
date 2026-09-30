@@ -321,6 +321,7 @@ function refreshStartPanel(): void {
 function draw(): void {
   renderer.draw(viewSel.value as View);
   ctx.drawImage(renderer.canvas, 0, 0, GRID_W * CELL_PX, GRID_H * CELL_PX);
+  drawSpores();
   drawSheep();
   drawCats();
   drawFish();
@@ -417,19 +418,35 @@ function drawSheepShape(x: number, y: number, heading: number, mass: number, col
   ctx.restore();
 }
 
+/** Algae spores: faint pale-green specks drifting in the water. */
+function drawSpores(): void {
+  const list = world.spores.spores;
+  if (!list.length) return;
+  ctx.fillStyle = "rgba(190, 240, 170, 0.55)";
+  ctx.beginPath();
+  for (const s of list) ctx.rect(s.x * CELL_PX - 0.5, s.y * CELL_PX - 0.5, 1, 1);
+  ctx.fill();
+}
+
 /**
  * Cats are bigger and longer than sheep: a dark rounded body with a round
- * head of the same colour at the front. Dead ones lie still, grey, fading.
+ * head of the same colour at the front, and a short curly tail (2/3 of the
+ * body length) whose curl drifts slowly and randomly. Dead ones lie still,
+ * grey, fading, tail limp.
  */
 function drawCats(): void {
   const sys = world.cats;
-  for (const c of sys.corpses) drawCatShape(c.x, c.y, c.heading, c.mass, corpseColour(c));
+  for (const c of sys.corpses) drawCatShape(c.x, c.y, c.heading, c.mass, corpseColour(c), c.x * 7.3 + c.y * 3.1, null);
   for (const s of sys.critters) {
-    if (s.alive) drawCatShape(s.x, s.y, s.heading, bodyMass(s), s.colour);
+    if (s.alive) drawCatShape(s.x, s.y, s.heading, bodyMass(s), s.colour, s.id, world.tick);
   }
 }
 
-function drawCatShape(x: number, y: number, heading: number, mass: number, colour: string): void {
+/**
+ * `seed` makes each cat's tail move differently; `tick` animates the curl
+ * (game time, so it freezes while paused), or null for a still tail.
+ */
+function drawCatShape(x: number, y: number, heading: number, mass: number, colour: string, seed: number, tick: number | null): void {
   const k = Math.max(0.4, Math.sqrt(mass / 4));
   const len = 7 * k;
   const wid = 3 * k;
@@ -443,6 +460,30 @@ function drawCatShape(x: number, y: number, heading: number, mass: number, colou
   ctx.moveTo(len / 2 + head * 0.7 + head, 0);
   ctx.arc(len / 2 + head * 0.7, 0, head, 0, Math.PI * 2);
   ctx.fill();
+  // Tail: a chain of short segments from the rump. Two slow sines at odd
+  // frequencies (offset per cat) set how it swings and how tightly it curls,
+  // curling more toward the tip.
+  const t = tick ?? 0;
+  const swing = 0.5 * Math.sin(t * 0.009 + seed * 1.7);
+  const curl = tick === null ? 1.2 : 2.6 * (0.65 * Math.sin(t * 0.011 + seed * 2.3) + 0.35 * Math.sin(t * 0.0043 + seed * 0.9));
+  const segs = 8;
+  const step = (len * 2) / 3 / segs;
+  let tx = -len / 2 + wid * 0.2;
+  let ty = 0;
+  let dir = Math.PI + swing;
+  ctx.strokeStyle = colour;
+  ctx.lineWidth = Math.max(1, wid * 0.4);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  ctx.moveTo(tx, ty);
+  for (let i = 1; i <= segs; i++) {
+    dir += (curl * 2 * i) / (segs * (segs + 1)); // the turns add up to `curl`, weighted toward the tip
+    tx += Math.cos(dir) * step;
+    ty += Math.sin(dir) * step;
+    ctx.lineTo(tx, ty);
+  }
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -651,6 +692,7 @@ function refreshStats(): void {
   statsLife.innerHTML = table([
     ["Grass", s.grass.toLocaleString()],
     ["Seeds waiting", s.seeds.toLocaleString()],
+    ["Algae spores drifting", s.spores.toLocaleString()],
     ["Algae", s.algae.toLocaleString()],
     ["Births / deaths (last 20 frames)", `${s.grassBirths + s.algaeBirths} / ${s.grassDeaths + s.algaeDeaths}`],
     ["Deaths: starved / old age / drowned or stranded", `${s.starved} / ${s.oldAge} / ${s.habitatLost}`],

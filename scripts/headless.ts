@@ -33,7 +33,7 @@ for (let k = 1; k <= ticks; k++) {
     const ms = (performance.now() - t1) / every;
     t1 = performance.now();
     console.log(
-      `t=${s.tick} seeds=${s.seeds} grass=${s.grass} algae=${s.algae} ` +
+      `t=${s.tick} seeds=${s.seeds} grass=${s.grass} algae=${s.algae} spores=${s.spores} ` +
       `\n    fish=${s.fish.alive} (b/d ${s.fish.births}/${s.fish.deaths}, starved ${s.fish.starved}, old ${s.fish.oldAge}, eaten ${s.fish.eaten}) ` +
       `algae=${s.algae} sharks=${s.sharks.alive} (b/d ${s.sharks.births}/${s.sharks.deaths}, starved ${s.sharks.starved}, old ${s.sharks.oldAge}) ` +
       `sheep=${s.sheep.alive} (b/d ${s.sheep.births}/${s.sheep.deaths}, starved ${s.sheep.starved}, old ${s.sheep.oldAge}) cats=${s.cats.alive} (b/d ${s.cats.births}/${s.cats.deaths}, starved ${s.cats.starved}, old ${s.cats.oldAge}, sheep eaten ${s.sheep.eaten})\n    ` +

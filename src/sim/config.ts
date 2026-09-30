@@ -101,11 +101,15 @@ export const PARAMS = {
   algaeChildN: 0.04, // nutrients a new algae cell takes from the water
   algaeChildE: 0.2, // energy a new algae cell takes from its parent
   algaeBreedReserve: 0.2,
-  algaeBreedSize: 0.5, // algae can bud once grown to this share of full size
+  algaeBreedSize: 0.5, // algae can release spores once grown to this share of full size
+  algaeSporeSpeed: 0.02, // squares per tick a spore drifts (it spends no energy moving)
+  algaeSporeDrift: 0.08, // how much a spore's direction wanders each tick (radians)
+  algaeSporeSharkRadius: 6, // spores within this many squares of a shark get caught in its wake...
+  algaeSporeSharkPull: 0.08, // ...their direction swinging this share of the way toward the shark's heading each tick
 
   // --- Fish ---
   fishMoveCost: 1, // multiplier on the ½·m·v² energy cost of moving
-  fishMetabolism: 0.0012, // energy burned per tick per unit of body mass (fat adds mass)
+  fishMetabolism: 0.002, // energy burned per tick per unit of body mass (fat adds mass)
   fishFatMass: 0.4, // mass added per unit of fat
   fishEnergyMax: 1, // short-term energy store; surplus goes to fat
   fishNutrientLoss: 0.0004, // share of body nutrients shed into the water each tick
@@ -115,7 +119,7 @@ export const PARAMS = {
   fishMateRadius: 14, // squares searched for a mate
   fishFoodInterval: 10, // ticks between food searches
   fishMateInterval: 40, // ticks between mate searches (less often than food)
-  fishBreedCooldown: 600, // ticks after mating before a fish can mate again
+  fishBreedCooldown: 1500, // ticks after mating before a fish can mate again
   fishMinChildEnergy: 0.3, // parents won't make a child with less energy than this
   fishMinChildNutrients: 0.04, // ...or fewer nutrients than this
   fishRotRate: 0.004, // share of a corpse's nutrients returned to its square each tick

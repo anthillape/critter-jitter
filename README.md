@@ -57,8 +57,16 @@ is shown next to the speed control. All rates in `PARAMS` are per tick.
      germinate. A seed that lands in water gives its nutrients to that water. A
      seed that lands on an occupied square or off the map rots into the ground.
    - **Algae** (water only) works the same way but draws nutrients from the
-     water and buds live algae into a free adjacent water square. If no square
-     is free, it doesn't breed. Deeper water gets less light.
+     water, and breeds by releasing **spores** (drawn as faint pale-green
+     specks). A spore takes its nutrients and energy from the parent and
+     drifts slowly through the water, its direction gradually wandering,
+     bouncing off land and using no energy. Fish can't eat spores. Spores near
+     a shark get caught in its wake: their direction swings toward the way
+     the shark is heading. After its genetic spore time (default 5 s; the
+     algae's use of the gene grass uses for germination) a spore settles as
+     a new algae cell if the square it's on is free water; otherwise it
+     dies (like a seed landing on an occupied square) and its nutrients
+     return to the water. Deeper water gets less light.
 
 ## Animals: fish, sharks, sheep and cats
 
@@ -188,8 +196,9 @@ Cats hunt sheep on land. They're based on sheep: the same lifecycle,
 meandering walk (with its genetic *Meander arc*), turning right round at
 water, swimming for the shore when caught in water, and genetic *Swimming
 ability*. They are bigger (body size 4 against the sheep's 2) and longer,
-drawn as a long rounded body with a round head of the same colour, and their
-hue-only colour is always a dark shade.
+drawn as a long rounded body with a round head of the same colour and a
+short curly tail (two-thirds of the body length) whose curl drifts slowly and
+randomly, and their hue-only colour is always a dark shade.
 
 - **Stalking.** A hungry cat locks on to the nearest sheep it can see (up
   to 40 squares away) and walks slowly after it at its *Stalking speed*.

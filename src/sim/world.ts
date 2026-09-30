@@ -1,8 +1,9 @@
 import { CELL_COUNT, GRID_H, GRID_W, PARAMS, type Params } from "./config";
 import {
   ALGAE_DEFAULTS, G_BREED, G_GERM, G_GROWTH, G_LIFESPAN, G_RANGE, G_WATER_PREF, G_WATER_TOL,
-  GENE_COUNT, GRASS_DEFAULTS, inheritGenes, setGenes,
+  GENE_COUNT, GRASS_DEFAULTS, inheritGenes, mutateInto, setGenes,
 } from "./genes";
+import { SporeSystem } from "./spores";
 import { Hydrology } from "./hydrology";
 import { Wind } from "./wind";
 import { CAT, CritterSystem, FISH, SHARK, SHEEP, type CritterHost } from "./critters";
@@ -15,12 +16,12 @@ export const SEED = 1;
 export const GRASS = 2;
 export const ALGAE = 3;
 
-const NEIGHBOURS_X = [-1, 0, 1, -1, 1, -1, 0, 1];
-const NEIGHBOURS_Y = [-1, -1, -1, 0, 0, 1, 1, 1];
 
 export interface Stats {
   tick: number;
   seeds: number;
+  /** Algae spores drifting in the water. */
+  spores: number;
   grass: number;
   algae: number;
   grassBirths: number;
@@ -80,6 +81,8 @@ export class World {
   readonly sharks: CritterSystem;
   readonly sheep: CritterSystem;
   readonly cats: CritterSystem;
+  /** Algae spores drifting in the water (how algae breed). */
+  readonly spores: SporeSystem;
   readonly p: Params;
   readonly rng: Rng;
   tick = 0;
@@ -131,6 +134,24 @@ export class World {
     this.sheep = new CritterSystem(host, SHEEP);
     this.sharks = new CritterSystem(host, SHARK, [this.fish, this.sheep]);
     this.cats = new CritterSystem(host, CAT, [this.sheep]);
+    this.spores = new SporeSystem({
+      p: this.p,
+      rng: this.rng,
+      nutrients: this.nutrients,
+      wet: this.water.wet,
+      settle: (i, sp) => {
+        if (!this.water.isWater(i) || this.kind[i] !== EMPTY) return false;
+        this.kind[i] = ALGAE;
+        this.floraN[i] = sp.n;
+        this.floraE[i] = sp.e;
+        this.age[i] = 0;
+        this.bornTick[i] = this.tick;
+        this.genes.set(sp.genes, i * GENE_COUNT);
+        this.births[1]++;
+        return true;
+      },
+      sharks: () => this.sharks.critters,
+    });
     this.seedInitialState();
   }
 
@@ -226,8 +247,9 @@ export class World {
         this.age[i] = 0;
       }
     }
-    // Animals by position (centred on the square, matching the brush).
+    // Animals and spores by position (centred on the square, matching the brush).
     for (const sys of [this.fish, this.sharks, this.sheep, this.cats]) sys.removeWithin(x + 0.5, y + 0.5, r);
+    this.spores.removeWithin(x + 0.5, y + 0.5, r);
   }
 
   step(): void {
@@ -242,6 +264,7 @@ export class World {
     } else {
       for (let i = CELL_COUNT - 1; i >= 0; i--) this.updateSquare(i);
     }
+    this.spores.step();
     this.fish.step();
     this.sharks.step();
     this.sheep.step();
@@ -439,42 +462,21 @@ export class World {
       }
     }
 
-    // Breed: bud a live algae cell into a free adjacent water square, if there is one.
-    // Algae can bud once half grown (algaeBreedSize), before fish find it
-    // worth eating, so grazed waters can recover.
+    // Breed: release a spore, which drifts off and later settles as a new
+    // cell (see spores.ts). Algae can release spores once half grown
+    // (algaeBreedSize), before fish find it worth eating, so grazed waters
+    // can recover.
     if (n >= p.algaeMaxN * p.algaeBreedSize && this.rng() < genes[g + G_BREED]
       && e >= p.algaeChildE + p.algaeBreedReserve && this.nutrients[i] >= p.algaeChildN) {
-      const t = this.freeWaterNeighbour(i);
-      if (t >= 0) {
-        e -= p.algaeChildE;
-        this.nutrients[i] -= p.algaeChildN;
-        this.kind[t] = ALGAE;
-        this.floraN[t] = p.algaeChildN;
-        this.floraE[t] = p.algaeChildE;
-        this.age[t] = 0;
-        this.bornTick[t] = this.tick;
-        inheritGenes(genes, i, t, this.rng);
-        this.births[1]++;
-      }
+      e -= p.algaeChildE;
+      this.nutrients[i] -= p.algaeChildN;
+      const sporeGenes = new Float32Array(GENE_COUNT);
+      mutateInto(genes, g, sporeGenes, 0, this.rng);
+      this.spores.release((i % GRID_W) + 0.5, Math.floor(i / GRID_W) + 0.5, sporeGenes, p.algaeChildN, p.algaeChildE);
     }
 
     this.floraN[i] = n;
     this.floraE[i] = e;
-  }
-
-  private freeWaterNeighbour(i: number): number {
-    const x = i % GRID_W;
-    const y = (i / GRID_W) | 0;
-    const start = (this.rng() * 8) | 0;
-    for (let k = 0; k < 8; k++) {
-      const d = (start + k) & 7;
-      const nx = x + NEIGHBOURS_X[d];
-      const ny = y + NEIGHBOURS_Y[d];
-      if (nx < 0 || ny < 0 || nx >= GRID_W || ny >= GRID_H) continue;
-      const t = ny * GRID_W + nx;
-      if (this.water.isWater(t) && this.kind[t] === EMPTY) return t;
-    }
-    return -1;
   }
 
   /** Death: all nutrients held return to the ground / water beneath. */
@@ -505,10 +507,11 @@ export class World {
       } else ground += this.nutrients[i];
       flora += this.floraN[i];
     }
+    flora += this.spores.nutrientTotal(); // spores are algae on the move
     const animals = sw.nutrientTotal() + sh.nutrientTotal() + this.sheep.nutrientTotal() + this.cats.nutrientTotal();
     const s: Stats = {
       tick: this.tick,
-      seeds, grass, algae,
+      seeds, grass, algae, spores: this.spores.spores.length,
       grassBirths: this.births[0],
       grassDeaths: this.deaths[0],
       algaeBirths: this.births[1],

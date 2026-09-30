@@ -398,14 +398,34 @@ export const SETTINGS: Setting[] = [
     min: 0.02, max: 1.5, log: true,
   }),
   param("algaeBreedSize", {
-    group: "Algae", label: "Size when algae can bud",
-    tip: "Algae can bud new cells once grown to this share of full size. Below the size fish bother eating, it gives grazed water a way to recover.",
+    group: "Algae", label: "Size when algae can release spores",
+    tip: "Algae can release spores once grown to this share of full size. Below the size fish bother eating, it gives grazed water a way to recover.",
     min: 0.1, max: 1, fmt: pct,
   }),
   param("algaeBreedReserve", {
-    group: "Algae", label: "Energy kept back when budding",
-    tip: "Algae only buds a new cell if it would still have this much energy left.",
+    group: "Algae", label: "Energy kept back when releasing a spore",
+    tip: "Algae only releases a spore if it would still have this much energy left.",
     min: 0, max: 2,
+  }),
+  param("algaeSporeSpeed", {
+    group: "Algae", label: "Spore drift speed",
+    tip: "How fast spores drift through the water, in squares per tick. Spores spend no energy moving.",
+    min: 0.001, max: 0.3, log: true,
+  }),
+  param("algaeSporeDrift", {
+    group: "Algae", label: "Spore wandering",
+    tip: "How much a spore's direction wanders each tick, in radians. Low values drift in long straight lines; high values jitter about.",
+    min: 0, max: 1,
+  }),
+  param("algaeSporeSharkRadius", {
+    group: "Algae", label: "Shark wake reach",
+    tip: "Spores within this many squares of a shark get caught in its wake and start drifting the way it's heading (0 = sharks don't affect spores).",
+    min: 0, max: 30,
+  }),
+  param("algaeSporeSharkPull", {
+    group: "Algae", label: "Shark wake pull",
+    tip: "How strongly a nearby shark swings a spore's direction toward its own heading each tick (stronger the closer the shark).",
+    min: 0.001, max: 1, log: true,
   }),
 
   // --- Animals: fish, sharks, sheep and cats ---
@@ -667,7 +687,8 @@ export const SETTINGS: Setting[] = [
   gene("grass", G_WATER_PREF, { group: "Starting genes", label: "Grass: water preference", tip: "Soil wetness (0 = dry, 1 = soaked) grass works best at. Starting seeds are spread around this value.", min: 0.01, max: 1 }),
   gene("grass", G_WATER_TOL, { group: "Starting genes", label: "Grass: water tolerance", tip: "How far from its preferred wetness grass still copes. Wider tolerance lowers peak efficiency.", min: 0.05, max: 1 }),
   gene("algae", G_GROWTH, { group: "Starting genes", label: "Algae: growth speed", tip: "Nutrients an algae cell takes up per tick while growing.", min: 0.0005, max: 0.05, log: true }),
-  gene("algae", G_BREED, { group: "Starting genes", label: "Algae: budding chance", tip: "Chance per tick that full-grown algae buds a new cell next to it.", min: 0.0005, max: 0.2, log: true }),
+  gene("algae", G_BREED, { group: "Starting genes", label: "Algae: spore release chance", tip: "Chance per tick that grown algae releases a spore (if it can spare the energy and nutrients).", min: 0.0005, max: 0.2, log: true }),
+  gene("algae", G_GERM, { group: "Starting genes", label: "Algae: spore time", tip: "Ticks a spore drifts before settling as a new algae cell (300 = 5 s at 1×).", min: 1, max: 800, log: true }),
   gene("algae", G_MUTATION, { group: "Starting genes", label: "Algae: mutation size", tip: "How much each gene can change, either way, in each new cell.", min: 0.002, max: 0.5, log: true, fmt: pct }),
   gene("algae", G_LIFESPAN, { group: "Starting genes", label: "Algae: lifespan", tip: "Age in ticks at which an algae cell dies.", min: 100, max: 30000, log: true }),
 ];
