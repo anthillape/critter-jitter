@@ -33,6 +33,10 @@ const catChart = $<HTMLCanvasElement>("catChart");
 const catChartCtx = catChart.getContext("2d")!;
 const statsCats = $<HTMLTableElement>("statsCats");
 const catTraits = $<HTMLTableElement>("catTraits");
+const rocChart = $<HTMLCanvasElement>("rocChart");
+const rocChartCtx = rocChart.getContext("2d")!;
+const statsRocs = $<HTMLTableElement>("statsRocs");
+const rocTraits = $<HTMLTableElement>("rocTraits");
 const playBtn = $<HTMLButtonElement>("play");
 const speedSel = $<HTMLSelectElement>("speed");
 const viewSel = $<HTMLSelectElement>("view");
@@ -79,6 +83,7 @@ interface Sample {
   sharks: number;
   sheep: number;
   cats: number;
+  rocs: number;
   /** It rained at some point since the previous sample. */
   rained: boolean;
 }
@@ -86,9 +91,9 @@ let history: Sample[] = [];
 /** Set whenever a tick rains; cleared each time a sample is taken. */
 let rainedSinceSample = false;
 
-type Tool = "select" | "rain" | "dryer" | "seeds" | "algae" | "fish" | "sharks" | "sheep" | "cats" | "destroy";
-const TOOL_KEYS: Record<string, Tool> = { s: "select", r: "rain", d: "dryer", g: "seeds", a: "algae", f: "fish", k: "sharks", h: "sheep", c: "cats", x: "destroy" };
-const SPRAY_TOOLS: ReadonlySet<Tool> = new Set(["seeds", "algae", "fish", "sharks", "sheep", "cats"]);
+type Tool = "select" | "rain" | "dryer" | "seeds" | "algae" | "fish" | "sharks" | "sheep" | "cats" | "rocs" | "destroy";
+const TOOL_KEYS: Record<string, Tool> = { s: "select", r: "rain", d: "dryer", g: "seeds", a: "algae", f: "fish", k: "sharks", h: "sheep", c: "cats", b: "rocs", x: "destroy" };
+const SPRAY_TOOLS: ReadonlySet<Tool> = new Set(["seeds", "algae", "fish", "sharks", "sheep", "cats", "rocs"]);
 const BRUSH_COLOURS: Record<Exclude<Tool, "select">, string> = {
   rain: "rgba(120,180,255,0.9)",
   dryer: "rgba(255,170,80,0.9)",
@@ -98,6 +103,7 @@ const BRUSH_COLOURS: Record<Exclude<Tool, "select">, string> = {
   sharks: "rgba(170,190,215,0.9)",
   sheep: "rgba(245,240,230,0.9)",
   cats: "rgba(200,150,110,0.9)",
+  rocs: "rgba(210,170,100,0.9)",
   destroy: "rgba(255,80,70,0.95)",
 };
 /** Fractional sprays owed but not yet placed (so low rates still spray). */
@@ -150,7 +156,8 @@ function applyBrush(ticks: number): void {
     else if (tool === "fish") world.fish.spawnRandom(x + Math.random(), y + Math.random());
     else if (tool === "sharks") world.sharks.spawnRandom(x + Math.random(), y + Math.random());
     else if (tool === "sheep") world.sheep.spawnRandom(x + Math.random(), y + Math.random());
-    else world.cats.spawnRandom(x + Math.random(), y + Math.random());
+    else if (tool === "cats") world.cats.spawnRandom(x + Math.random(), y + Math.random());
+    else world.rocs.spawnRandom(x + Math.random(), y + Math.random());
   }
 }
 
@@ -326,6 +333,7 @@ function draw(): void {
   drawCats();
   drawFish();
   drawSharks();
+  drawRocs(); // on top: they fly over everything
   if (hover >= 0) {
     ctx.strokeStyle = "rgba(255,255,255,0.8)";
     const x = (hover % GRID_W) * CELL_PX;
@@ -485,6 +493,58 @@ function drawCatShape(x: number, y: number, heading: number, mass: number, colou
   }
   ctx.stroke();
   ctx.restore();
+}
+
+/**
+ * Rocs, seen from above: a body with a small head and a fan tail. Flying,
+ * their wings are spread (sweeping in and out as they flap, when turning or
+ * speeding up) and a faint shadow falls below them; landed, the wings are
+ * folded along the body. Dead ones lie still, grey, fading.
+ */
+function drawRocs(): void {
+  const sys = world.rocs;
+  for (const c of sys.corpses) drawRocShape(c.x, c.y, c.heading, c.mass, corpseColour(c), false, 0, 0);
+  for (const r of sys.critters) {
+    if (r.alive) drawRocShape(r.x, r.y, r.heading, bodyMass(r), r.colour, r.flying, r.tailAmp, r.phase);
+  }
+}
+
+function drawRocShape(x: number, y: number, heading: number, mass: number, colour: string, flying: boolean, flap: number, phase: number): void {
+  const L = 4 + 10 * Math.sqrt(Math.max(0.1, mass) / 8); // body length in pixels (14 at default size)
+  // Wing span: wide open when gliding, sweeping in and out while flapping, folded on the ground.
+  const beat = 0.5 + 0.5 * Math.sin(phase);
+  const span = flying ? L * 1.5 * (1 - 0.45 * flap * beat) : L * 0.35;
+  const sweep = flying ? L * (0.15 + 0.25 * flap * beat) : L * 0.35; // how far back the wingtips sit
+  const draw = (dx: number, dy: number, fill: string) => {
+    ctx.save();
+    ctx.translate(x * CELL_PX + dx, y * CELL_PX + dy);
+    ctx.rotate(heading);
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    // Body.
+    ctx.ellipse(0, 0, L * 0.45, L * 0.14, 0, 0, Math.PI * 2);
+    // Head.
+    ctx.moveTo(L * 0.62, 0);
+    ctx.arc(L * 0.5, 0, L * 0.12, 0, Math.PI * 2);
+    // Fan tail.
+    ctx.moveTo(-L * 0.4, 0);
+    ctx.lineTo(-L * 0.68, L * 0.16);
+    ctx.lineTo(-L * 0.68, -L * 0.16);
+    ctx.closePath();
+    // Wings: from the shoulders out to swept-back tips.
+    for (const side of [1, -1]) {
+      ctx.moveTo(L * 0.2, 0);
+      ctx.lineTo(L * 0.05, side * span * 0.55); // leading edge, bending back to the tip
+      ctx.lineTo(-sweep, side * span);
+      ctx.lineTo(-L * 0.28, side * span * 0.35); // broad trailing edge
+      ctx.lineTo(-L * 0.25, 0);
+      ctx.closePath();
+    }
+    ctx.fill();
+    ctx.restore();
+  };
+  if (flying) draw(5, 7, "rgba(0, 0, 0, 0.22)"); // shadow on the ground below
+  draw(0, 0, colour);
 }
 
 /**
@@ -681,7 +741,7 @@ function refreshStats(): void {
   const s = world.stats();
   history.push({
     grass: s.grass, seeds: s.seeds, algae: s.algae,
-    cloud: s.waterCloud, surface: s.waterSurface, soil: s.waterSoil, fish: s.fish.alive, sharks: s.sharks.alive, sheep: s.sheep.alive, cats: s.cats.alive,
+    cloud: s.waterCloud, surface: s.waterSurface, soil: s.waterSoil, fish: s.fish.alive, sharks: s.sharks.alive, sheep: s.sheep.alive, cats: s.cats.alive, rocs: s.rocs.alive,
     rained: rainedSinceSample || s.raining,
   });
   rainedSinceSample = false;
@@ -732,10 +792,12 @@ function refreshStats(): void {
   critterCard(world.sharks, s.sharks, statsSharks, sharkTraits, "Sharks", null);
   critterCard(world.sheep, s.sheep, statsSheep, sheepTraits, "Sheep", "Eaten by cats, or by sharks while swimming");
   critterCard(world.cats, s.cats, statsCats, catTraits, "Cats", null);
+  critterCard(world.rocs, s.rocs, statsRocs, rocTraits, "Rocs", "Eaten by cats (while landed)");
   drawLineChart(fishChartCtx, fishChart, [["fish", "#e07a5f"]]);
   drawLineChart(sharkChartCtx, sharkChart, [["sharks", "#aabed7"]]);
   drawLineChart(sheepChartCtx, sheepChart, [["sheep", "#f0e6d8"]]);
   drawLineChart(catChartCtx, catChart, [["cats", "#c8966e"]]);
+  drawLineChart(rocChartCtx, rocChart, [["rocs", "#d2aa64"]]);
   drawLineChart(waterChartCtx, waterChart, [
     ["cloud", "#e4ded2"],
     ["surface", "#4f94e0"],
@@ -809,6 +871,7 @@ function refreshSelection(): void {
     ...critterRows(world.sharks, "Sharks", x0, y0, x1, y1),
     ...critterRows(world.sheep, "Sheep", x0, y0, x1, y1),
     ...critterRows(world.cats, "Cats", x0, y0, x1, y1),
+    ...critterRows(world.rocs, "Rocs", x0, y0, x1, y1),
   ];
   selectionEl.innerHTML =
     `<table>${rows.map(([k, v]) => `<tr><td class="muted">${k}</td><td>${v}</td></tr>`).join("")}</table>` +
@@ -915,12 +978,12 @@ function showInspect(): void {
     line2 += ` · genes ` + GENE_NAMES.map((n, j) => `${n} ${g[j].toPrecision(3)}`).join(", ");
   }
   // The nearest critter under the cursor (sharks first, they're bigger).
-  for (const sys of [world.sharks, world.cats, world.sheep, world.fish]) {
-    const c = sys.nearest(x + 0.5, y + 0.5, sys === world.sharks || sys === world.cats ? 4 : 2.5);
+  for (const sys of [world.rocs, world.sharks, world.cats, world.sheep, world.fish]) {
+    const c = sys.nearest(x + 0.5, y + 0.5, sys === world.fish ? 2.5 : 4);
     if (!c) continue;
     const tr = sys.species.traits.map((d, j) => `${d.label.toLowerCase()} ${j === T_LITTER ? c.traits[j].toFixed(1) : fmtNum(c.traits[j])}`).join(", ");
     line2 += (line2 ? "\n" : "") +
-      `${sys.species.name} #${c.id} (${c.mode === Mode.Stranded ? sys.species.stranded : MODE_NAMES[c.mode]}${c.boostLeft > 0 ? ", boosting" : ""}${c.pounceLeft > 0 ? ", pouncing" : ""}): age ${c.age} · size ${bodyMass(c).toFixed(2)}${c.grown < 1 ? ` (${Math.round(c.grown * 100)}% grown)` : ""} · fat ${c.fat.toFixed(2)} · nutrients ${c.nutrients.toFixed(3)}` +
+      `${sys.species.name} #${c.id} (${c.mode === Mode.Stranded ? sys.species.stranded : MODE_NAMES[c.mode]}${c.boostLeft > 0 ? ", boosting" : ""}${c.pounceLeft > 0 ? ", pouncing" : ""}${sys === world.rocs ? (c.flying ? ", flying" : ", on the ground") : ""}): age ${c.age} · size ${bodyMass(c).toFixed(2)}${c.grown < 1 ? ` (${Math.round(c.grown * 100)}% grown)` : ""} · fat ${c.fat.toFixed(2)} · nutrients ${c.nutrients.toFixed(3)}` +
       (c.parents[0] ? ` · parents #${c.parents[0]} & #${c.parents[1]}` : " · founder") + `\n  traits: ${tr}`;
     break;
   }
@@ -1054,6 +1117,7 @@ setCritterTraitsHook(() => {
   world.sharks.reexpress();
   world.sheep.reexpress();
   world.cats.reexpress();
+  world.rocs.reexpress();
 });
 const refreshSettings = buildSettings("settings", (s) => !s.newWorld);
 const refreshStartSettings = buildSettings("startSettings", (s) => !!s.newWorld, startConditionsChanged);

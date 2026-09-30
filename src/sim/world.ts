@@ -6,7 +6,7 @@ import {
 import { SporeSystem } from "./spores";
 import { Hydrology } from "./hydrology";
 import { Wind } from "./wind";
-import { CAT, CritterSystem, FISH, SHARK, SHEEP, type CritterHost } from "./critters";
+import { CAT, CritterSystem, FISH, ROC, SHARK, SHEEP, type CritterHost } from "./critters";
 import { mulberry32, type Rng } from "./rng";
 import { generateTerrain, type Terrain } from "./terrain";
 
@@ -42,6 +42,7 @@ export interface Stats {
   sharks: CritterCounts;
   sheep: CritterCounts;
   cats: CritterCounts;
+  rocs: CritterCounts;
   waterSurface: number;
   waterSoil: number;
   waterCloud: number;
@@ -81,6 +82,7 @@ export class World {
   readonly sharks: CritterSystem;
   readonly sheep: CritterSystem;
   readonly cats: CritterSystem;
+  readonly rocs: CritterSystem;
   /** Algae spores drifting in the water (how algae breed). */
   readonly spores: SporeSystem;
   readonly p: Params;
@@ -133,7 +135,8 @@ export class World {
     this.fish = new CritterSystem(host, FISH);
     this.sheep = new CritterSystem(host, SHEEP);
     this.sharks = new CritterSystem(host, SHARK, [this.fish, this.sheep]);
-    this.cats = new CritterSystem(host, CAT, [this.sheep]);
+    this.rocs = new CritterSystem(host, ROC, [this.fish, this.sheep]);
+    this.cats = new CritterSystem(host, CAT, [this.sheep, this.rocs]);
     this.spores = new SporeSystem({
       p: this.p,
       rng: this.rng,
@@ -187,6 +190,10 @@ export class World {
     placed = 0;
     for (let tries = 0; placed < this.p.initialCats && tries < 1e6; tries++) {
       if (this.cats.spawnRandom(rng() * GRID_W, rng() * GRID_H)) placed++;
+    }
+    placed = 0;
+    for (let tries = 0; placed < this.p.initialRocs && tries < 1e6; tries++) {
+      if (this.rocs.spawnRandom(rng() * GRID_W, rng() * GRID_H)) placed++;
     }
   }
 
@@ -248,7 +255,7 @@ export class World {
       }
     }
     // Animals and spores by position (centred on the square, matching the brush).
-    for (const sys of [this.fish, this.sharks, this.sheep, this.cats]) sys.removeWithin(x + 0.5, y + 0.5, r);
+    for (const sys of [this.fish, this.sharks, this.sheep, this.cats, this.rocs]) sys.removeWithin(x + 0.5, y + 0.5, r);
     this.spores.removeWithin(x + 0.5, y + 0.5, r);
   }
 
@@ -269,8 +276,10 @@ export class World {
     this.sharks.step();
     this.sheep.step();
     this.cats.step();
-    this.fish.removeDead();
-    this.sheep.removeDead(); // sheep eaten by cats this tick // fish eaten by sharks this tick
+    this.rocs.step();
+    this.fish.removeDead(); // fish eaten by sharks and rocs this tick
+    this.sheep.removeDead(); // sheep eaten by cats and rocs this tick
+    this.rocs.removeDead(); // rocs eaten by cats this tick // fish eaten by sharks this tick
   }
 
   /**
@@ -508,7 +517,7 @@ export class World {
       flora += this.floraN[i];
     }
     flora += this.spores.nutrientTotal(); // spores are algae on the move
-    const animals = sw.nutrientTotal() + sh.nutrientTotal() + this.sheep.nutrientTotal() + this.cats.nutrientTotal();
+    const animals = sw.nutrientTotal() + sh.nutrientTotal() + this.sheep.nutrientTotal() + this.cats.nutrientTotal() + this.rocs.nutrientTotal();
     const s: Stats = {
       tick: this.tick,
       seeds, grass, algae, spores: this.spores.spores.length,
@@ -527,6 +536,7 @@ export class World {
       sharks: counts(sh),
       sheep: counts(this.sheep),
       cats: counts(this.cats),
+      rocs: counts(this.rocs),
       habitatLost: this.habitatLost,
       ...(() => {
         const m = water.measure();
@@ -540,7 +550,7 @@ export class World {
     this.starved = 0;
     this.oldAge = 0;
     this.habitatLost = 0;
-    for (const c of [sw, sh, this.sheep, this.cats]) c.births = c.deaths = c.starved = c.oldAge = c.eaten = 0;
+    for (const c of [sw, sh, this.sheep, this.cats, this.rocs]) c.births = c.deaths = c.starved = c.oldAge = c.eaten = 0;
     return s;
   }
 

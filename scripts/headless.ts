@@ -36,7 +36,7 @@ for (let k = 1; k <= ticks; k++) {
       `t=${s.tick} seeds=${s.seeds} grass=${s.grass} algae=${s.algae} spores=${s.spores} ` +
       `\n    fish=${s.fish.alive} (b/d ${s.fish.births}/${s.fish.deaths}, starved ${s.fish.starved}, old ${s.fish.oldAge}, eaten ${s.fish.eaten}) ` +
       `algae=${s.algae} sharks=${s.sharks.alive} (b/d ${s.sharks.births}/${s.sharks.deaths}, starved ${s.sharks.starved}, old ${s.sharks.oldAge}) ` +
-      `sheep=${s.sheep.alive} (b/d ${s.sheep.births}/${s.sheep.deaths}, starved ${s.sheep.starved}, old ${s.sheep.oldAge}) cats=${s.cats.alive} (b/d ${s.cats.births}/${s.cats.deaths}, starved ${s.cats.starved}, old ${s.cats.oldAge}, sheep eaten ${s.sheep.eaten})\n    ` +
+      `sheep=${s.sheep.alive} (b/d ${s.sheep.births}/${s.sheep.deaths}, starved ${s.sheep.starved}, old ${s.sheep.oldAge}) cats=${s.cats.alive} (b/d ${s.cats.births}/${s.cats.deaths}, starved ${s.cats.starved}, old ${s.cats.oldAge}, sheep eaten ${s.sheep.eaten}) rocs=${s.rocs.alive} (b/d ${s.rocs.births}/${s.rocs.deaths}, starved ${s.rocs.starved}, old ${s.rocs.oldAge}, eaten ${s.rocs.eaten})\n    ` +
       `gB/gD=${s.grassBirths}/${s.grassDeaths} aB/aD=${s.algaeBirths}/${s.algaeDeaths} ` +
       `starved=${s.starved} old=${s.oldAge} N[g/w/f]=${s.nutrientsGround.toFixed(0)}/${s.nutrientsWater.toFixed(0)}/${s.nutrientsFlora.toFixed(0)} ` +
       `drift=${(s.nutrientsTotal - start.nutrientsTotal).toExponential(1)} lost=${s.habitatLost}\n    ` +

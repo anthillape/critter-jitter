@@ -156,6 +156,7 @@ export const PARAMS = {
   sharkSenseRays: 32, // directions it looks in, all round
   sharkSenseCrowd: 4, // it doesn't bother looking far if it already has this many fish within sight
   sharkSenseFull: 0.35, // ...or if its fat is at least this share of what it can carry
+  sharkSenseMin: 1, // it only heads off if it saw at least this many fish
   sharkBoostRange: 5, // squares from its locked-on prey at which a shark may boost
   sharkBoostDuration: 60, // ticks a boost lasts
   sharkBoostMetabolism: 3, // upkeep multiplier while boosting
@@ -238,7 +239,45 @@ export const PARAMS = {
   catSenseRays: 32,
   catSenseCrowd: 3, // it doesn't bother looking far if it already has this many sheep within sight
   catSenseFull: 0.5, // ...or if its fat is at least this share of what it can carry
+  catSenseMin: 1, // it only heads off if it saw at least this many sheep
   catMeanderRate: 0.03,
+
+  // --- Rocs (huge birds: eat fish or sheep, fly anywhere, land on land) ---
+  rocMoveCost: 0.05, // flying is efficient
+  rocMetabolism: 0.0002,
+  rocFatMass: 0.05,
+  rocNutrientLoss: 0.0002,
+  rocMinNutrients: 0.03,
+  rocFoodRadius: 15, // squares within which it spots a fish or sheep to dive at
+  rocMateRadius: 150, // they fly far and see far
+  rocFoodInterval: 30,
+  rocMateInterval: 60,
+  rocBreedCooldown: 4000,
+  rocMinChildFat: 3,
+  rocMinChildNutrients: 0.2,
+  rocRotRate: 0.002,
+  rocGeneStrength: 0.35,
+  rocStartFat: 20,
+  rocStartNutrients: 0.5,
+  rocTurnRate: 0.05,
+  rocAccel: 0.003,
+  rocWanderTurnChance: 0.004,
+  rocWanderTurnSize: 1.2,
+  rocLookAhead: 3, // squares ahead it checks for water when walking
+  rocBirthSize: 0.3,
+  rocGrowthRate: 0.0003,
+  rocGrowthCost: 1,
+  rocMeanderRate: 0.03,
+  rocSenseRange: 200, // it can see a long way from the air, over anything
+  rocSenseInterval: 600,
+  rocSenseRays: 32,
+  rocSenseCrowd: 5,
+  rocSenseFull: 0.6,
+  rocSenseMin: 25, // only very large crowds of fish or sheep draw it
+  rocTooFat: 0.7, // past this share of its fat store it's too heavy to fly (and stops going after fish)
+  rocFlightCheck: 300, // ticks between decisions to take off or land (by its flying preference)
+  rocDiveBoost: 1.5, // flying speed multiplier while diving at prey
+  rocLandedUpkeep: 0.5, // share of its upkeep it burns while on the ground
 
   // --- Genetics ---
   fullGrowth: 0.98, // fraction of max nutrients considered "fully grown"
@@ -251,6 +290,7 @@ export const PARAMS = {
   initialSharks: 12,
   initialSheep: 40,
   initialCats: 20,
+  initialRocs: 4,
   startingSurfaceWater: 1.3, // standing water at the start, as an average depth over the whole world
   initialSoilWetness: 0.4, // how full the soil starts (0..1); full under the starting lakes
   initialWaterPrefSpread: 0.85, // starting seeds' water preference is spread over this range around the default

@@ -28,8 +28,8 @@ export const GENE_LIMITS: ReadonlyArray<readonly [number, number]> = [
 ];
 
 /** Starting genes for new worlds (editable in the settings panel). */
-export const GRASS_DEFAULTS = [0.008, 0.01, 8, 80, 0.05, 3000, 0.525, 0.35];
-export const ALGAE_DEFAULTS = [0.006, 0.008, 1, 300, 0.05, 2000, 1, 1];
+export const GRASS_DEFAULTS = [0.008, 0.01, 8, 80, 0.15, 3000, 0.525, 0.35];
+export const ALGAE_DEFAULTS = [0.006, 0.008, 1, 300, 0.15, 2000, 1, 1];
 
 /**
  * Copies genes from parent slot `src` to child slot `dst`. Every gene mutates

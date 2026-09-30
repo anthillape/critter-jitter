@@ -1,5 +1,5 @@
 import { PARAMS, TERRAIN, TICKS_PER_SECOND, WORLD_SIZE, type Params } from "./sim/config";
-import { CAT, FISH, SHARK, SHEEP, type SpeciesDef } from "./sim/critters";
+import { CAT, FISH, ROC, SHARK, SHEEP, type SpeciesDef } from "./sim/critters";
 import {
   ALGAE_DEFAULTS, G_BREED, G_GERM, G_GROWTH, G_LIFESPAN, G_MUTATION, G_RANGE, G_WATER_PREF,
   G_WATER_TOL, GRASS_DEFAULTS,
@@ -144,6 +144,11 @@ function senseSettings(sp: SpeciesDef, group: string, prey: string, across: stri
       group, label: "Too full to scan",
       tip: `A ${sp.name} doesn't bother scanning far once its fat is at least this share of what it can carry.`,
       min: 0.05, max: 1, fmt: pct,
+    }),
+    param(k("SenseMin"), {
+      group, label: "Least seen worth the trip",
+      tip: `A ${sp.name} only heads off toward the ${prey} it sensed if it saw at least this many in the best direction.`,
+      min: 1, max: 500, int: true, log: true,
     }),
   ];
 }
@@ -459,7 +464,7 @@ export const SETTINGS: Setting[] = [
     min: 0.001, max: 1, log: true,
   }),
 
-  // --- Animals: fish, sharks, sheep and cats ---
+  // --- Animals: fish, sharks, sheep, cats and rocs ---
   param("hueMutation", {
     group: "Animal colours", label: "Hue mutation",
     tip: "A newborn animal's hue is the midpoint of its parents' hues, nudged randomly by up to this many degrees. Larger values let families drift apart in colour faster.",
@@ -575,6 +580,34 @@ export const SETTINGS: Setting[] = [
     min: 0.001, max: 0.3, log: true,
   }),
   ...critterTraitSettings(CAT, "Cat traits (defaults)"),
+  ...critterSettings(ROC, "Rocs", "roc", "fish or sheep"),
+  param("rocTooFat", {
+    group: "Rocs", label: "Too fat to fly",
+    tip: "Once a roc's fat is past this share of what it can carry, it's too heavy to fly: it lands at the first land it reaches, stays on the ground and ignores fish.",
+    min: 0.1, max: 1, fmt: pct,
+  }),
+  param("rocFlightCheck", {
+    group: "Rocs", label: "Ticks between flight decisions",
+    tip: "How often a roc decides, by its genetic flying preference, whether to take off (on land) or land (over land). It also takes off at once to chase a fish, to head for a crowd it sensed, or if it finds itself in water.",
+    min: 10, max: 5000, int: true, log: true,
+  }),
+  param("rocDiveBoost", {
+    group: "Rocs", label: "Dive speed",
+    tip: "Flying speed while diving at prey, as a multiple of its genetic flying speed.",
+    min: 1, max: 5,
+  }),
+  param("rocLandedUpkeep", {
+    group: "Rocs", label: "Upkeep on the ground",
+    tip: "Share of its normal upkeep a roc burns while landed (resting is cheaper than flying).",
+    min: 0.05, max: 1, fmt: pct,
+  }),
+  param("rocMeanderRate", {
+    group: "Rocs", label: "Meander speed (walking)",
+    tip: "How quickly a walking roc's path swings about within its meander arc, in radians per tick.",
+    min: 0.001, max: 0.3, log: true,
+  }),
+  ...senseSettings(ROC, "Rocs", "fish or sheep", "anything (it flies)", "nothing"),
+  ...critterTraitSettings(ROC, "Roc traits (defaults)"),
 
   // --- Both plants ---
   param("growEnergyPerN", {
@@ -723,6 +756,21 @@ export const SETTINGS: Setting[] = [
     group: "Life", label: "Starting cat nutrients",
     tip: "Nutrients each starting cat gathers from the ground to build its body.",
     min: 0.02, max: 2, log: true, newWorld: true,
+  }),
+  param("initialRocs", {
+    group: "Life", label: "Starting rocs",
+    tip: "Number of rocs (with random genomes) released on land at the start. Each gathers a few nutrients from the ground around it.",
+    min: 0, max: 200, int: true, newWorld: true,
+  }),
+  param("rocStartFat", {
+    group: "Life", label: "Starting roc fat",
+    tip: "Fat (its energy) each starting roc begins with (up to what it can carry).",
+    min: 1, max: 100, log: true, newWorld: true,
+  }),
+  param("rocStartNutrients", {
+    group: "Life", label: "Starting roc nutrients",
+    tip: "Nutrients each starting roc gathers from the ground to build its body.",
+    min: 0.05, max: 3, log: true, newWorld: true,
   }),
   param("initialWaterPrefSpread", {
     group: "Life", label: "Spread of starting water preferences",

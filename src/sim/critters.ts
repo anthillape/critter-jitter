@@ -44,6 +44,8 @@ export const T_SAT = 13, T_LUM = 14, T_BOOST_CHANCE = 15, T_BOOST_POWER = 16;
 // Land animals (hue-only colour, so no saturation / lightness): meandering and
 // swimming; sheep also have grass sight, cats pounce distance, in the same slot.
 export const T_WANDER_ARC = 13, T_GRASS_SIGHT = 14, T_POUNCE = 14, T_SWIM = 15;
+// Rocs: meandering on foot, then flying preference and flying speed in the same slots.
+export const T_FLY_PREF = 14, T_AIR_SPEED = 15;
 
 type TraitDefaults = Partial<Record<string, Partial<TraitDef>>>;
 
@@ -63,7 +65,7 @@ function traitList(o: TraitDefaults, colour: boolean, extras: TraitDef[] = []): 
     { key: "lifespan", label: "Lifespan", tip: "Age (ticks) at which it dies of old age.", def: 7000, min: 300, max: 100000, mode: "mul", spread: 0.4 },
     { key: "parentShare", label: "Share given to each child", tip: "Share of its own nutrients and fat a parent gives each child.", def: 0.2, min: 0.02, max: 0.6, mode: "add", spread: 0.12 },
     { key: "litterSize", label: "Preferred litter size", tip: "How many children it would like per mating (if the parents can afford them).", def: 2, min: 1, max: 12, mode: "mul", spread: 0.5 },
-    { key: "mutation", label: "Mutation size", tip: "How much inherited genes change, randomly, in each child.", def: 0.15, min: 0.005, max: 1, mode: "mul", spread: 0.6 },
+    { key: "mutation", label: "Mutation size", tip: "How much inherited genes change, randomly, in each child.", def: 0.45, min: 0.005, max: 1, mode: "mul", spread: 0.6 },
     { key: "bodySize", label: "Body size", tip: "Body mass: bigger critters cost more to move and to keep alive.", def: 1, min: 0.3, max: 12, mode: "mul", spread: 0.35 },
     { key: "roamSpeed", label: "Roaming speed", tip: "Speed while roaming randomly (with nothing in sight), in squares per tick. Kept between the minimum and top speeds.", def: 0.025, min: 0.001, max: 0.3, mode: "mul", spread: 0.6 },
   ];
@@ -79,12 +81,12 @@ function traitList(o: TraitDefaults, colour: boolean, extras: TraitDef[] = []): 
 }
 
 export interface SpeciesDef {
-  key: "fish" | "shark" | "sheep" | "cat";
+  key: "fish" | "shark" | "sheep" | "cat" | "roc";
   /** Singular / plural names for the UI. */
   name: string;
   plural: string;
   /** Prefix of this species' settings in PARAMS (e.g. "fish" -> fishMoveCost). */
-  prefix: "fish" | "shark" | "sheep" | "cat";
+  prefix: "fish" | "shark" | "sheep" | "cat" | "roc";
   /** What it eats: algae on the grid, the prey species, or grass (grazed a bite at a time). */
   diet: "algae" | "prey" | "grass";
   /** Where it lives. Land critters caught in water swim for the shore; water critters on land are stuck. */
@@ -95,8 +97,10 @@ export interface SpeciesDef {
   collides?: boolean;
   /** Now and then scans the water for the most prey in any direction (sharks). */
   senses?: boolean;
+  /** Can fly anywhere over the map as well as walk on land (rocs). */
+  flies?: boolean;
   /** Colour comes from hue alone, always a pastel (light) or dark shade. */
-  shade?: "pastel" | "dark";
+  shade?: "pastel" | "dark" | "tawny";
   /** Predators: how they close in, a boost (sharks) or a pounce (cats). */
   hunt?: "boost" | "pounce";
   /** Describes it when it's out of its habitat. */
@@ -175,7 +179,28 @@ export const CAT: SpeciesDef = {
   ]),
 };
 
-export const SPECIES = [FISH, SHARK, SHEEP, CAT];
+export const ROC: SpeciesDef = {
+  key: "roc", name: "roc", plural: "rocs", prefix: "roc", diet: "prey", flies: true, senses: true, habitat: "land", shade: "tawny", stranded: "taking off from water",
+  traits: traitList({
+    maxFat: { def: 40, tip: "Most fat it can carry. Rocs eat a lot, but past a point they're too fat to fly (see Too fat to fly)." },
+    minSpeed: { def: 0.005 },
+    maxSpeed: { def: 0.03, label: "Running speed", tip: "Speed on foot while chasing prey or heading for a mate, in squares per tick." },
+    roamSpeed: { def: 0.012, label: "Walking speed", tip: "Speed on foot while wandering, in squares per tick (flying speed is a separate trait)." },
+    hue: { def: 30, spread: 60, tip: "Hue of its (tawny) feathers, in degrees." },
+    breedAge: { def: 5000 },
+    breedFat: { def: 12 },
+    hungerFat: { def: 14, tip: "When fat falls below this, it hunts. Rocs have big appetites: they keep eating past the fat they need to breed." },
+    lifespan: { def: 40000, tip: "Age (ticks) at which it dies of old age. Rocs are long-lived." },
+    litterSize: { def: 1.2 },
+    bodySize: { def: 8, max: 30 },
+  }, false, [
+    { key: "wanderArc", label: "Meander arc", tip: "Width of the arc (degrees) its path wanders within when walking.", def: 50, min: 20, max: 90, mode: "add", spread: 25 },
+    { key: "flyPref", label: "Flying preference", tip: "0..1: how much it prefers flying to walking. At each check it takes off with this chance, or lands (over land) with the opposite chance.", def: 0.6, min: 0, max: 1, mode: "add", spread: 0.3 },
+    { key: "airSpeed", label: "Flying speed", tip: "Cruising speed in the air, in squares per tick (diving at prey goes faster).", def: 0.12, min: 0.01, max: 0.6, mode: "mul", spread: 0.5 },
+  ]),
+};
+
+export const SPECIES = [FISH, SHARK, SHEEP, CAT, ROC];
 
 export const GENE_COUNT_CRITTER = 23;
 /** Genes taken from each parent (the child also gets one brand-new gene). */
@@ -236,6 +261,8 @@ export interface Critter {
   /** Long-range sensing (sharks): the direction it's heading for the most prey it saw, and ticks left doing so. */
   senseDir: number;
   senseLeft: number;
+  /** Rocs: in the air (else on foot, on land). */
+  flying: boolean;
   /** Personal space (sheep): which way, and how strongly, it wants to move away from nearby others (worked out each tick). */
   awayX: number;
   awayY: number;
@@ -309,6 +336,7 @@ function catchReach(prey: Critter): number {
 export function colourOf(t: Float32Array, sp: SpeciesDef): string {
   if (sp.shade === "pastel") return `hsl(${t[T_HUE].toFixed(0)} 75% 86%)`;
   if (sp.shade === "dark") return `hsl(${t[T_HUE].toFixed(0)} 40% 24%)`;
+  if (sp.shade === "tawny") return `hsl(${t[T_HUE].toFixed(0)} 45% 42%)`;
   return `hsl(${t[T_HUE].toFixed(0)} ${(t[T_SAT] * 100).toFixed(0)}% ${(t[T_LUM] * 100).toFixed(0)}%)`;
 }
 
@@ -361,6 +389,10 @@ const PARAM_NAMES = [
   "SenseRange", "SenseInterval", "SenseRays", "SenseCrowd", "SenseFull",
   // Personal space (sheep).
   "Space", "SpaceWeight",
+  // Sensing: least prey seen before it bothers heading that way.
+  "SenseMin",
+  // Flying (rocs).
+  "TooFat", "FlightCheck", "DiveBoost", "LandedUpkeep",
   "BirthSize", "GrowthRate", "GrowthCost",
 ] as const;
 type ParamName = (typeof PARAM_NAMES)[number];
@@ -461,7 +493,7 @@ export class CritterSystem {
       hue: traits[T_HUE],
       id: this.nextId++, x, y, heading: this.host.rng() * Math.PI * 2, speed: 0,
       fat, nutrients, age: 0, cooldown: 0, parents, genes, traits,
-      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, boostTried: false, stroke: 0, tailAmp: 0, pounceLeft: 0, pounceDir: 0, pounceRest: 0, desired: 0, general: 0, wander: 0, avoid: 0, shore: false, senseDir: 0, senseLeft: 0, awayX: 0, awayY: 0, species: this.species, grown: 1,
+      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, boostTried: false, stroke: 0, tailAmp: 0, pounceLeft: 0, pounceDir: 0, pounceRest: 0, desired: 0, general: 0, wander: 0, avoid: 0, shore: false, senseDir: 0, senseLeft: 0, awayX: 0, awayY: 0, flying: false, species: this.species, grown: 1,
       phase: this.host.rng() * Math.PI * 2, alive: true, colour: colourOf(traits, this.species),
     };
     c.desired = c.general = c.heading;
@@ -528,12 +560,54 @@ export class CritterSystem {
     this.preyBuckets.clear();
     const size = this.sp("FoodRadius");
     for (const sys of this.preySystems) for (const c of sys.critters) {
-      // Prey can only be caught in the predator's own habitat (sheep by sharks only while swimming).
-      if (!c.alive || !this.home(squareOf(c))) continue;
+      if (!this.catchable(c)) continue;
       const key = Math.floor(c.x / size) * 1000 + Math.floor(c.y / size);
       let b = this.preyBuckets.get(key);
       if (!b) this.preyBuckets.set(key, (b = []));
       b.push(c);
+    }
+  }
+
+  /**
+   * Whether this predator can catch `p` where it is: never in the air; a
+   * flyer can take anything below it; others only in their own habitat
+   * (sheep by sharks only while swimming, rocs by cats only once landed).
+   */
+  private catchable(p: Critter): boolean {
+    if (!p.alive || p.flying) return false;
+    if (this.species.flies) return true;
+    return this.home(squareOf(p));
+  }
+
+  /** Rocs: fat enough that it can't get off the ground. */
+  private tooFat(c: Critter): boolean {
+    return c.fat > this.sp("TooFat") * c.traits[T_MAX_FAT];
+  }
+
+  /**
+   * Rocs: when to take off and land. Water underfoot always means taking
+   * off; too fat means landing at the first land. Otherwise, every
+   * FlightCheck ticks the genetic flying preference decides, and it takes
+   * off to chase a fish or to head for a crowd it sensed far away.
+   */
+  private flight(c: Critter, here: number): void {
+    const h = this.host;
+    const overLand = this.home(here);
+    const fat = this.tooFat(c);
+    if (!c.flying) {
+      if (!overLand) c.flying = true; // never stands in water, however fat
+      else if (!fat && ((c.prey && c.prey.species.habitat === "water") || c.senseLeft > 0)) c.flying = true;
+      else if (!fat && (this.tick + c.id) % this.sp("FlightCheck") === 0 && h.rng() < c.traits[T_FLY_PREF]) c.flying = true;
+      if (c.flying) c.wander = 0;
+      return;
+    }
+    if (!overLand) return;
+    const chasingFish = c.prey !== null && c.prey.species.habitat === "water";
+    if (fat || (!chasingFish && c.senseLeft <= 0 && (this.tick + c.id) % this.sp("FlightCheck") === 0 && h.rng() < 1 - c.traits[T_FLY_PREF])) {
+      c.flying = false;
+      c.general = c.heading;
+      c.wander = 0;
+      if (chasingFish) this.dropTarget(c);
     }
   }
 
@@ -549,8 +623,13 @@ export class CritterSystem {
     }
 
     const here = Math.floor(c.y) * GRID_W + Math.floor(c.x);
-    const atHome = this.home(here);
+    if (this.species.flies) this.flight(c, here);
+    const flying = c.flying;
+    const atHome = flying || this.home(here);
     const land = this.species.habitat === "land";
+    // On foot on land (flyers in the air steer like swimmers, over anything).
+    const walking = land && !flying;
+    const roamSpeed = flying ? t[T_AIR_SPEED] : t[T_ROAM_SPEED];
     const grazer = this.species.diet === "grass";
 
     // A grazer keeps at a plant until it's gone or it can't store any more.
@@ -597,8 +676,8 @@ export class CritterSystem {
     } else if (c.hasTarget) {
       const other = c.mate ?? c.prey;
       if (other) {
-        // Prey that's gone, or has left the predator's habitat, is lost.
-        if (!other.alive || (other === c.prey && !this.home(squareOf(other)))) {
+        // Prey that's gone, or has got out of reach (left the predator's habitat, taken off), is lost.
+        if (!other.alive || (other === c.prey && !this.catchable(other))) {
           this.dropTarget(c);
         } else {
           c.targetX = other.x;
@@ -635,7 +714,7 @@ export class CritterSystem {
       // Close in: turn harder so it doesn't circle what it's chasing.
       if (dist < 3) turnRate *= 3;
       // Heading for something it has spotted: top speed (or boost), easing off at the end.
-      let top = t[T_MAX_SPEED];
+      let top = flying ? t[T_AIR_SPEED] * this.sp("DiveBoost") : t[T_MAX_SPEED];
       // Close to locked-on prey: pouncers pounce (a fast dash toward where it is now)...
       if (this.species.hunt === "pounce" && c.prey && c.pounceRest === 0 && dist < t[T_POUNCE] && dist >= 1) {
         c.pounceDir = c.heading = c.desired;
@@ -655,7 +734,7 @@ export class CritterSystem {
       // Arrived: at prey, at a mate (bodies touching, for animals that collide), or at food.
       const reach = c.prey ? catchReach(c.prey) : c.mate && this.species.collides ? bodyRadius(c) + bodyRadius(c.mate) + 0.3 : 0.75;
       if (dist < reach) this.arrive(c);
-    } else if (moving && land) {
+    } else if (moving && walking) {
       // Meander: the path wanders to and fro within the genetic arc around
       // its general direction, which itself changes now and then.
       // (Cats that sensed a herd from afar meander toward it.)
@@ -666,7 +745,7 @@ export class CritterSystem {
       const half = (t[T_WANDER_ARC] * Math.PI) / 360;
       c.wander = Math.max(-half, Math.min(half, c.wander + (h.rng() - 0.5) * 2 * this.sp("MeanderRate")));
       c.desired = c.general + c.wander;
-      speed = t[T_ROAM_SPEED];
+      speed = roamSpeed;
       // Personal space: bend away from others that are too close.
       if (c.awayX || c.awayY) {
         const w = this.sp("SpaceWeight");
@@ -679,12 +758,14 @@ export class CritterSystem {
         c.senseLeft--;
         c.desired = c.senseDir;
       } else if (h.rng() < this.sp("WanderTurnChance")) c.desired = c.heading + (h.rng() - 0.5) * this.sp("WanderTurnSize");
-      speed = t[T_ROAM_SPEED];
+      speed = roamSpeed;
       c.boostLeft = 0;
     }
     if (moving && !pouncing) {
       const look = this.sp("LookAhead");
-      if (land) {
+      if (flying) {
+        // Nothing is in the way in the air.
+      } else if (land) {
         // Water ahead: a land animal turns right round (170-190°, left or right).
         if (c.avoid === 0 && look > 0 && atHome && !this.clearAhead(c.x, c.y, c.heading, look)) this.turnAround(c);
       } else if (look > 0 && atHome && !this.clearAhead(c.x, c.y, c.heading, look)) {
@@ -699,6 +780,12 @@ export class CritterSystem {
       let delta = c.desired - c.heading;
       delta = Math.atan2(Math.sin(delta), Math.cos(delta));
       c.heading += Math.max(-turnRate, Math.min(turnRate, delta));
+      if (this.species.flies) {
+        // Wings flap while turning or speeding up; otherwise it glides.
+        const flap = flying && (Math.abs(delta) > 0.05 || speed > c.speed + 1e-4) ? 1 : 0;
+        c.tailAmp += (flap - c.tailAmp) * 0.15;
+        if (c.tailAmp > 0.02) c.phase += 0.35;
+      }
       const accel = this.sp("Accel");
       if (this.species.glides) speed = this.glide(c, speed, boosting);
       else speed = c.speed + Math.max(-accel, Math.min(accel, speed - c.speed));
@@ -710,10 +797,10 @@ export class CritterSystem {
       const nx = c.x + Math.cos(c.heading) * speed;
       const ny = c.y + Math.sin(c.heading) * speed;
       const ni = Math.floor(ny) * GRID_W + Math.floor(nx);
-      if (nx >= 0 && ny >= 0 && nx < GRID_W && ny < GRID_H && (!atHome || this.home(ni))) {
+      if (nx >= 0 && ny >= 0 && nx < GRID_W && ny < GRID_H && (flying || !atHome || this.home(ni))) {
         c.x = nx;
         c.y = ny;
-      } else if (land) {
+      } else if (walking) {
         // Reached the water's edge anyway: stop and turn right round (once, while it turns).
         if (c.pounceLeft > 0) {
           c.pounceLeft = 0;
@@ -734,7 +821,7 @@ export class CritterSystem {
       // The tail only sweeps during a stroke, easing in and out.
       c.tailAmp += ((c.stroke > 0 ? 1 : 0) - c.tailAmp) * 0.12;
       if (c.stroke > 0) c.phase += this.sp("TailBeat");
-    } else {
+    } else if (!this.species.flies) {
       c.phase += speed * 12; // wiggle only while moving
     }
     if (!c.alive) return;
@@ -742,9 +829,10 @@ export class CritterSystem {
     // Fat is its energy: moving costs ½·m·v² (fat adds mass), living costs fat
     // per unit of mass, and boosting multiplies the living cost while it lasts.
     const mass = bodyMass(c) + c.fat * this.sp("FatMass");
-    const upkeep = this.sp("Metabolism") * mass * (boosting ? this.host.p.sharkBoostMetabolism : 1);
+    let upkeep = this.sp("Metabolism") * mass * (boosting ? this.host.p.sharkBoostMetabolism : 1);
+    if (this.species.flies && !flying) upkeep *= this.sp("LandedUpkeep"); // resting on the ground is cheaper
     let move = this.sp("MoveCost") * 0.5 * mass * speed * speed;
-    if (land) {
+    if (land && !this.species.flies) {
       // Swimming ability trades off: good swimmers swim cheaply but pay more to walk.
       const a = t[T_SWIM];
       if (atHome) move *= 1 + a * this.sp("SwimWalkCost");
@@ -811,18 +899,22 @@ export class CritterSystem {
   }
 
   /** Coarse count of catchable prey per SENSE_CELL block, for long-range sensing. */
-  private preyGrid = new Uint16Array(0);
+  private preyGrids: Uint16Array[] = [];
 
+  /** One count grid per prey species, so a roc can leave fish out when it's too fat to catch them. */
   private buildPreyGrid(): void {
     const cw = Math.ceil(GRID_W / SENSE_CELL);
     const ch = Math.ceil(GRID_H / SENSE_CELL);
-    if (this.preyGrid.length !== cw * ch) this.preyGrid = new Uint16Array(cw * ch);
-    else this.preyGrid.fill(0);
-    for (const sys of this.preySystems) for (const p of sys.critters) {
-      if (!p.alive || !this.home(squareOf(p))) continue;
-      const k = Math.floor(p.y / SENSE_CELL) * cw + Math.floor(p.x / SENSE_CELL);
-      if (this.preyGrid[k] < 65535) this.preyGrid[k]++;
-    }
+    this.preySystems.forEach((sys, s) => {
+      let g = this.preyGrids[s];
+      if (!g || g.length !== cw * ch) g = this.preyGrids[s] = new Uint16Array(cw * ch);
+      else g.fill(0);
+      for (const p of sys.critters) {
+        if (!this.catchable(p)) continue;
+        const k = Math.floor(p.y / SENSE_CELL) * cw + Math.floor(p.x / SENSE_CELL);
+        if (g[k] < 65535) g[k]++;
+      }
+    });
   }
 
   /**
@@ -836,8 +928,15 @@ export class CritterSystem {
     if (c.fat >= this.sp("SenseFull") * c.traits[T_MAX_FAT]) return;
     const r = this.sp("FoodRadius");
     let near = 0;
-    this.forEachIn(this.preyBuckets, r, c, () => near++);
+    this.forEachIn(this.preyBuckets, r, c, (o) => {
+      if (this.wants(c, o)) near++;
+    });
     if (near >= this.sp("SenseCrowd")) return;
+    // The grids of the prey it's after; a flyer sees over anything.
+    const grids = this.preySystems
+      .filter((sys) => !(this.species.flies && sys.species.habitat === "water" && this.tooFat(c)))
+      .map((sys) => this.preyGrids[this.preySystems.indexOf(sys)]);
+    const seeAll = !!this.species.flies;
     const cw = Math.ceil(GRID_W / SENSE_CELL);
     const range = this.sp("SenseRange");
     const rays = Math.max(4, Math.round(this.sp("SenseRays")));
@@ -854,11 +953,13 @@ export class CritterSystem {
       for (let d = 1; d <= range; d++) {
         const x = c.x + dx * d;
         const y = c.y + dy * d;
-        if (x < 0 || y < 0 || x >= GRID_W || y >= GRID_H || !this.home(Math.floor(y) * GRID_W + Math.floor(x))) break;
+        if (x < 0 || y < 0 || x >= GRID_W || y >= GRID_H) break;
+        if (!seeAll && !this.home(Math.floor(y) * GRID_W + Math.floor(x))) break;
         const cell = Math.floor(y / SENSE_CELL) * cw + Math.floor(x / SENSE_CELL);
         if (cell === lastCell) continue; // count each block once
         lastCell = cell;
-        const n = this.preyGrid[cell];
+        let n = 0;
+        for (const g of grids) n += g[cell];
         seen += n;
         far += n * d;
       }
@@ -868,10 +969,12 @@ export class CritterSystem {
         bestDist = far / seen;
       }
     }
-    if (best <= 0) return;
+    // Only worth the trip if it saw enough (rocs go only for very large crowds).
+    if (best <= 0 || best < this.sp("SenseMin")) return;
     c.senseDir = bestDir;
     // Head that way for as long as it takes to get there (but look again at the next scan).
-    c.senseLeft = Math.min(this.sp("SenseInterval"), Math.ceil(bestDist / Math.max(1e-3, c.traits[T_ROAM_SPEED])));
+    const speed = this.species.flies ? c.traits[T_AIR_SPEED] : c.traits[T_ROAM_SPEED];
+    c.senseLeft = Math.min(this.sp("SenseInterval"), Math.ceil(bestDist / Math.max(1e-3, speed)));
   }
 
   /** Calls `f` for each critter in the bucket map (bucket size = r) within r of `c`. */
@@ -1088,11 +1191,16 @@ export class CritterSystem {
    * Predators: lock on to the nearest living prey within sight and follow
    * it until it's caught, lost from sight or escapes (see update).
    */
+  /** Whether this predator will go after `o` (a roc too fat to fly ignores fish). */
+  private wants(c: Critter, o: Critter): boolean {
+    return !(this.species.flies && o.species.habitat === "water" && this.tooFat(c));
+  }
+
   private findPrey(c: Critter): void {
     const r = this.sp("FoodRadius");
     const locked = c.prey;
     if (locked && locked.alive && (locked.x - c.x) ** 2 + (locked.y - c.y) ** 2 <= r * r) return;
-    const best = nearestIn(this.preyBuckets, r, c, () => true);
+    const best = nearestIn(this.preyBuckets, r, c, (o) => this.wants(c, o));
     this.dropTarget(c);
     c.boostLeft = 0;
     if (!best) return;

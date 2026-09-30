@@ -116,8 +116,8 @@ founders.
   each gene nudges a third of the traits (5) up or down, so several genes
   overlap on each trait. The genes act on top of editable defaults (Settings
   → *Fish traits*). A child gets 11 random genes from each parent, each
-  mutated slightly by the parents' mutation size, plus one brand-new random
-  gene, making 23 again.
+  mutated by the parents' mutation size (default 0.45, so populations adapt
+  within a few generations), plus one brand-new random gene, making 23 again.
 
 ### Sharks
 
@@ -242,17 +242,49 @@ randomly, and their hue-only colour is always a dark shade.
 - Sheep in water are out of a cat's reach, and so are sheep that reach
   water: a cat loses a sheep that isn't on land.
 
-With the default settings, 20 cats and 40 sheep start spread over the whole
-map, and cats often starve before the sheep become plentiful. Starting
-with more sheep, or adding cats later with the spray tool, gives them a
-better chance.
+- Cats also pounce on **rocs** that have landed (a roc in the air is out of
+  reach).
 
-Fish, sharks, sheep and cats run on the same code (`src/sim/critters.ts`).
-Each species has its own traits, settings (Settings → *Fish* / *Sharks* /
-*Sheep* / *Cats*, and their trait defaults), diet and habitat.
+### Rocs
+
+Rocs are huge birds that eat fish or sheep. They're long-lived (lifespan
+40,000 ticks), big (body size 8) and can carry a lot of fat (default 40).
+They're drawn from above as tawny birds: wings spread with a shadow on the
+ground below while flying, wings folded when landed.
+
+- **Flying and landing.** A roc flies anywhere over the map, over land and
+  water alike, at its genetic *Flying speed*. It lands only on land, where
+  it walks and meanders at its separate genetic *Walking speed*, and burns
+  half its upkeep (*Upkeep on the ground*). It never stands in water: if
+  it finds itself in water it takes off. Every 5 s (*Ticks between flight
+  decisions*) its genetic *Flying preference* (0–1) decides whether it takes
+  off (on land) or lands (over land). It also takes off at once to chase a
+  fish or to head for a crowd it sensed.
+- **Flapping.** Its wings flap (sweeping in and out) only while it turns or
+  speeds up; the rest of the time it glides.
+- **Hunting.** A hungry roc dives at the nearest fish (only while flying) or
+  sheep (flying or on foot) within 15 squares, diving at 1.5 times its
+  flying speed (*Dive speed*). It has a big appetite: it keeps hunting until
+  it's past the fat it needs to breed.
+- **Too fat to fly.** Past 70% of its fat store (*Too fat to fly*) it's too
+  heavy to fly: it lands at the first land, stays on the ground and ignores
+  fish, only walking after sheep.
+- **Drawn to big crowds.** Like sharks and cats it scans far and wide (up to
+  200 squares, seeing over everything from the air) and heads for the
+  biggest crowd of fish or sheep, but only a very large one (at least 25
+  seen; *Least seen worth the trip*).
+
+The default world (seed 1337) keeps fish, sharks, sheep, cats and rocs
+going for 15,000 ticks, but in some worlds cats and rocs together hunt the
+sheep out.
+
+Fish, sharks, sheep, cats and rocs run on the same code
+(`src/sim/critters.ts`). Each species has its own traits, settings
+(Settings → *Fish* / *Sharks* / *Sheep* / *Cats* / *Rocs*, and their trait
+defaults), diet and habitat.
 
 Nutrients stay conserved: starting fish and sharks gather theirs from
-the water and starting sheep and cats from the ground, and everything a critter eats, sheds or leaves behind is
+the water and starting sheep, cats and rocs from the ground, and everything a critter eats, sheds or leaves behind is
 accounted for.
 
 ## Water cycle
@@ -392,7 +424,7 @@ Each organism carries `growth`, `breed`, `range` (grass), `germ` (grass),
 `mutation`, `lifespan`, `water pref` (grass) and `water tol` (grass). Every
 gene mutates on every birth: the child's value is the parent's scaled by a
 random factor in `[1 − m, 1 + m]`, where `m` is the parent's `mutation` gene
-(default 0.05). The mutation gene mutates the same way, so the mutation rate
+(default 0.15). The mutation gene mutates the same way, so the mutation rate
 evolves too.
 
 Grass's ability to use energy and nutrients (absorbing energy and growing) is
