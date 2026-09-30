@@ -110,8 +110,7 @@ export const PARAMS = {
   // --- Fish ---
   fishMoveCost: 1, // multiplier on the ½·m·v² energy cost of moving
   fishMetabolism: 0.002, // energy burned per tick per unit of body mass (fat adds mass)
-  fishFatMass: 0.4, // mass added per unit of fat
-  fishEnergyMax: 1, // short-term energy store; surplus goes to fat
+  fishFatMass: 0.1, // mass added per unit of fat (fat is the only energy store)
   fishNutrientLoss: 0.0004, // share of body nutrients shed into the water each tick
   fishMinNutrients: 0.005, // a fish whose body nutrients fall below this dies
   fishFoodRadius: 7, // squares searched for algae when hungry
@@ -120,11 +119,11 @@ export const PARAMS = {
   fishFoodInterval: 10, // ticks between food searches
   fishMateInterval: 40, // ticks between mate searches (less often than food)
   fishBreedCooldown: 1500, // ticks after mating before a fish can mate again
-  fishMinChildEnergy: 0.3, // parents won't make a child with less energy than this
+  fishMinChildFat: 0.3, // parents won't make a child with less fat than this
   fishMinChildNutrients: 0.04, // ...or fewer nutrients than this
   fishRotRate: 0.004, // share of a corpse's nutrients returned to its square each tick
   fishGeneStrength: 0.35, // how strongly each gene nudges its traits
-  fishStartEnergy: 1, // energy each starting fish gets
+  fishStartFat: 2, // fat (energy) each starting fish gets
   fishStartNutrients: 0.1, // nutrients each starting fish takes from the water
   fishTurnRate: 0.6, // most a fish can turn per tick (radians): nimble
   fishAccel: 0.05, // most its speed can change per tick
@@ -138,8 +137,7 @@ export const PARAMS = {
   // --- Sharks (eat fish) ---
   sharkMoveCost: 0.04, // sharks are efficient swimmers
   sharkMetabolism: 0.00015,
-  sharkFatMass: 0.3,
-  sharkEnergyMax: 3,
+  sharkFatMass: 0.1,
   sharkNutrientLoss: 0.0002,
   sharkMinNutrients: 0.02,
   sharkFoodRadius: 20, // squares within which a hungry shark can detect fish
@@ -147,11 +145,11 @@ export const PARAMS = {
   sharkFoodInterval: 15,
   sharkMateInterval: 60,
   sharkBreedCooldown: 2000,
-  sharkMinChildEnergy: 1,
+  sharkMinChildFat: 1,
   sharkMinChildNutrients: 0.1,
   sharkRotRate: 0.003,
   sharkGeneStrength: 0.35,
-  sharkStartEnergy: 7,
+  sharkStartFat: 10,
   sharkStartNutrients: 0.3,
   sharkBoostRange: 5, // squares from its locked-on prey at which a shark may boost
   sharkBoostDuration: 60, // ticks a boost lasts
@@ -167,24 +165,22 @@ export const PARAMS = {
   sharkBirthSize: 0.15, // newborn sharks are this share of their adult size...
   sharkGrowthRate: 0.0004, // ...and grow by this share per tick while they have spare energy
   sharkGrowthCost: 1, // energy per unit of body mass grown
-  sharkPreyEnergy: 2, // extra energy per unit of a fish's body size when a shark digests it
 
   // --- Sheep (graze grass on land) ---
   sheepMoveCost: 1,
   sheepMetabolism: 0.0004,
-  sheepFatMass: 0.4,
-  sheepEnergyMax: 2,
+  sheepFatMass: 0.1,
   sheepNutrientLoss: 0.0003,
   sheepMinNutrients: 0.01,
   sheepMateRadius: 30,
   sheepFoodInterval: 90, // ticks between looks for the grassiest direction while hungry
   sheepMateInterval: 60,
   sheepBreedCooldown: 1500,
-  sheepMinChildEnergy: 0.6,
+  sheepMinChildFat: 0.6,
   sheepMinChildNutrients: 0.08,
   sheepRotRate: 0.003,
   sheepGeneStrength: 0.35,
-  sheepStartEnergy: 3,
+  sheepStartFat: 6,
   sheepStartNutrients: 0.2,
   sheepTurnRate: 0.08, // most a sheep can turn per tick (radians)
   sheepAccel: 0.002,
@@ -203,8 +199,7 @@ export const PARAMS = {
   // --- Cats (hunt sheep on land) ---
   catMoveCost: 0.3,
   catMetabolism: 0.0002,
-  catFatMass: 0.3,
-  catEnergyMax: 3,
+  catFatMass: 0.1,
   catNutrientLoss: 0.0002,
   catMinNutrients: 0.02,
   catFoodRadius: 40, // squares within which a hungry cat can spot a sheep
@@ -212,11 +207,11 @@ export const PARAMS = {
   catFoodInterval: 30,
   catMateInterval: 60,
   catBreedCooldown: 2500,
-  catMinChildEnergy: 1,
+  catMinChildFat: 1,
   catMinChildNutrients: 0.1,
   catRotRate: 0.003,
   catGeneStrength: 0.35,
-  catStartEnergy: 10,
+  catStartFat: 12,
   catStartNutrients: 0.3,
   catTurnRate: 0.1,
   catAccel: 0.002,
@@ -226,7 +221,6 @@ export const PARAMS = {
   catBirthSize: 0.3,
   catGrowthRate: 0.0004,
   catGrowthCost: 1,
-  catPreyEnergy: 2, // extra energy per unit of a sheep's body size when a cat eats it
   catPounceSpeed: 0.25, // squares per tick while pouncing
   catPounceRest: 180, // ticks after a pounce before it can pounce again
   catSwimEffort: 0.0005,

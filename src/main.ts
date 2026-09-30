@@ -846,7 +846,7 @@ function critterRows(sys: CritterSystem, label: string, x0: number, y0: number, 
   const mean = (f: (s: Critter) => number) => inside.reduce((a, s) => a + f(s), 0) / inside.length;
   return [
     [label, inside.length.toLocaleString()],
-    ["&nbsp;&nbsp;mean energy / fat", `${mean((s) => s.energy).toFixed(2)} / ${mean((s) => s.fat).toFixed(2)}`],
+    ["&nbsp;&nbsp;mean fat", mean((s) => s.fat).toFixed(2)],
     ["&nbsp;&nbsp;mean age", mean((s) => s.age).toFixed(0)],
   ];
 }
@@ -920,7 +920,7 @@ function showInspect(): void {
     if (!c) continue;
     const tr = sys.species.traits.map((d, j) => `${d.label.toLowerCase()} ${j === T_LITTER ? c.traits[j].toFixed(1) : fmtNum(c.traits[j])}`).join(", ");
     line2 += (line2 ? "\n" : "") +
-      `${sys.species.name} #${c.id} (${c.mode === Mode.Stranded ? sys.species.stranded : MODE_NAMES[c.mode]}${c.boostLeft > 0 ? ", boosting" : ""}${c.pounceLeft > 0 ? ", pouncing" : ""}): age ${c.age} · size ${bodyMass(c).toFixed(2)}${c.grown < 1 ? ` (${Math.round(c.grown * 100)}% grown)` : ""} · energy ${c.energy.toFixed(2)} · fat ${c.fat.toFixed(2)} · nutrients ${c.nutrients.toFixed(3)}` +
+      `${sys.species.name} #${c.id} (${c.mode === Mode.Stranded ? sys.species.stranded : MODE_NAMES[c.mode]}${c.boostLeft > 0 ? ", boosting" : ""}${c.pounceLeft > 0 ? ", pouncing" : ""}): age ${c.age} · size ${bodyMass(c).toFixed(2)}${c.grown < 1 ? ` (${Math.round(c.grown * 100)}% grown)` : ""} · fat ${c.fat.toFixed(2)} · nutrients ${c.nutrients.toFixed(3)}` +
       (c.parents[0] ? ` · parents #${c.parents[0]} & #${c.parents[1]}` : " · founder") + `\n  traits: ${tr}`;
     break;
   }

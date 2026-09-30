@@ -87,9 +87,8 @@ function critterSettings(sp: SpeciesDef, group: string, noun: string, food: stri
   const grazer = sp.diet === "grass";
   return [
     e("MoveCost", "Cost of moving", `Multiplier on the energy a ${noun} spends moving (½ × mass × speed², where fat adds mass).`, { min: 0.005, max: 20, log: true }),
-    e("Metabolism", "Upkeep per unit of mass", `Energy a ${noun} burns each tick just staying alive, per unit of body mass (fat counts as mass).` + PER_SEC, { min: 0.00005, max: 0.01, log: true }),
+    e("Metabolism", "Upkeep per unit of mass", `Fat a ${noun} burns each tick just staying alive, per unit of body mass (fat counts as mass).` + PER_SEC, { min: 0.00005, max: 0.01, log: true }),
     e("FatMass", "Weight of fat", `Mass added by each unit of fat. Fatter ${sp.plural} cost more to move and to keep alive.`, { min: 0, max: 2 }),
-    e("EnergyMax", "Short-term energy store", `Energy a ${noun} holds before the surplus goes to fat.`, { min: 0.2, max: 20, log: true }),
     e("NutrientLoss", "Nutrient shedding", `Share of its body nutrients a ${noun} sheds into its square each tick, so it has to keep eating.` + PER_SEC, { min: 0, max: 0.005 }),
     e("MinNutrients", "Fewest nutrients to survive", `A ${noun} whose body nutrients fall below this dies.`, { min: 0.0005, max: 0.5, log: true }),
     // Grazers' sight range is genetic (the grass sight trait).
@@ -100,7 +99,7 @@ function critterSettings(sp: SpeciesDef, group: string, noun: string, food: stri
       : `How often a hungry ${noun} looks around for ${food}.`, { min: 1, max: grazer ? 600 : 120, int: true, log: grazer }),
     e("MateInterval", "Ticks between mate searches", `How often a ${noun} ready to breed looks around for a mate.`, { min: 1, max: 300, int: true }),
     e("BreedCooldown", "Rest after mating", `Ticks after mating before a ${noun} can mate again.`, { min: 0, max: 10000, int: true }),
-    e("MinChildEnergy", "Least energy for a child", "Parents won't make a child they can't give at least this much energy between them.", { min: 0.01, max: 10, log: true }),
+    e("MinChildFat", "Least fat for a child", "Parents won't make a child they can't give at least this much fat between them.", { min: 0.01, max: 10, log: true }),
     e("MinChildNutrients", "Fewest nutrients for a child", "Parents won't make a child they can't give at least this many nutrients between them.", { min: 0.001, max: 1, log: true }),
     e("RotRate", "Rotting speed", `Share of a dead ${noun}'s remaining nutrients returned to its square each tick.` + PER_SEC, { min: 0.0002, max: 0.1, log: true }),
     e("GeneStrength", "Gene strength", "How strongly each gene pushes its traits away from the defaults (affects new genes and mutations).", { min: 0.02, max: 1, log: true }),
@@ -472,11 +471,6 @@ export const SETTINGS: Setting[] = [
     tip: "How many times its normal upkeep a shark burns while boosting (on top of the extra cost of moving faster).",
     min: 1, max: 20, log: true,
   }),
-  param("sharkPreyEnergy", {
-    group: "Sharks", label: "Energy from digesting prey",
-    tip: "Energy a shark gets per unit of its prey's body size (fish, or a swimming sheep) when it eats it, on top of the prey's own stored energy and fat.",
-    min: 0, max: 10,
-  }),
   ...critterTraitSettings(SHARK, "Shark traits (defaults)"),
   ...critterSettings(SHEEP, "Sheep", "sheep", "grass"),
   param("sheepBite", {
@@ -506,11 +500,6 @@ export const SETTINGS: Setting[] = [
   }),
   ...critterTraitSettings(SHEEP, "Sheep traits (defaults)"),
   ...critterSettings(CAT, "Cats", "cat", "sheep"),
-  param("catPreyEnergy", {
-    group: "Cats", label: "Energy from digesting a sheep",
-    tip: "Energy a cat gets per unit of a sheep's body size when it eats it, on top of the sheep's own stored energy and fat.",
-    min: 0, max: 10,
-  }),
   param("catPounceSpeed", {
     group: "Cats", label: "Pounce speed",
     tip: "How fast a cat dashes when it pounces, in squares per tick. It pounces straight at where the sheep was, so fast pounces are more likely to land.",
@@ -631,10 +620,10 @@ export const SETTINGS: Setting[] = [
     tip: "Number of fish (with random genomes) released into the water at the start. Each takes a few nutrients from the water.",
     min: 0, max: 2000, int: true, newWorld: true,
   }),
-  param("fishStartEnergy", {
-    group: "Life", label: "Starting fish energy",
-    tip: "Energy each starting fish begins with.",
-    min: 0.1, max: 3, log: true, newWorld: true,
+  param("fishStartFat", {
+    group: "Life", label: "Starting fish fat",
+    tip: "Fat (its energy) each starting fish begins with (up to what it can carry).",
+    min: 0.1, max: 20, log: true, newWorld: true,
   }),
   param("fishStartNutrients", {
     group: "Life", label: "Starting fish nutrients",
@@ -646,9 +635,9 @@ export const SETTINGS: Setting[] = [
     tip: "Number of sharks (with random genomes) released into the water at the start. Each gathers a few nutrients from the water around it.",
     min: 0, max: 500, int: true, newWorld: true,
   }),
-  param("sharkStartEnergy", {
-    group: "Life", label: "Starting shark energy",
-    tip: "Energy each starting shark begins with (beyond its short-term store it starts as fat).",
+  param("sharkStartFat", {
+    group: "Life", label: "Starting shark fat",
+    tip: "Fat (its energy) each starting shark begins with (up to what it can carry).",
     min: 0.5, max: 30, log: true, newWorld: true,
   }),
   param("sharkStartNutrients", {
@@ -661,9 +650,9 @@ export const SETTINGS: Setting[] = [
     tip: "Number of sheep (with random genomes) released on land at the start. Each gathers a few nutrients from the ground around it.",
     min: 0, max: 1000, int: true, newWorld: true,
   }),
-  param("sheepStartEnergy", {
-    group: "Life", label: "Starting sheep energy",
-    tip: "Energy each starting sheep begins with (beyond its short-term store it starts as fat).",
+  param("sheepStartFat", {
+    group: "Life", label: "Starting sheep fat",
+    tip: "Fat (its energy) each starting sheep begins with (up to what it can carry).",
     min: 0.2, max: 20, log: true, newWorld: true,
   }),
   param("sheepStartNutrients", {
@@ -676,9 +665,9 @@ export const SETTINGS: Setting[] = [
     tip: "Number of cats (with random genomes) released on land at the start. Each gathers a few nutrients from the ground around it.",
     min: 0, max: 500, int: true, newWorld: true,
   }),
-  param("catStartEnergy", {
-    group: "Life", label: "Starting cat energy",
-    tip: "Energy each starting cat begins with (beyond its short-term store it starts as fat).",
+  param("catStartFat", {
+    group: "Life", label: "Starting cat fat",
+    tip: "Fat (its energy) each starting cat begins with (up to what it can carry).",
     min: 0.5, max: 30, log: true, newWorld: true,
   }),
   param("catStartNutrients", {

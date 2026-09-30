@@ -34,15 +34,15 @@ export interface TraitDef {
 }
 
 // Trait indices shared by every species.
-export const T_MAX_FAT = 0, T_FAT_TEND = 1, T_MIN_SPEED = 2, T_MAX_SPEED = 3, T_HUE = 4,
-  T_BREED_AGE = 5, T_BREED_FAT = 6, T_HUNGER_FAT = 7, T_LIFESPAN = 8, T_PARENT_SHARE = 9, T_LITTER = 10,
-  T_MUTATION = 11, T_BODY = 12, T_ROAM_SPEED = 13;
+export const T_MAX_FAT = 0, T_MIN_SPEED = 1, T_MAX_SPEED = 2, T_HUE = 3,
+  T_BREED_AGE = 4, T_BREED_FAT = 5, T_HUNGER_FAT = 6, T_LIFESPAN = 7, T_PARENT_SHARE = 8, T_LITTER = 9,
+  T_MUTATION = 10, T_BODY = 11, T_ROAM_SPEED = 12;
 // Species-specific traits follow the shared ones. Fish and sharks: full
 // colour (saturation, lightness); sharks also boosting.
-export const T_SAT = 14, T_LUM = 15, T_BOOST_CHANCE = 16, T_BOOST_POWER = 17;
+export const T_SAT = 13, T_LUM = 14, T_BOOST_CHANCE = 15, T_BOOST_POWER = 16;
 // Land animals (hue-only colour, so no saturation / lightness): meandering and
 // swimming; sheep also have grass sight, cats pounce distance, in the same slot.
-export const T_WANDER_ARC = 14, T_GRASS_SIGHT = 15, T_POUNCE = 15, T_SWIM = 16;
+export const T_WANDER_ARC = 13, T_GRASS_SIGHT = 14, T_POUNCE = 14, T_SWIM = 15;
 
 type TraitDefaults = Partial<Record<string, Partial<TraitDef>>>;
 
@@ -52,16 +52,15 @@ type TraitDefaults = Partial<Record<string, Partial<TraitDef>>>;
  */
 function traitList(o: TraitDefaults, colour: boolean, extras: TraitDef[] = []): TraitDef[] {
   const t: TraitDef[] = [
-    { key: "maxFat", label: "Fat store max", tip: "Most energy it can keep as fat.", def: 2, min: 0.1, max: 40, mode: "mul", spread: 0.8 },
-    { key: "fatTendency", label: "Fat storing", tip: "Share of spare energy turned into fat each tick. High = stores fat eagerly.", def: 0.05, min: 0.002, max: 0.5, mode: "mul", spread: 0.8 },
+    { key: "maxFat", label: "Fat store max", tip: "Most fat it can carry. Fat is its only energy store: everything it eats goes into fat, and everything it does is paid from it.", def: 5, min: 0.2, max: 100, mode: "mul", spread: 0.8 },
     { key: "minSpeed", label: "Minimum speed", tip: "Slowest it moves when it's going anywhere, in squares per tick.", def: 0.01, min: 0.001, max: 0.2, mode: "mul", spread: 0.6 },
     { key: "maxSpeed", label: "Top speed", tip: "Speed while chasing food or a mate, in squares per tick.", def: 0.07, min: 0.01, max: 0.5, mode: "mul", spread: 0.6 },
     { key: "hue", label: "Colour hue", tip: "Hue of its colour, in degrees. Founders take it from their genes; children inherit the midpoint of their parents' hues, slightly mutated.", def: 200, min: 0, max: 360, mode: "add", spread: 140, wrap: true },
     { key: "breedAge", label: "Breeding age", tip: "Age (ticks) from which it starts prioritising breeding.", def: 900, min: 60, max: 40000, mode: "mul", spread: 0.6 },
-    { key: "breedFat", label: "Fat needed to breed", tip: "Fat it needs before it starts looking for a mate.", def: 0.8, min: 0, max: 40, mode: "mul", spread: 0.6 },
-    { key: "hungerFat", label: "Hunger threshold", tip: "When fat falls below this, it actively hunts for food.", def: 0.6, min: 0, max: 40, mode: "mul", spread: 0.7 },
+    { key: "breedFat", label: "Fat needed to breed", tip: "Fat it needs before it starts looking for a mate.", def: 2, min: 0, max: 100, mode: "mul", spread: 0.6 },
+    { key: "hungerFat", label: "Hunger threshold", tip: "When fat falls below this, it actively hunts for food.", def: 1.5, min: 0, max: 100, mode: "mul", spread: 0.7 },
     { key: "lifespan", label: "Lifespan", tip: "Age (ticks) at which it dies of old age.", def: 7000, min: 300, max: 100000, mode: "mul", spread: 0.4 },
-    { key: "parentShare", label: "Share given to each child", tip: "Share of its own nutrients and energy a parent gives each child.", def: 0.2, min: 0.02, max: 0.6, mode: "add", spread: 0.12 },
+    { key: "parentShare", label: "Share given to each child", tip: "Share of its own nutrients and fat a parent gives each child.", def: 0.2, min: 0.02, max: 0.6, mode: "add", spread: 0.12 },
     { key: "litterSize", label: "Preferred litter size", tip: "How many children it would like per mating (if the parents can afford them).", def: 2, min: 1, max: 12, mode: "mul", spread: 0.5 },
     { key: "mutation", label: "Mutation size", tip: "How much inherited genes change, randomly, in each child.", def: 0.15, min: 0.005, max: 1, mode: "mul", spread: 0.6 },
     { key: "bodySize", label: "Body size", tip: "Body mass: bigger critters cost more to move and to keep alive.", def: 1, min: 0.3, max: 12, mode: "mul", spread: 0.35 },
@@ -108,7 +107,7 @@ export const FISH: SpeciesDef = {
 export const SHARK: SpeciesDef = {
   key: "shark", name: "shark", plural: "sharks", prefix: "shark", diet: "prey", hunt: "boost", glides: true, habitat: "water", stranded: "stranded on land",
   traits: traitList({
-      maxFat: { def: 6 },
+      maxFat: { def: 20 },
       minSpeed: { def: 0.015 },
       maxSpeed: { def: 0.1 },
       roamSpeed: { def: 0.045 },
@@ -116,8 +115,8 @@ export const SHARK: SpeciesDef = {
       sat: { def: 0.18, spread: 0.2 },
       lum: { def: 0.6, spread: 0.15 },
       breedAge: { def: 2500 },
-      breedFat: { def: 3 },
-      hungerFat: { def: 2 },
+      breedFat: { def: 8 },
+      hungerFat: { def: 6 },
       lifespan: { def: 15000 },
       litterSize: { def: 1.5 },
       bodySize: { def: 6, max: 20, tip: "Adult body mass (babies start small and grow into it). Bigger sharks cost more to move and to keep alive." },
@@ -130,14 +129,14 @@ export const SHARK: SpeciesDef = {
 export const SHEEP: SpeciesDef = {
   key: "sheep", name: "sheep", plural: "sheep", prefix: "sheep", diet: "grass", habitat: "land", shade: "pastel", stranded: "swimming to shore",
   traits: traitList({
-    maxFat: { def: 4 },
+    maxFat: { def: 12 },
     minSpeed: { def: 0.004 },
     maxSpeed: { def: 0.03, tip: "Speed while heading for a mate, in squares per tick." },
     roamSpeed: { def: 0.012, tip: "Walking speed while meandering (including looking for grass), in squares per tick. Kept between the minimum and top speeds." },
     hue: { def: 0, spread: 180, tip: "Hue of its (always pastel) fleece, in degrees. Founders take it from their genes; lambs inherit the midpoint of their parents' hues, slightly mutated." },
     breedAge: { def: 2000 },
-    breedFat: { def: 1.5 },
-    hungerFat: { def: 1.2, tip: "When fat falls below this, it grazes any grass it walks over, and now and then heads for the grassiest direction it can see." },
+    breedFat: { def: 5 },
+    hungerFat: { def: 4, tip: "When fat falls below this, it grazes any grass it walks over, and now and then heads for the grassiest direction it can see." },
     lifespan: { def: 12000 },
     litterSize: { def: 1.3 },
     bodySize: { def: 2 },
@@ -153,14 +152,14 @@ const SWIM_ABILITY: TraitDef = { key: "swimAbility", label: "Swimming ability", 
 export const CAT: SpeciesDef = {
   key: "cat", name: "cat", plural: "cats", prefix: "cat", diet: "prey", hunt: "pounce", habitat: "land", shade: "dark", stranded: "swimming to shore",
   traits: traitList({
-    maxFat: { def: 6 },
+    maxFat: { def: 20 },
     minSpeed: { def: 0.004 },
     maxSpeed: { def: 0.02, label: "Stalking speed", tip: "Speed while following the sheep it's locked on to (or heading for a mate), in squares per tick." },
     roamSpeed: { def: 0.01, tip: "Walking speed while meandering, in squares per tick. Kept between the minimum and stalking speeds." },
     hue: { def: 20, spread: 180, tip: "Hue of its (always dark) fur, in degrees. Founders take it from their genes; kittens inherit the midpoint of their parents' hues, slightly mutated." },
     breedAge: { def: 3000 },
-    breedFat: { def: 2.5 },
-    hungerFat: { def: 2 },
+    breedFat: { def: 8 },
+    hungerFat: { def: 6 },
     lifespan: { def: 15000 },
     litterSize: { def: 1.5 },
     bodySize: { def: 4 },
@@ -193,7 +192,6 @@ export interface Critter {
   y: number;
   heading: number;
   speed: number;
-  energy: number;
   fat: number;
   nutrients: number;
   age: number;
@@ -320,14 +318,14 @@ export function expressTraits(genes: Gene[], defs: TraitDef[]): Float32Array {
 
 /** The per-species settings, read live from PARAMS by prefix. */
 const PARAM_NAMES = [
-  "MoveCost", "Metabolism", "FatMass", "EnergyMax", "NutrientLoss", "MinNutrients", "FoodRadius", "MateRadius",
-  "FoodInterval", "MateInterval", "BreedCooldown", "MinChildEnergy", "MinChildNutrients", "RotRate",
-  "GeneStrength", "StartEnergy", "StartNutrients",
+  "MoveCost", "Metabolism", "FatMass", "NutrientLoss", "MinNutrients", "FoodRadius", "MateRadius",
+  "FoodInterval", "MateInterval", "BreedCooldown", "MinChildFat", "MinChildNutrients", "RotRate",
+  "GeneStrength", "StartFat", "StartNutrients",
   "TurnRate", "Accel", "WanderTurnChance", "WanderTurnSize", "LookAhead",
   // Sheep have no FoodRadius (grass sight is genetic) and use these instead:
   "Bite", "GrazeFloor", "MeanderRate",
   // Land animals caught in water; predators.
-  "SwimEffort", "SwimWalkCost", "PreyEnergy", "PounceSpeed", "PounceRest",
+  "SwimEffort", "SwimWalkCost", "PounceSpeed", "PounceRest",
   // Gliders (sharks).
   "StrokeTicks", "GlideDrag", "GlideSlack",
   "BirthSize", "GrowthRate", "GrowthCost",
@@ -389,11 +387,8 @@ export class CritterSystem {
     if (!this.gatherNutrients(Math.floor(x), Math.floor(y), n)) return false;
     const genes: Gene[] = [];
     for (let g = 0; g < GENE_COUNT_CRITTER; g++) genes.push(randomGene(h.rng, this.sp("GeneStrength"), this.species.traits.length));
-    // Starting energy beyond the short-term store goes into fat.
-    const e = this.sp("StartEnergy");
-    const eMax = this.sp("EnergyMax");
-    const c = this.add(x, y, genes, [0, 0], Math.min(e, eMax), n, 0);
-    c.fat = Math.min(Math.max(0, e - eMax), c.traits[T_MAX_FAT]);
+    const c = this.add(x, y, genes, [0, 0], n, 0);
+    c.fat = Math.min(this.sp("StartFat"), c.traits[T_MAX_FAT]);
     return true;
   }
 
@@ -426,13 +421,13 @@ export class CritterSystem {
     return true;
   }
 
-  private add(x: number, y: number, genes: Gene[], parents: [number, number], energy: number, nutrients: number, fat: number, hue?: number): Critter {
+  private add(x: number, y: number, genes: Gene[], parents: [number, number], nutrients: number, fat: number, hue?: number): Critter {
     const traits = expressTraits(genes, this.species.traits);
     if (hue !== undefined) traits[T_HUE] = hue;
     const c: Critter = {
       hue: traits[T_HUE],
       id: this.nextId++, x, y, heading: this.host.rng() * Math.PI * 2, speed: 0,
-      energy, fat, nutrients, age: 0, cooldown: 0, parents, genes, traits,
+      fat, nutrients, age: 0, cooldown: 0, parents, genes, traits,
       mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, boostTried: false, stroke: 0, tailAmp: 0, pounceLeft: 0, pounceDir: 0, pounceRest: 0, desired: 0, general: 0, wander: 0, avoid: 0, shore: false, species: this.species, grown: 1,
       phase: this.host.rng() * Math.PI * 2, alive: true, colour: colourOf(traits, this.species),
     };
@@ -691,8 +686,8 @@ export class CritterSystem {
     }
     if (!c.alive) return;
 
-    // Energy: moving costs ½·m·v² (fat adds mass), living costs energy per unit
-    // of mass, and boosting multiplies the living cost while it lasts.
+    // Fat is its energy: moving costs ½·m·v² (fat adds mass), living costs fat
+    // per unit of mass, and boosting multiplies the living cost while it lasts.
     const mass = bodyMass(c) + c.fat * this.sp("FatMass");
     const upkeep = this.sp("Metabolism") * mass * (boosting ? this.host.p.sharkBoostMetabolism : 1);
     let move = this.sp("MoveCost") * 0.5 * mass * speed * speed;
@@ -702,36 +697,24 @@ export class CritterSystem {
       if (atHome) move *= 1 + a * this.sp("SwimWalkCost");
       else move = this.sp("SwimEffort") * mass * (1 - 0.75 * a);
     }
-    c.energy -= move + upkeep;
-    // Fat: store spare energy, or draw on fat when running low.
-    const eMax = this.sp("EnergyMax");
-    if (c.energy > 0.7 * eMax && c.fat < t[T_MAX_FAT]) {
-      const put = Math.min((c.energy - 0.7 * eMax) * t[T_FAT_TEND], t[T_MAX_FAT] - c.fat);
-      c.energy -= put;
-      c.fat += put;
-    } else if (c.energy < 0.3 * eMax && c.fat > 0) {
-      const take = Math.min(0.3 * eMax - c.energy, c.fat);
-      c.energy += take;
-      c.fat -= take;
-    }
-    // Growing up: while it has spare energy it grows toward its adult size,
-    // paying energy for each unit of body mass it adds.
-    if (c.grown < 1 && c.energy > 0.5 * eMax) {
+    c.fat -= move + upkeep;
+    // Growing up: while it isn't hungry it grows toward its adult size,
+    // paying fat for each unit of body mass it adds.
+    if (c.grown < 1 && c.fat > t[T_HUNGER_FAT]) {
       const step = Math.min(this.sp("GrowthRate"), 1 - c.grown);
       const cost = step * t[T_BODY] * this.sp("GrowthCost");
-      if (c.energy - cost > 0.3 * eMax) {
+      if (c.fat - cost > t[T_HUNGER_FAT]) {
         c.grown += step;
-        c.energy -= cost;
+        c.fat -= cost;
       }
     }
-    if (c.energy > eMax) c.energy = eMax; // anything beyond both stores is lost
 
     // Metabolism also sheds a little of the body's nutrients into its square.
     const shed = c.nutrients * this.sp("NutrientLoss");
     c.nutrients -= shed;
     h.nutrients[here] += shed;
 
-    if (c.energy <= 0 || c.nutrients < this.sp("MinNutrients")) {
+    if (c.fat <= 0 || c.nutrients < this.sp("MinNutrients")) {
       this.starved++;
       this.die(c);
     }
@@ -868,10 +851,10 @@ export class CritterSystem {
     h.floraN[i] -= bite;
     h.floraE[i] -= e;
     c.nutrients += bite;
-    c.energy += e;
+    c.fat += e;
     if (h.floraN[i] < this.sp("GrazeFloor") * h.p.grassMaxN) {
       c.nutrients += h.floraN[i];
-      c.energy += h.floraE[i];
+      c.fat += h.floraE[i];
       h.floraN[i] = 0;
       h.clearFlora(i);
       c.mode = Mode.Wander;
@@ -953,15 +936,15 @@ export class CritterSystem {
       return;
     }
     if (c.prey) {
-      // Catch: eat the whole fish (its energy, fat and nutrients).
+      // Catch: eat the whole animal: all its fat (its energy) and nutrients.
       const p = c.prey;
       this.dropTarget(c);
       c.boostLeft = 0;
       c.pounceLeft = 0;
       if (!p.alive) return;
       p.alive = false;
-      // Its stored energy plus what its body yields when digested.
-      c.energy += p.energy + p.fat + bodyMass(p) * this.sp("PreyEnergy");
+      c.fat += p.fat;
+      p.fat = 0;
       c.nutrients += p.nutrients;
       p.nutrients = 0;
       const sys = this.preySystems.find((sy) => sy.species === p.species)!;
@@ -978,7 +961,7 @@ export class CritterSystem {
     this.dropTarget(c);
     const i = Math.floor(c.targetY) * GRID_W + Math.floor(c.targetX);
     if (h.kind[i] === ALGAE_KIND) {
-      c.energy += h.floraE[i];
+      c.fat += h.floraE[i];
       c.nutrients += h.floraN[i];
       h.floraN[i] = 0;
       h.clearFlora(i);
@@ -986,39 +969,30 @@ export class CritterSystem {
     }
   }
 
-  /** Energy beyond the short-term store goes straight to fat where there's room. */
+  /** Fat beyond what it can carry is lost. */
   private storeSurplus(c: Critter): void {
-    const eMax = this.sp("EnergyMax");
-    if (c.energy > eMax) {
-      const put = Math.min(c.energy - eMax, c.traits[T_MAX_FAT] - c.fat);
-      if (put > 0) {
-        c.fat += put;
-        c.energy -= put;
-      }
-    }
+    if (c.fat > c.traits[T_MAX_FAT]) c.fat = c.traits[T_MAX_FAT];
   }
 
   /** Parents make as many children (up to their preferred litter) as they can afford. */
   private breed(a: Critter, b: Critter): void {
     const want = Math.max(1, Math.round((a.traits[T_LITTER] + b.traits[T_LITTER]) / 2));
-    const eMax = this.sp("EnergyMax");
     let made = 0;
     for (let k = 0; k < want; k++) {
       const shareA = a.traits[T_PARENT_SHARE];
       const shareB = b.traits[T_PARENT_SHARE];
-      const eA = (a.energy + a.fat) * shareA;
-      const eB = (b.energy + b.fat) * shareB;
+      const fA = a.fat * shareA;
+      const fB = b.fat * shareB;
       const nA = a.nutrients * shareA;
       const nB = b.nutrients * shareB;
-      if (eA + eB < this.sp("MinChildEnergy") || nA + nB < this.sp("MinChildNutrients")) break;
-      take(a, eA);
-      take(b, eB);
+      if (fA + fB < this.sp("MinChildFat") || nA + nB < this.sp("MinChildNutrients")) break;
+      a.fat -= fA;
+      b.fat -= fB;
       a.nutrients -= nA;
       b.nutrients -= nB;
-      const e = eA + eB;
-      const child = this.add((a.x + b.x) / 2, (a.y + b.y) / 2, this.childGenes(a, b), [a.id, b.id], Math.min(e, eMax), nA + nB, 0, this.childHue(a, b));
+      const child = this.add((a.x + b.x) / 2, (a.y + b.y) / 2, this.childGenes(a, b), [a.id, b.id], nA + nB, 0, this.childHue(a, b));
       child.grown = Math.min(1, this.sp("BirthSize")); // babies start small and grow
-      child.fat = Math.min(Math.max(0, e - eMax), child.traits[T_MAX_FAT]); // any remainder beyond fat is lost
+      child.fat = Math.min(fA + fB, child.traits[T_MAX_FAT]); // any beyond what it can carry is lost
       made++;
     }
     if (made > 0) {
@@ -1026,11 +1000,6 @@ export class CritterSystem {
       this.sounds.births++;
       this.sounds.x = a.x;
       a.cooldown = b.cooldown = this.sp("BreedCooldown");
-    }
-    function take(c: Critter, amount: number): void {
-      const fromEnergy = Math.min(c.energy, amount);
-      c.energy -= fromEnergy;
-      c.fat -= amount - fromEnergy;
     }
   }
 

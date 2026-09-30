@@ -82,18 +82,19 @@ Lineages therefore keep a family colour that drifts slowly over the
 generations. Changing a species' *Colour hue* default only recolours
 founders.
 
-- **Energy.** Each fish has a short-term energy store and a fat reserve
-  (both capped: the fat cap is genetic). Spare energy is turned into fat at
-  a genetic rate, and fat is drawn on when energy runs low. Moving costs
-  ½·m·v², where mass is body size plus fat, so fat fish pay more to move.
-  Staying alive costs energy per unit of mass. Metabolism also sheds a little
+- **Fat is energy.** An animal has one energy store: its fat, up to a
+  genetic maximum (*Fat store max*; anything beyond that is lost). Everything
+  it eats goes into fat, and everything it does is paid from fat. Moving costs
+  ½·m·v², where mass is body size plus a little for its fat, so fat animals pay
+  a bit more to move. Staying alive costs fat per unit of mass. It starves
+  when its fat runs out. Metabolism also sheds a little
   body nutrient into the water every tick, so fish must keep eating.
 - **Behaviour.**
   - *Roaming*: with nothing in sight, a fish roams randomly at its genetic
     roaming speed.
   - *Hungry*: when fat drops below its hunger threshold, it looks for the
     nearest algae within 7 squares every so often, swims to it at top speed,
-    and eats it in one go (the algae's nutrients and energy).
+    and eats it in one go (the algae's nutrients, and its energy as fat).
   - *Looking for a mate*: once it's old and fat enough (both genetic) it
     looks, less often, for another ready fish within 14 squares.
   - Fish can't move on land and slowly starve there. They pass through
@@ -101,14 +102,14 @@ founders.
 - **Breeding.** Both fish must be ready. Any two can mate (no sexes),
   except a fish and its own parent. They make up to their preferred litter
   size (the parents' genetic average), as long as they can afford it. Each
-  parent gives each child its genetic share of its nutrients and energy.
+  parent gives each child its genetic share of its nutrients and fat.
   Children appear straight away between the parents, and the parents then
   rest for a while before mating again.
 - **Death.** Fish die of old age (genetic lifespan), starvation, or
-  running out of body nutrients. Any remaining energy is lost, and the body
+  running out of body nutrients. Any remaining fat is lost, and the body
   rots, returning its nutrients to the square gradually. Dead bodies stay
   where they died, turn grey, and fade out as they decompose.
-- **Genome.** Fish have 16 traits (fat store max, fat storing, minimum /
+- **Genome.** Fish have 15 traits (fat store max, minimum /
   top / roaming speed, colour hue, breeding age, fat needed to breed, hunger
   threshold, lifespan, share given to each child, litter size, mutation
   size, body size, colour saturation / lightness). A fish has 23 genes, and
@@ -135,17 +136,15 @@ far less per unit of mass than it costs fish. They have two extra traits:
 
 While boosting, a shark burns several times its normal upkeep, on top of the
 higher ½·m·v² cost of moving faster, for a set number of ticks. A caught fish
-is eaten whole: the shark gets its energy, fat and nutrients, plus extra
-energy from digesting its body. Sharks are bigger than fish and drawn
+is eaten whole: the shark gets all its fat (its energy) and its nutrients. Sharks are bigger than fish and drawn
 shark-shaped (seen from above: tapered body, pectoral fins, and a forked
 tail that sweeps as they swim). Their colour is genetic too, defaulting to grey-blue.
 
 Baby sharks are born at 15% of their adult size and grow into it while they
-have spare energy, paying energy for each unit of body mass they add. They
+aren't hungry, paying fat for each unit of body mass they add. They
 can breed once nearly full-grown. Adult size is genetic (*Body size*,
-default 6, up to 20). A shark's current mass sets how much energy it spends
-moving (½·m·v²) and staying alive, and how much energy it gives when eaten,
-so big sharks cost more to run. Sharks are drawn in proportion to their
+default 6, up to 20). A shark's current mass sets how much fat it burns
+moving (½·m·v²) and staying alive, so big sharks cost more to run. Sharks are drawn in proportion to their
 current size. Birth size, growth speed and growth cost are settings for each
 species; fish are born full-size by default.
 
@@ -167,7 +166,7 @@ species.
 ### Sheep
 
 Sheep live on land and graze grass. They have the same lifecycle and kind
-of genome as fish and sharks (23 genes, each nudging a third of their 17
+of genome as fish and sharks (23 genes, each nudging a third of their 16
 traits, including *Swimming ability*). They are drawn as little rounded squares of fleece, 4 pixels
 across at the default size, with a black head at the front. Their colour
 genome has only a hue: sheep are always pastel shades.
@@ -210,11 +209,11 @@ randomly, and their hue-only colour is always a dark shade.
 - **Pouncing.** Once the sheep is within the cat's genetic *Pounce
   distance* (default 5 squares), the cat pounces: a fast dash (*Pounce
   speed*) in a fixed direction, toward where the sheep was. If it comes
-  within a square of the sheep on the way, it catches and eats it (its
-  energy, fat and nutrients, plus extra energy from its body). A missed
+  within a square of the sheep on the way, it catches and eats it (all its
+  fat and nutrients). A missed
   pounce ends after the distance to the sheep, and the cat must rest
   (*Rest after pouncing*) before it can pounce again, though it keeps
-  stalking. Pouncing costs energy like any movement (½·m·v²), so it's
+  stalking. Pouncing costs fat like any movement (½·m·v²), so it's
   expensive.
 - Sheep in water are out of a cat's reach, and so are sheep that reach
   water: a cat loses a sheep that isn't on land.
