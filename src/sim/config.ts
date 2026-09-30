@@ -278,6 +278,8 @@ export const PARAMS = {
   rocFlightCheck: 300, // ticks between decisions to take off or land (by its flying preference)
   rocDiveBoost: 1.5, // flying speed multiplier while diving at prey
   rocLandedUpkeep: 0.5, // share of its upkeep it burns while on the ground
+  rocHuntUntil: 0.65, // it keeps hunting until its fat reaches this share of its store (a big reserve)
+  rocEdgeMargin: 20, // squares from the map edge at which a flying roc starts arcing back toward the middle
 
   // --- Genetics ---
   fullGrowth: 0.98, // fraction of max nutrients considered "fully grown"

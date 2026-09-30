@@ -392,7 +392,7 @@ const PARAM_NAMES = [
   // Sensing: least prey seen before it bothers heading that way.
   "SenseMin",
   // Flying (rocs).
-  "TooFat", "FlightCheck", "DiveBoost", "LandedUpkeep",
+  "TooFat", "FlightCheck", "DiveBoost", "LandedUpkeep", "HuntUntil", "EdgeMargin",
   "BirthSize", "GrowthRate", "GrowthCost",
 ] as const;
 type ParamName = (typeof PARAM_NAMES)[number];
@@ -541,7 +541,7 @@ export class CritterSystem {
 
   private isReady(c: Critter): boolean {
     const t = c.traits;
-    return c.alive && c.cooldown === 0 && c.grown >= 0.9 && c.age >= t[T_BREED_AGE] && c.fat >= t[T_BREED_FAT] && c.fat >= t[T_HUNGER_FAT];
+    return c.alive && c.cooldown === 0 && c.grown >= 0.9 && c.age >= t[T_BREED_AGE] && c.fat >= t[T_BREED_FAT] && c.fat >= this.hunger(c);
   }
 
   private buildBuckets(): void {
@@ -577,6 +577,19 @@ export class CritterSystem {
     if (!p.alive || p.flying) return false;
     if (this.species.flies) return true;
     return this.home(squareOf(p));
+  }
+
+  /**
+   * Fat below which it hunts (and grows, and can't breed): its genetic
+   * hunger threshold; rocs also keep hunting until they've built up a big
+   * reserve (HuntUntil, a share of their fat store, kept just short of too
+   * fat to fly).
+   */
+  private hunger(c: Critter): number {
+    const t = c.traits;
+    if (!this.species.flies) return t[T_HUNGER_FAT];
+    const share = Math.min(this.sp("HuntUntil"), this.sp("TooFat") - 0.05);
+    return Math.max(t[T_HUNGER_FAT], share * t[T_MAX_FAT]);
   }
 
   /** Rocs: fat enough that it can't get off the ground. */
@@ -644,10 +657,10 @@ export class CritterSystem {
       c.mode = Mode.Stranded;
     } else if (c.mode === Mode.Grazing) {
       // Still grazing.
-    } else if (grazer && c.fat < t[T_HUNGER_FAT] && h.kind[here] === GRASS_KIND) {
+    } else if (grazer && c.fat < this.hunger(c) && h.kind[here] === GRASS_KIND) {
       this.dropTarget(c);
       c.mode = Mode.Grazing;
-    } else if (c.fat < t[T_HUNGER_FAT]) {
+    } else if (c.fat < this.hunger(c)) {
       if (c.mode !== Mode.Hungry) this.dropTarget(c);
       c.mode = Mode.Hungry;
     } else if (this.isReady(c)) {
@@ -777,6 +790,16 @@ export class CritterSystem {
           if (this.clearAhead(c.x, c.y, c.heading - side * off, look)) { c.desired = c.heading - side * off; break; }
         }
       }
+      // Flyers keep away from the edges of the map, arcing back toward the
+      // middle (more sharply the nearer they get), unless diving at prey.
+      if (flying && !c.prey) {
+        const m = this.sp("EdgeMargin");
+        if (m > 0) {
+          const ex = c.x < m ? 1 - c.x / m : c.x > GRID_W - m ? -(1 - (GRID_W - c.x) / m) : 0;
+          const ey = c.y < m ? 1 - c.y / m : c.y > GRID_H - m ? -(1 - (GRID_H - c.y) / m) : 0;
+          if (ex || ey) c.desired = Math.atan2(Math.sin(c.desired) + 3 * ey, Math.cos(c.desired) + 3 * ex);
+        }
+      }
       let delta = c.desired - c.heading;
       delta = Math.atan2(Math.sin(delta), Math.cos(delta));
       c.heading += Math.max(-turnRate, Math.min(turnRate, delta));
@@ -841,10 +864,10 @@ export class CritterSystem {
     c.fat -= move + upkeep;
     // Growing up: while it isn't hungry it grows toward its adult size,
     // paying fat for each unit of body mass it adds.
-    if (c.grown < 1 && c.fat > t[T_HUNGER_FAT]) {
+    if (c.grown < 1 && c.fat > this.hunger(c)) {
       const step = Math.min(this.sp("GrowthRate"), 1 - c.grown);
       const cost = step * t[T_BODY] * this.sp("GrowthCost");
-      if (c.fat - cost > t[T_HUNGER_FAT]) {
+      if (c.fat - cost > this.hunger(c)) {
         c.grown += step;
         c.fat -= cost;
       }

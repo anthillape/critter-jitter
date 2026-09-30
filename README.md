@@ -262,10 +262,16 @@ ground below while flying, wings folded when landed.
   fish or to head for a crowd it sensed.
 - **Flapping.** Its wings flap (sweeping in and out) only while it turns or
   speeds up; the rest of the time it glides.
+- **Keeping off the edges.** Within 20 squares of the edge of the map
+  (*Keeps away from the edge*), a flying roc steers back toward the middle,
+  more strongly the nearer it gets, so it turns away in an arc (unless it's
+  diving at prey).
 - **Hunting.** A hungry roc dives at the nearest fish (only while flying) or
   sheep (flying or on foot) within 15 squares, diving at 1.5 times its
   flying speed (*Dive speed*). It has a big appetite: it keeps hunting until
-  it's past the fat it needs to breed.
+  it has built up a big reserve, 65% of its fat store (*Hunts until this
+  full*; its genetic hunger threshold applies if higher), and only breeds
+  once it's that full.
 - **Too fat to fly.** Past 70% of its fat store (*Too fat to fly*) it's too
   heavy to fly: it lands at the first land, stays on the ground and ignores
   fish, only walking after sheep.

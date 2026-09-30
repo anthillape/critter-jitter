@@ -601,6 +601,16 @@ export const SETTINGS: Setting[] = [
     tip: "Share of its normal upkeep a roc burns while landed (resting is cheaper than flying).",
     min: 0.05, max: 1, fmt: pct,
   }),
+  param("rocHuntUntil", {
+    group: "Rocs", label: "Hunts until this full",
+    tip: "A roc keeps hunting until its fat reaches this share of what it can carry, building a big reserve (kept a little below Too fat to fly). It only breeds once it's this full. Its genetic hunger threshold still applies if higher.",
+    min: 0, max: 1, fmt: pct,
+  }),
+  param("rocEdgeMargin", {
+    group: "Rocs", label: "Keeps away from the edge",
+    tip: "Squares from the edge of the map at which a flying roc starts turning back toward the middle, in an arc that tightens the closer it gets (0 = it doesn't; it just bounces off the edge).",
+    min: 0, max: 80, int: true,
+  }),
   param("rocMeanderRate", {
     group: "Rocs", label: "Meander speed (walking)",
     tip: "How quickly a walking roc's path swings about within its meander arc, in radians per tick.",
