@@ -157,7 +157,10 @@ export const PARAMS = {
   sharkBoostDuration: 60, // ticks a boost lasts
   sharkBoostMetabolism: 3, // upkeep multiplier while boosting
   sharkTurnRate: 0.04, // most a shark can turn per tick (radians): smooth, gliding turns
-  sharkAccel: 0.003, // most its speed can change per tick
+  sharkAccel: 0.0012, // speed gained per tick during a tail stroke
+  sharkStrokeTicks: 45, // longest tail stroke, in ticks...
+  sharkGlideDrag: 0.004, // ...then it glides, losing this share of its speed each tick...
+  sharkGlideSlack: 0.25, // ...until it's this share below the speed it wants (strokes push it half this share above) // most its speed can change per tick
   sharkWanderTurnChance: 0.004, // chance per tick of changing course while roaming
   sharkWanderTurnSize: 1.6, // size of those course changes (radians)
   sharkLookAhead: 6, // squares ahead it checks for land, turning away before it gets there

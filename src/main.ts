@@ -498,7 +498,7 @@ function drawSharks(): void {
   for (const c of sh.corpses) drawSharkShape(c.x, c.y, c.heading, c.mass, 0, corpseColour(c));
   for (const s of sh.critters) {
     if (!s.alive) continue;
-    drawSharkShape(s.x, s.y, s.heading, bodyMass(s), s.speed > 0 ? Math.sin(s.phase * 0.7) : 0, s.colour);
+    drawSharkShape(s.x, s.y, s.heading, bodyMass(s), Math.sin(s.phase) * s.tailAmp, s.colour);
   }
 }
 

@@ -89,6 +89,8 @@ export interface SpeciesDef {
   diet: "algae" | "prey" | "grass";
   /** Where it lives. Land critters caught in water swim for the shore; water critters on land are stuck. */
   habitat: "water" | "land";
+  /** Swims in strokes and glides between them (sharks), rather than holding a steady speed. */
+  glides?: boolean;
   /** Colour comes from hue alone, always a pastel (light) or dark shade. */
   shade?: "pastel" | "dark";
   /** Predators: how they close in, a boost (sharks) or a pounce (cats). */
@@ -104,7 +106,7 @@ export const FISH: SpeciesDef = {
 };
 
 export const SHARK: SpeciesDef = {
-  key: "shark", name: "shark", plural: "sharks", prefix: "shark", diet: "prey", hunt: "boost", habitat: "water", stranded: "stranded on land",
+  key: "shark", name: "shark", plural: "sharks", prefix: "shark", diet: "prey", hunt: "boost", glides: true, habitat: "water", stranded: "stranded on land",
   traits: traitList({
       maxFat: { def: 6 },
       minSpeed: { def: 0.015 },
@@ -210,6 +212,10 @@ export interface Critter {
   boostLeft: number;
   /** Whether it has already decided whether to boost at its current prey. */
   boostTried: boolean;
+  /** Gliders (sharks): ticks of tail stroke left; 0 while gliding. */
+  stroke: number;
+  /** How hard the tail is sweeping, 0..1 (eases in and out, for drawing). */
+  tailAmp: number;
   /** Ticks of pounce left (cats), the direction of the pounce, and ticks before it can pounce again. */
   pounceLeft: number;
   pounceDir: number;
@@ -322,6 +328,8 @@ const PARAM_NAMES = [
   "Bite", "GrazeFloor", "MeanderRate",
   // Land animals caught in water; predators.
   "SwimEffort", "SwimWalkCost", "PreyEnergy", "PounceSpeed", "PounceRest",
+  // Gliders (sharks).
+  "StrokeTicks", "GlideDrag", "GlideSlack",
   "BirthSize", "GrowthRate", "GrowthCost",
 ] as const;
 type ParamName = (typeof PARAM_NAMES)[number];
@@ -425,7 +433,7 @@ export class CritterSystem {
       hue: traits[T_HUE],
       id: this.nextId++, x, y, heading: this.host.rng() * Math.PI * 2, speed: 0,
       energy, fat, nutrients, age: 0, cooldown: 0, parents, genes, traits,
-      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, boostTried: false, pounceLeft: 0, pounceDir: 0, pounceRest: 0, desired: 0, general: 0, wander: 0, avoid: 0, shore: false, species: this.species, grown: 1,
+      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, boostTried: false, stroke: 0, tailAmp: 0, pounceLeft: 0, pounceDir: 0, pounceRest: 0, desired: 0, general: 0, wander: 0, avoid: 0, shore: false, species: this.species, grown: 1,
       phase: this.host.rng() * Math.PI * 2, alive: true, colour: colourOf(traits, this.species),
     };
     c.desired = c.general = c.heading;
@@ -644,7 +652,8 @@ export class CritterSystem {
       delta = Math.atan2(Math.sin(delta), Math.cos(delta));
       c.heading += Math.max(-turnRate, Math.min(turnRate, delta));
       const accel = this.sp("Accel");
-      speed = c.speed + Math.max(-accel, Math.min(accel, speed - c.speed));
+      if (this.species.glides) speed = this.glide(c, speed, boosting);
+      else speed = c.speed + Math.max(-accel, Math.min(accel, speed - c.speed));
     }
 
     // Move, but never out of its habitat (land critters already in water can
@@ -673,7 +682,13 @@ export class CritterSystem {
       }
     }
     if (c.mode !== Mode.Grazing) c.speed = speed;
-    c.phase += speed * 12; // wiggle only while moving
+    if (this.species.glides) {
+      // The tail only sweeps during a stroke, easing in and out.
+      c.tailAmp += ((c.stroke > 0 ? 1 : 0) - c.tailAmp) * 0.12;
+      if (c.stroke > 0) c.phase += 0.4;
+    } else {
+      c.phase += speed * 12; // wiggle only while moving
+    }
     if (!c.alive) return;
 
     // Energy: moving costs ½·m·v² (fat adds mass), living costs energy per unit
@@ -733,6 +748,30 @@ export class CritterSystem {
       if (!this.home(Math.floor(py) * GRID_W + Math.floor(px))) return false;
     }
     return true;
+  }
+
+  /**
+   * Gliders swim in strokes: a few sweeps of the tail push them a little
+   * faster than they want to go, then they glide, slowing gently, until
+   * they've dropped far enough below it to take the next stroke. While
+   * chasing prey (and boosting), the tail beats without a break. Returns the
+   * new speed.
+   */
+  private glide(c: Critter, want: number, boosting: boolean): number {
+    const slack = this.sp("GlideSlack");
+    // Chasing prey (or boosting), the tail beats without a break.
+    const hunting = boosting || c.prey !== null;
+    if (hunting) c.stroke = Math.max(c.stroke, 1);
+    else if (c.stroke === 0 && want > 0 && c.speed < want * (1 - slack)) c.stroke = this.sp("StrokeTicks");
+    if (c.stroke > 0) {
+      c.stroke--;
+      // A stroke pushes it a little past the speed it wants (never faster), then ends.
+      const cap = want * (1 + slack / 2);
+      const speed = Math.min(c.speed + this.sp("Accel"), Math.max(c.speed, cap));
+      if (!hunting && speed >= cap) c.stroke = 0;
+      return speed;
+    }
+    return c.speed * (1 - this.sp("GlideDrag"));
   }
 
   /** Turns right round (170-190°, left or right) and takes that as its general direction. */

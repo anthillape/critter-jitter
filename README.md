@@ -149,9 +149,14 @@ so big sharks cost more to run. Sharks are drawn in proportion to their
 current size. Birth size, growth speed and growth cost are settings for each
 species; fish are born full-size by default.
 
-Sharks glide. They turn gradually (a slow turn rate), speed up and slow down
-smoothly, keep a steady course while roaming and only change course now and
-then. They look ahead for land and turn away before reaching the shore, and
+Sharks glide. They swim in strokes: a few sweeps of the tail push them a
+little faster than they want to go, then the tail goes still and they glide,
+slowing gently, until they've dropped a quarter below that speed and take the
+next stroke (at roaming speed, roughly a short stroke every 2 s). While
+chasing prey, and while boosting, the tail beats without a break. Stroke length, glide slowing and
+how far they glide before the next stroke are settings. Sharks turn
+gradually (a slow turn rate), keep a steady course while roaming and only
+change course now and then. They look ahead for land and turn away before reaching the shore, and
 curve toward prey, turning harder only in the last few squares. They're
 drawn centred on their position, so they rotate about their middle.
 Fish use the same steering with nimble settings, so they stay quick and

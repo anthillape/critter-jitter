@@ -442,6 +442,21 @@ export const SETTINGS: Setting[] = [
   }),
   ...critterTraitSettings(FISH, "Fish traits (defaults)"),
   ...critterSettings(SHARK, "Sharks", "shark", "fish (or swimming sheep)"),
+  param("sharkStrokeTicks", {
+    group: "Sharks", label: "Tail stroke length",
+    tip: "Sharks swim in strokes: a few sweeps of the tail speed them up, then they glide. This is the longest a stroke lasts, in ticks (it ends early once the shark is a little faster than it wants to go).",
+    min: 5, max: 300, int: true, log: true,
+  }),
+  param("sharkGlideDrag", {
+    group: "Sharks", label: "Glide slowing",
+    tip: "Share of its speed a gliding shark loses each tick. Low values mean long glides between strokes." + PER_SEC,
+    min: 0.0005, max: 0.05, log: true,
+  }),
+  param("sharkGlideSlack", {
+    group: "Sharks", label: "Glide before next stroke",
+    tip: "How far below the speed it wants a shark lets itself slow before its next stroke (strokes push it half this far above). Larger values give longer glides and bigger surges.",
+    min: 0.02, max: 0.9, fmt: pct,
+  }),
   param("sharkBoostRange", {
     group: "Sharks", label: "Boost range",
     tip: "How close (squares) a shark gets to the prey it's locked on to before it may boost at it.",
