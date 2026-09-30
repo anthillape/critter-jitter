@@ -46,6 +46,8 @@ export const PARAMS = {
   waterNutrients: 0.25, // mean starting nutrients per water square
   waterDiffusion: 0.2, // nutrient exchange rate between neighbouring water squares
   wetDiffusion: 0.03, // max exchange rate through wet ground (scaled by saturation)
+  nutrientBoost: 1, // how much nutrients in a square help plants and algae there (0 = not at all)...
+  nutrientBoostRef: 0.5, // ...at this many nutrients their upkeep and growing cost are divided by (1 + boost) and growth multiplied by it; no upper limit
 
   // --- Water cycle (total water is conserved) ---
   waterDepthMin: 0.3, // standing water at least this deep makes a "water" square

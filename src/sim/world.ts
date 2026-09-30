@@ -358,11 +358,12 @@ export class World {
     const take = Math.min(p.grassAbsorb * eff, p.grassMaxE - e, p.energyPerTick);
     if (take > 0) e += take;
 
-    // Metabolise. If the plant can't pay, it dies.
+    // Metabolise (cheaper the richer its soil). If the plant can't pay, it dies.
+    const rich = this.richness(i);
     const size = this.floraN[i] / p.grassMaxN;
-    const cost = p.grassMetaBase + p.grassMetaSize * size
+    const cost = (p.grassMetaBase + p.grassMetaSize * size
       + p.grassMetaGrowthGene * genes[g + G_GROWTH]
-      + p.grassMetaLifespan * genes[g + G_LIFESPAN];
+      + p.grassMetaLifespan * genes[g + G_LIFESPAN]) / rich;
     if (e < cost) {
       this.starved++;
       this.kill(i, 0);
@@ -375,15 +376,17 @@ export class World {
       return;
     }
 
-    // Grow: move nutrients from the ground into the plant, paid for with energy.
+    // Grow: move nutrients from the ground into the plant, paid for with
+    // energy. Richer soil makes it faster and cheaper.
     let n = this.floraN[i];
     if (n < p.grassMaxN) {
-      let dn = Math.min(genes[g + G_GROWTH] * eff, p.grassMaxN - n, this.nutrients[i]);
-      dn = Math.min(dn, e / p.growEnergyPerN);
+      const perN = p.growEnergyPerN / rich;
+      let dn = Math.min(genes[g + G_GROWTH] * eff * rich, p.grassMaxN - n, this.nutrients[i]);
+      dn = Math.min(dn, e / perN);
       if (dn > 0) {
         this.nutrients[i] -= dn;
         n += dn;
-        e -= dn * p.growEnergyPerN;
+        e -= dn * perN;
       }
     }
 
@@ -443,10 +446,12 @@ export class World {
     const take = Math.min(p.algaeAbsorb * light, p.algaeMaxE - e, p.energyPerTick);
     if (take > 0) e += take;
 
+    // Metabolise (cheaper the richer its water).
+    const rich = this.richness(i);
     const size = this.floraN[i] / p.algaeMaxN;
-    const cost = p.algaeMetaBase + p.algaeMetaSize * size
+    const cost = (p.algaeMetaBase + p.algaeMetaSize * size
       + p.algaeMetaGrowthGene * genes[g + G_GROWTH]
-      + p.algaeMetaLifespan * genes[g + G_LIFESPAN];
+      + p.algaeMetaLifespan * genes[g + G_LIFESPAN]) / rich;
     if (e < cost) {
       this.starved++;
       this.kill(i, 1);
@@ -459,15 +464,17 @@ export class World {
       return;
     }
 
-    // Grow from nutrients dissolved in this water square.
+    // Grow from nutrients dissolved in this water square: faster and
+    // cheaper the richer the water.
     let n = this.floraN[i];
     if (n < p.algaeMaxN) {
-      let dn = Math.min(genes[g + G_GROWTH], p.algaeMaxN - n, this.nutrients[i]);
-      dn = Math.min(dn, e / p.growEnergyPerN);
+      const perN = p.growEnergyPerN / rich;
+      let dn = Math.min(genes[g + G_GROWTH] * rich, p.algaeMaxN - n, this.nutrients[i]);
+      dn = Math.min(dn, e / perN);
       if (dn > 0) {
         this.nutrients[i] -= dn;
         n += dn;
-        e -= dn * p.growEnergyPerN;
+        e -= dn * perN;
       }
     }
 
@@ -486,6 +493,18 @@ export class World {
 
     this.floraN[i] = n;
     this.floraE[i] = e;
+  }
+
+  /**
+   * How much the nutrients in square i help a plant or algae there: 1 with
+   * none, rising in a straight line with no upper limit (1 + boost at
+   * nutrientBoostRef nutrients, 1 + 2·boost at twice that...). Upkeep and
+   * the energy cost of growing are divided by it; growth speed is
+   * multiplied by it.
+   */
+  private richness(i: number): number {
+    const p = this.p;
+    return 1 + p.nutrientBoost * Math.max(0, this.nutrients[i]) / p.nutrientBoostRef;
   }
 
   /** Death: all nutrients held return to the ground / water beneath. */

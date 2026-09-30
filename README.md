@@ -427,6 +427,13 @@ underlying values are in `src/sim/config.ts` (`PARAMS`, `TERRAIN`) and
 - **Energy** (sunlight) arrives in every square each tick, the same
   everywhere. The ground can't store it: only a plant or algae in the square
   can use it that tick, up to its own uptake limit, and the rest is lost.
+- **Richer ground helps plants.** The more nutrients in a plant's soil (or an
+  algae cell's water), the better it does, with no upper limit: its upkeep
+  and the energy it spends per nutrient when growing are divided by
+  `1 + boost × nutrients ÷ reference`, and it grows that many times faster
+  (*Nutrient richness boost*, default 1; *Richness reference*, default 0.5).
+  So a square with 0.5 nutrients halves the costs and doubles growth, 1.0
+  divides them by three, and so on.
 - An organism dies when it can't pay its metabolism or reaches its genetic
   lifespan. All the nutrients it holds go back to its square.
 

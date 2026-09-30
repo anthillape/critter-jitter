@@ -189,6 +189,17 @@ export const SETTINGS: Setting[] = [
     min: 0.001, max: 0.2, log: true,
   }),
 
+  param("nutrientBoost", {
+    group: "Sunlight & nutrients", label: "Nutrient richness boost",
+    tip: "Plants and algae do better the more nutrients there are in their soil or water, with no upper limit: their upkeep and the energy cost of growing are divided by 1 + boost × (nutrients ÷ reference), and they grow that many times faster. 0 turns this off.",
+    min: 0, max: 10,
+  }),
+  param("nutrientBoostRef", {
+    group: "Sunlight & nutrients", label: "Richness reference",
+    tip: "Nutrients in a square at which the richness boost applies in full once (twice as many nutrients count twice, and so on).",
+    min: 0.01, max: 5, log: true,
+  }),
+
   // --- Water on the ground ---
   param("flowRate", {
     group: "Water on the ground", label: "Water flow speed",
