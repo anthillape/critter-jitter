@@ -3,7 +3,7 @@ import { ALGAE_UNUSED_GENES, GENE_COUNT, GENE_NAMES } from "./sim/genes";
 import { ALGAE, GRASS, SEED, World, type GroupStats, type RegionStats } from "./sim/world";
 import { Renderer, type View } from "./render";
 import { formatSetting, fromSlider, SETTINGS, setCritterTraitsHook, SLIDER_STEPS, toSlider, type Setting } from "./settings";
-import { bodyMass, CritterSystem, Mode, MODE_NAMES, T_LITTER, type Corpse, type Critter } from "./sim/critters";
+import { bodyMass, sheepSide, CritterSystem, Mode, MODE_NAMES, T_LITTER, type Corpse, type Critter } from "./sim/critters";
 import type { CritterCounts } from "./sim/world";
 import { Sound, SOUNDS, type SoundName } from "./sound";
 import { setupCards } from "./cards";
@@ -391,7 +391,7 @@ function drawFishShape(x: number, y: number, heading: number, w: number, colour:
 }
 
 /**
- * Sheep are little rounded squares of pastel fleece (4 pixels across at the
+ * Sheep are rounded squares of pastel fleece (8 pixels across at the
  * default size, bigger or smaller with body size) with a black head at the
  * front. Dead ones lie still, grey, fading as they rot.
  */
@@ -404,7 +404,7 @@ function drawSheep(): void {
 }
 
 function drawSheepShape(x: number, y: number, heading: number, mass: number, colour: string, head: string | null): void {
-  const side = Math.max(1.5, 4 * Math.sqrt(mass / 2));
+  const side = sheepSide(mass) * CELL_PX; // same size the simulation collides with
   const hs = side * 0.45; // head size
   ctx.save();
   ctx.translate(x * CELL_PX, y * CELL_PX);

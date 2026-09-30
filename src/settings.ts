@@ -461,6 +461,31 @@ export const SETTINGS: Setting[] = [
     tip: "How far below the speed it wants a shark lets itself slow before its next stroke (strokes push it half this far above). Larger values give longer glides and bigger surges.",
     min: 0.02, max: 0.9, fmt: pct,
   }),
+  param("sharkSenseRange", {
+    group: "Sharks", label: "Long-range sense distance",
+    tip: "How far (squares) a shark can sense fish, looking in straight lines across water in every direction. Land blocks its view.",
+    min: 0, max: 400, int: true,
+  }),
+  param("sharkSenseInterval", {
+    group: "Sharks", label: "Ticks between long-range looks",
+    tip: "How often a shark scans far and wide for the most fish, then heads that way.",
+    min: 10, max: 2000, int: true, log: true,
+  }),
+  param("sharkSenseRays", {
+    group: "Sharks", label: "Directions scanned",
+    tip: "How many directions, all round, a shark looks in when it scans. More directions miss fewer shoals but cost more.",
+    min: 4, max: 128, int: true, log: true,
+  }),
+  param("sharkSenseCrowd", {
+    group: "Sharks", label: "Fish nearby to skip scanning",
+    tip: "A shark doesn't bother scanning far if it already has this many fish within its food sight range.",
+    min: 1, max: 50, int: true, log: true,
+  }),
+  param("sharkSenseFull", {
+    group: "Sharks", label: "Too full to scan",
+    tip: "A shark doesn't bother scanning far once its fat is at least this share of what it can carry.",
+    min: 0.05, max: 1, fmt: pct,
+  }),
   param("sharkBoostRange", {
     group: "Sharks", label: "Boost range",
     tip: "How close (squares) a shark gets to the prey it's locked on to before it may boost at it.",

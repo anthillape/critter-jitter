@@ -151,6 +151,11 @@ export const PARAMS = {
   sharkGeneStrength: 0.35,
   sharkStartFat: 10,
   sharkStartNutrients: 0.3,
+  sharkSenseRange: 100, // how far (squares) a shark can sense fish, in a straight line across water
+  sharkSenseInterval: 1200, // ticks between long-range looks (every 20 s)
+  sharkSenseRays: 32, // directions it looks in, all round
+  sharkSenseCrowd: 4, // it doesn't bother looking far if it already has this many fish within sight
+  sharkSenseFull: 0.35, // ...or if its fat is at least this share of what it can carry
   sharkBoostRange: 5, // squares from its locked-on prey at which a shark may boost
   sharkBoostDuration: 60, // ticks a boost lasts
   sharkBoostMetabolism: 3, // upkeep multiplier while boosting

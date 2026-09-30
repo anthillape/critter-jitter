@@ -1,4 +1,5 @@
 import { GRID_H, GRID_W, type Params } from "./config";
+import { QuadTree } from "./quadtree";
 import type { Rng } from "./rng";
 
 /**
@@ -90,6 +91,10 @@ export interface SpeciesDef {
   habitat: "water" | "land";
   /** Swims in strokes and glides between them (sharks), rather than holding a steady speed. */
   glides?: boolean;
+  /** Bumps into others of its kind (sheep): bodies push apart instead of overlapping. */
+  collides?: boolean;
+  /** Now and then scans the water for the most prey in any direction (sharks). */
+  senses?: boolean;
   /** Colour comes from hue alone, always a pastel (light) or dark shade. */
   shade?: "pastel" | "dark";
   /** Predators: how they close in, a boost (sharks) or a pounce (cats). */
@@ -105,7 +110,7 @@ export const FISH: SpeciesDef = {
 };
 
 export const SHARK: SpeciesDef = {
-  key: "shark", name: "shark", plural: "sharks", prefix: "shark", diet: "prey", hunt: "boost", glides: true, habitat: "water", stranded: "stranded on land",
+  key: "shark", name: "shark", plural: "sharks", prefix: "shark", diet: "prey", hunt: "boost", glides: true, senses: true, habitat: "water", stranded: "stranded on land",
   traits: traitList({
       maxFat: { def: 20 },
       minSpeed: { def: 0.02 },
@@ -127,7 +132,7 @@ export const SHARK: SpeciesDef = {
 };
 
 export const SHEEP: SpeciesDef = {
-  key: "sheep", name: "sheep", plural: "sheep", prefix: "sheep", diet: "grass", habitat: "land", shade: "pastel", stranded: "swimming to shore",
+  key: "sheep", name: "sheep", plural: "sheep", prefix: "sheep", diet: "grass", habitat: "land", collides: true, shade: "pastel", stranded: "swimming to shore",
   traits: traitList({
     maxFat: { def: 12 },
     minSpeed: { def: 0.004 },
@@ -228,6 +233,9 @@ export interface Critter {
   avoid: number;
   /** Swimming sheep: whether (targetX, targetY) holds the nearest shore. */
   shore: boolean;
+  /** Long-range sensing (sharks): the direction it's heading for the most prey it saw, and ticks left doing so. */
+  senseDir: number;
+  senseLeft: number;
   readonly species: SpeciesDef;
   /** How grown it is: its current size as a share of its genetic adult body size (0..1). */
   grown: number;
@@ -275,6 +283,24 @@ const ALGAE_KIND = 3;
 /** Current body mass: the genetic adult body size scaled by how grown it is. */
 export function bodyMass(c: Critter): number {
   return c.traits[T_BODY] * c.grown;
+}
+
+/**
+ * Sheep size: the side of its square body, in grid squares (8 pixels across,
+ * 2.67 squares, at the default adult body size). Drawing and collisions both use it.
+ */
+export function sheepSide(mass: number): number {
+  return Math.max(0.5, (8 / 3) * Math.sqrt(mass / 2));
+}
+
+/** Radius of a colliding critter's body, in squares. */
+function bodyRadius(c: Critter): number {
+  return sheepSide(bodyMass(c)) / 2;
+}
+
+/** How close a predator must get to catch this prey: a square, or its body's edge if it has a solid body. */
+function catchReach(prey: Critter): number {
+  return prey.species.collides ? 1 + bodyRadius(prey) : 1;
 }
 
 export function colourOf(t: Float32Array, sp: SpeciesDef): string {
@@ -328,6 +354,8 @@ const PARAM_NAMES = [
   "SwimEffort", "SwimWalkCost", "PounceSpeed", "PounceRest",
   // Gliders (sharks).
   "StrokeTicks", "GlideDrag", "GlideSlack", "TailBeat",
+  // Long-range sensing (sharks).
+  "SenseRange", "SenseInterval", "SenseRays", "SenseCrowd", "SenseFull",
   "BirthSize", "GrowthRate", "GrowthCost",
 ] as const;
 type ParamName = (typeof PARAM_NAMES)[number];
@@ -428,7 +456,7 @@ export class CritterSystem {
       hue: traits[T_HUE],
       id: this.nextId++, x, y, heading: this.host.rng() * Math.PI * 2, speed: 0,
       fat, nutrients, age: 0, cooldown: 0, parents, genes, traits,
-      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, boostTried: false, stroke: 0, tailAmp: 0, pounceLeft: 0, pounceDir: 0, pounceRest: 0, desired: 0, general: 0, wander: 0, avoid: 0, shore: false, species: this.species, grown: 1,
+      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, boostTried: false, stroke: 0, tailAmp: 0, pounceLeft: 0, pounceDir: 0, pounceRest: 0, desired: 0, general: 0, wander: 0, avoid: 0, shore: false, senseDir: 0, senseLeft: 0, species: this.species, grown: 1,
       phase: this.host.rng() * Math.PI * 2, alive: true, colour: colourOf(traits, this.species),
     };
     c.desired = c.general = c.heading;
@@ -440,7 +468,9 @@ export class CritterSystem {
     this.tick++;
     this.buildBuckets();
     if (this.preySystems.length) this.buildPreyBuckets();
+    if (this.species.senses) this.buildPreyGrid();
     for (const c of this.critters) if (c.alive) this.update(c);
+    if (this.species.collides) this.collide();
     this.removeDead();
     this.rot();
   }
@@ -547,6 +577,9 @@ export class CritterSystem {
     // Look around (staggered so not everyone searches on the same tick).
     if (c.mode === Mode.Hungry && (this.tick + c.id) % this.sp("FoodInterval") === 0) this.findFood(c);
     if (c.mode === Mode.Mating && (this.tick + c.id) % this.sp("MateInterval") === 0) this.findMate(c);
+    // Long-range sensing, when not busy chasing or courting.
+    if (this.species.senses && !c.prey && (c.mode === Mode.Wander || c.mode === Mode.Hungry)
+      && (this.tick + c.id) % this.sp("SenseInterval") === 0) this.sense(c);
 
     // Steer and set speed. Water critters stranded on land can't move; land
     // critters caught in water wade on until they reach land. Grazers stand still.
@@ -582,7 +615,7 @@ export class CritterSystem {
       c.heading = c.desired = c.pounceDir;
       speed = this.sp("PounceSpeed");
       const p = c.prey;
-      if (p && p.alive && (p.x - c.x) ** 2 + (p.y - c.y) ** 2 < 1) this.arrive(c);
+      if (p && p.alive && (p.x - c.x) ** 2 + (p.y - c.y) ** 2 < catchReach(p) ** 2) this.arrive(c);
       if (c.pounceLeft === 0) c.pounceRest = this.sp("PounceRest");
     } else if (moving && land && !atHome) {
       // Swimming: head for the nearest shore at half walking speed.
@@ -614,7 +647,9 @@ export class CritterSystem {
         c.boostLeft--;
       }
       speed = Math.max(Math.min(t[T_MIN_SPEED], dist), Math.min(top, dist));
-      if (dist < (c.prey ? 1 : 0.75)) this.arrive(c);
+      // Arrived: at prey, at a mate (bodies touching, for animals that collide), or at food.
+      const reach = c.prey ? catchReach(c.prey) : c.mate && this.species.collides ? bodyRadius(c) + bodyRadius(c.mate) + 0.3 : 0.75;
+      if (dist < reach) this.arrive(c);
     } else if (moving && land) {
       // Meander: the path wanders to and fro within the genetic arc around
       // its general direction, which itself changes now and then.
@@ -624,8 +659,12 @@ export class CritterSystem {
       c.desired = c.general + c.wander;
       speed = t[T_ROAM_SPEED];
     } else if (moving) {
-      // Nothing in sight: roam, picking a new course now and then.
-      if (h.rng() < this.sp("WanderTurnChance")) c.desired = c.heading + (h.rng() - 0.5) * this.sp("WanderTurnSize");
+      // Nothing in sight: roam, picking a new course now and then, or head
+      // for the prey it sensed from afar.
+      if (c.senseLeft > 0) {
+        c.senseLeft--;
+        c.desired = c.senseDir;
+      } else if (h.rng() < this.sp("WanderTurnChance")) c.desired = c.heading + (h.rng() - 0.5) * this.sp("WanderTurnSize");
       speed = t[T_ROAM_SPEED];
       c.boostLeft = 0;
     }
@@ -755,6 +794,130 @@ export class CritterSystem {
       return speed;
     }
     return c.speed * (1 - this.sp("GlideDrag"));
+  }
+
+  /** Coarse count of catchable prey per SENSE_CELL block, for long-range sensing. */
+  private preyGrid = new Uint16Array(0);
+
+  private buildPreyGrid(): void {
+    const cw = Math.ceil(GRID_W / SENSE_CELL);
+    const ch = Math.ceil(GRID_H / SENSE_CELL);
+    if (this.preyGrid.length !== cw * ch) this.preyGrid = new Uint16Array(cw * ch);
+    else this.preyGrid.fill(0);
+    for (const sys of this.preySystems) for (const p of sys.critters) {
+      if (!p.alive || !this.home(squareOf(p))) continue;
+      const k = Math.floor(p.y / SENSE_CELL) * cw + Math.floor(p.x / SENSE_CELL);
+      if (this.preyGrid[k] < 65535) this.preyGrid[k]++;
+    }
+  }
+
+  /**
+   * Long-range sensing: unless it's already well fed or has plenty of prey
+   * close by, it looks in SenseRays directions all round, each a straight
+   * line across its habitat (stopping at the shore) up to SenseRange squares,
+   * counting the prey along it. It then heads the way it saw the most, for
+   * as long as it would take to get there.
+   */
+  private sense(c: Critter): void {
+    if (c.fat >= this.sp("SenseFull") * c.traits[T_MAX_FAT]) return;
+    const r = this.sp("FoodRadius");
+    let near = 0;
+    this.forEachIn(this.preyBuckets, r, c, () => near++);
+    if (near >= this.sp("SenseCrowd")) return;
+    const cw = Math.ceil(GRID_W / SENSE_CELL);
+    const range = this.sp("SenseRange");
+    const rays = Math.max(4, Math.round(this.sp("SenseRays")));
+    let best = 0;
+    let bestDir = 0;
+    let bestDist = 0;
+    for (let k = 0; k < rays; k++) {
+      const a = (k / rays) * Math.PI * 2;
+      const dx = Math.cos(a);
+      const dy = Math.sin(a);
+      let seen = 0;
+      let far = 0; // prey-weighted distance, to judge how far to go
+      let lastCell = -1;
+      for (let d = 1; d <= range; d++) {
+        const x = c.x + dx * d;
+        const y = c.y + dy * d;
+        if (x < 0 || y < 0 || x >= GRID_W || y >= GRID_H || !this.home(Math.floor(y) * GRID_W + Math.floor(x))) break;
+        const cell = Math.floor(y / SENSE_CELL) * cw + Math.floor(x / SENSE_CELL);
+        if (cell === lastCell) continue; // count each block once
+        lastCell = cell;
+        const n = this.preyGrid[cell];
+        seen += n;
+        far += n * d;
+      }
+      if (seen > best) {
+        best = seen;
+        bestDir = a;
+        bestDist = far / seen;
+      }
+    }
+    if (best <= 0) return;
+    c.senseDir = bestDir;
+    c.senseLeft = Math.ceil(bestDist / Math.max(1e-3, c.traits[T_ROAM_SPEED]));
+  }
+
+  /** Calls `f` for each critter in the bucket map (bucket size = r) within r of `c`. */
+  private forEachIn(buckets: Map<number, Critter[]>, r: number, c: Critter, f: (o: Critter) => void): void {
+    const bx = Math.floor(c.x / r);
+    const by = Math.floor(c.y / r);
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const b = buckets.get((bx + dx) * 1000 + by + dy);
+        if (!b) continue;
+        for (const o of b) if (o.alive && (o.x - c.x) ** 2 + (o.y - c.y) ** 2 <= r * r) f(o);
+      }
+    }
+  }
+
+  /**
+   * Collisions (sheep): bodies are circles; any two that overlap are pushed
+   * apart, half each, along the line between them. A push that would move
+   * one into water is skipped (unless it's already swimming). A quadtree
+   * finds the neighbours, so this stays cheap with big flocks.
+   */
+  private collide(): void {
+    const tree = new QuadTree<Critter>(0, 0, GRID_W, GRID_H);
+    let maxR = 0;
+    for (const c of this.critters) {
+      if (!c.alive) continue;
+      tree.insert(c);
+      maxR = Math.max(maxR, bodyRadius(c));
+    }
+    const rng = this.host.rng;
+    for (const a of this.critters) {
+      if (!a.alive) continue;
+      const ra = bodyRadius(a);
+      tree.query(a.x, a.y, ra + maxR, (b) => {
+        if (b.id <= a.id || !b.alive) return; // each pair once
+        const min = ra + bodyRadius(b);
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let d = Math.hypot(dx, dy);
+        if (d >= min) return;
+        if (d < 1e-6) {
+          const ang = rng() * Math.PI * 2;
+          dx = Math.cos(ang);
+          dy = Math.sin(ang);
+          d = 1;
+        }
+        const push = (min - d) / 2;
+        this.nudge(a, (-dx / d) * push, (-dy / d) * push);
+        this.nudge(b, (dx / d) * push, (dy / d) * push);
+      });
+    }
+  }
+
+  /** Moves a critter by (dx, dy) if that keeps it on the map and in its habitat (or it's already out of it). */
+  private nudge(c: Critter, dx: number, dy: number): void {
+    const x = c.x + dx;
+    const y = c.y + dy;
+    if (x < 0 || y < 0 || x >= GRID_W || y >= GRID_H) return;
+    if (this.home(squareOf(c)) && !this.home(Math.floor(y) * GRID_W + Math.floor(x))) return;
+    c.x = x;
+    c.y = y;
   }
 
   /** Turns right round (170-190°, left or right) and takes that as its general direction. */
@@ -930,7 +1093,7 @@ export class CritterSystem {
     if (c.mate) {
       const m = c.mate;
       this.dropTarget(c);
-      if (m.alive && this.isReady(c) && this.isReady(m) && this.canMate(c, m) && Math.hypot(m.x - c.x, m.y - c.y) < 1.5) {
+      if (m.alive && this.isReady(c) && this.isReady(m) && this.canMate(c, m) && Math.hypot(m.x - c.x, m.y - c.y) < (this.species.collides ? bodyRadius(c) + bodyRadius(m) + 0.5 : 1.5)) {
         this.breed(c, m);
       }
       return;
@@ -1125,6 +1288,9 @@ export class CritterSystem {
     });
   }
 }
+
+/** Block size (squares) of the coarse prey-count grid used for long-range sensing. */
+const SENSE_CELL = 4;
 
 function squareOf(c: Critter): number {
   return Math.floor(c.y) * GRID_W + Math.floor(c.x);

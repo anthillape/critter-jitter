@@ -129,6 +129,12 @@ follows it until it catches it, loses sight of it, or the prey escapes (a
 sheep reaching land). They're fast, efficient swimmers: moving costs them
 far less per unit of mass than it costs fish. They have two extra traits:
 
+- **Long-range sensing**: every 20 s or so (*Ticks between long-range
+  looks*), a shark that is less than 35% full (*Too full to scan*) and has
+  fewer than 4 fish within sight (*Fish nearby to skip scanning*) looks all
+  round, in 32 straight lines across the water up to 100 squares (land blocks
+  its view), counts the fish along each, and heads off the way it saw the
+  most, for as long as it would take to get there.
 - **Boost likelihood**: once a shark has closed to within 5 squares of the
   prey it's locked on to (*Boost range*), this is the chance it bursts into
   a boost.
@@ -168,9 +174,16 @@ species.
 
 Sheep live on land and graze grass. They have the same lifecycle and kind
 of genome as fish and sharks (23 genes, each nudging a third of their 16
-traits, including *Swimming ability*). They are drawn as little rounded squares of fleece, 4 pixels
-across at the default size, with a black head at the front. Their colour
+traits, including *Swimming ability*). They are drawn as rounded squares of fleece, 8 pixels
+(2.7 squares) across at the default size, with a black head at the front. Their colour
 genome has only a hue: sheep are always pastel shades.
+
+Sheep have solid bodies: they bump into each other rather than overlapping.
+Each tick, any two sheep whose bodies overlap are pushed apart, half each (a
+push that would shove one into water is skipped). A quadtree
+(`src/sim/quadtree.ts`) finds each sheep's neighbours, so big flocks stay
+cheap. Two sheep mate once their bodies touch, and a cat catches a sheep when
+it reaches the sheep's body.
 
 - **Meandering.** A sheep walks slowly in a general direction, and its path
   wanders to and fro within an arc around that direction. The arc is
