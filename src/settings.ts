@@ -93,7 +93,7 @@ function critterSettings(sp: SpeciesDef, group: string, noun: string, food: stri
     e("MinNutrients", "Fewest nutrients to survive", `A ${noun} whose body nutrients fall below this dies.`, { min: 0.0005, max: 0.5, log: true }),
     // Grazers' sight range is genetic (the grass sight trait).
     ...(grazer ? [] : [e("FoodRadius", "Food sight range", `How far (squares) a hungry ${noun} can detect ${food}.`, { min: 1, max: 60, int: true })]),
-    e("MateRadius", "Mate sight range", `How far (squares) a ${noun} ready to breed can see another ready ${noun}.`, { min: 2, max: 100, int: true }),
+    e("MateRadius", "Mate sight range", `How far (squares) a ${noun} ready to breed can see another ready ${noun}.`, { min: 2, max: 300, int: true }),
     e("FoodInterval", "Ticks between food searches", grazer
       ? `How often a hungry ${noun} looks around and turns toward the grassiest direction.`
       : `How often a hungry ${noun} looks around for ${food}.`, { min: 1, max: grazer ? 600 : 120, int: true, log: grazer }),
