@@ -1,6 +1,6 @@
 // Runs the simulation without a browser and prints population / nutrient
 // stats, for tuning parameters: `npm run sim -- [seed] [ticks] [every]`
-import { CELL_COUNT, GRID_H, GRID_W } from "../src/sim/config";
+import { applyWorldSize, CELL_COUNT, GRID_H, GRID_W, PARAMS, WORLD_SIZE } from "../src/sim/config";
 import { World, type GroupStats } from "../src/sim/world";
 import { GENE_NAMES } from "../src/sim/genes";
 
@@ -8,6 +8,12 @@ const seed = Number(process.argv[2] ?? 1337);
 const ticks = Number(process.argv[3] ?? 20000);
 const every = Number(process.argv[4] ?? 1000);
 
+// Optional size: npm run sim -- seed ticks every width height
+if (process.argv[5]) WORLD_SIZE.width = Number(process.argv[5]);
+if (process.argv[6]) WORLD_SIZE.height = Number(process.argv[6]);
+applyWorldSize();
+// Optional overrides, e.g. SIM_PARAMS='{"initialFish":0}'
+if (process.env.SIM_PARAMS) Object.assign(PARAMS, JSON.parse(process.env.SIM_PARAMS));
 const t0 = performance.now();
 const world = new World(seed);
 let waterCells = 0;
@@ -27,7 +33,10 @@ for (let k = 1; k <= ticks; k++) {
     const ms = (performance.now() - t1) / every;
     t1 = performance.now();
     console.log(
-      `t=${s.tick} seeds=${s.seeds} grass=${s.grass} algae=${s.algae} ` +
+      `t=${s.tick} seeds=${s.seeds} grass=${s.grass} algae=${s.algae} spores=${s.spores} ` +
+      `\n    fish=${s.fish.alive} (b/d ${s.fish.births}/${s.fish.deaths}, starved ${s.fish.starved}, old ${s.fish.oldAge}, eaten ${s.fish.eaten}) ` +
+      `algae=${s.algae} sharks=${s.sharks.alive} (b/d ${s.sharks.births}/${s.sharks.deaths}, starved ${s.sharks.starved}, old ${s.sharks.oldAge}) ` +
+      `sheep=${s.sheep.alive} (b/d ${s.sheep.births}/${s.sheep.deaths}, starved ${s.sheep.starved}, old ${s.sheep.oldAge}) cats=${s.cats.alive} (b/d ${s.cats.births}/${s.cats.deaths}, starved ${s.cats.starved}, old ${s.cats.oldAge}, sheep eaten ${s.sheep.eaten}) rocs=${s.rocs.alive} (b/d ${s.rocs.births}/${s.rocs.deaths}, starved ${s.rocs.starved}, old ${s.rocs.oldAge}, eaten ${s.rocs.eaten})\n    ` +
       `gB/gD=${s.grassBirths}/${s.grassDeaths} aB/aD=${s.algaeBirths}/${s.algaeDeaths} ` +
       `starved=${s.starved} old=${s.oldAge} N[g/w/f]=${s.nutrientsGround.toFixed(0)}/${s.nutrientsWater.toFixed(0)}/${s.nutrientsFlora.toFixed(0)} ` +
       `drift=${(s.nutrientsTotal - start.nutrientsTotal).toExponential(1)} lost=${s.habitatLost}\n    ` +

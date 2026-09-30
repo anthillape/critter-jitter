@@ -8,50 +8,201 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <main class="layout">
-      <div class="stage">
-        <canvas id="world" width="800" height="600"></canvas>
+    <main class="app">
+      <section class="main-col">
+        <canvas id="world" width="1200" height="900"></canvas>
         <div id="inspect" class="inspect">Hover the map to inspect a square</div>
-      </div>
-      <aside class="panel">
-        <h1>Critter Jitter</h1>
-        <div class="controls">
-          <button id="play">Pause</button>
-          <button id="step">Step</button>
-          <label title="Game seconds per real second (1× = 60 ticks per second)">Speed
-            <select id="speed">
-              <option value="0.5">½×</option>
-              <option value="1" selected>1×</option>
-              <option value="2">2×</option>
-              <option value="4">4×</option>
-              <option value="8">8×</option>
-            </select>
-          </label>
+        <div class="cards-scroll">
+        <div class="cards">
+          <section class="card">
+            <h2>Population</h2>
+            <canvas id="chart" class="chart" width="360" height="130"></canvas>
+            <div class="legend">
+              <span class="sw grass"></span>grass <span class="sw seeds"></span>seeds <span class="sw algae"></span>algae
+            </div>
+            <table id="statsLife"></table>
+          </section>
+          <section class="card">
+            <h2>Fish</h2>
+            <canvas id="fishChart" class="chart" width="360" height="110"></canvas>
+            <table id="statsFish"></table>
+            <h2>Fish traits <span class="small">(mean ±sd)</span></h2>
+            <table id="fishTraits"></table>
+          </section>
+          <section class="card">
+            <h2>Sharks</h2>
+            <canvas id="sharkChart" class="chart" width="360" height="110"></canvas>
+            <table id="statsSharks"></table>
+            <h2>Shark traits <span class="small">(mean ±sd)</span></h2>
+            <table id="sharkTraits"></table>
+          </section>
+          <section class="card">
+            <h2>Sheep</h2>
+            <canvas id="sheepChart" class="chart" width="360" height="110"></canvas>
+            <table id="statsSheep"></table>
+            <h2>Sheep traits <span class="small">(mean ±sd)</span></h2>
+            <table id="sheepTraits"></table>
+          </section>
+          <section class="card">
+            <h2>Cats</h2>
+            <canvas id="catChart" class="chart" width="360" height="110"></canvas>
+            <table id="statsCats"></table>
+            <h2>Cat traits <span class="small">(mean ±sd)</span></h2>
+            <table id="catTraits"></table>
+          </section>
+          <section class="card">
+            <h2>Rocs</h2>
+            <canvas id="rocChart" class="chart" width="360" height="110"></canvas>
+            <table id="statsRocs"></table>
+            <h2>Roc traits <span class="small">(mean ±sd)</span></h2>
+            <table id="rocTraits"></table>
+          </section>
+          <section class="card">
+            <h2>World</h2>
+            <table id="statsWorld"></table>
+          </section>
+          <section class="card">
+            <h2>Water</h2>
+            <canvas id="waterChart" class="chart" width="360" height="130"></canvas>
+            <div class="legend">
+              <span class="sw cloudw"></span>clouds <span class="sw surfacew"></span>free water <span class="sw soilw"></span>in the ground <span class="sw rainband"></span>raining
+            </div>
+            <table id="statsWater"></table>
+          </section>
+          <section class="card">
+            <h2>Nutrients</h2>
+            <table id="statsNutrients"></table>
+            <h2>Genes, whole world <span class="small">(mean ±sd)</span></h2>
+            <table id="genes"></table>
+          </section>
+          <section class="card">
+            <h2>Selection</h2>
+            <div id="selection"></div>
+          </section>
         </div>
-        <div class="controls">
-          <label>View
-            <select id="view">
-              <option value="normal">Normal</option>
-              <option value="nutrients">Nutrients</option>
-              <option value="energy">Energy</option>
-              <option value="moisture">Water &amp; soil moisture</option>
-              <option value="height">Height</option>
-              <option value="waterpref">Grass water preference</option>
-            </select>
-          </label>
-          <label>Seed <input id="seed" type="number" /></label>
-          <button id="regen">New world</button>
         </div>
-        <canvas id="chart" width="320" height="110"></canvas>
-        <div class="legend">
-          <span class="sw grass"></span>grass <span class="sw seeds"></span>seeds <span class="sw algae"></span>algae
+      </section>
+
+      <aside class="sidebar">
+        <header class="sidebar-head">
+          <h1>Critter Jitter</h1>
+          <div class="controls">
+            <button id="play">Pause</button>
+            <button id="step">Step</button>
+            <label title="Game seconds per real second (1× = 60 ticks per second)">Speed
+              <select id="speed">
+                <option value="0.5">½×</option>
+                <option value="1" selected>1×</option>
+                <option value="2">2×</option>
+                <option value="4">4×</option>
+                <option value="8">8×</option>
+              </select>
+            </label>
+            <button id="sound" aria-pressed="false" title="Switch sounds on or off: rain, and animals being born, dying and eating (M)">Sound off</button>
+            <span id="speedStatus" class="speed-status" title="Speed the world is actually running at, compared with the chosen speed"></span>
+          </div>
+          <nav class="tabs" role="tablist">
+            <button role="tab" id="tab-start" aria-controls="panel-start" aria-selected="true">Start</button>
+            <button role="tab" id="tab-world" aria-controls="panel-world" aria-selected="false">World</button>
+            <button role="tab" id="tab-tools" aria-controls="panel-tools" aria-selected="false">Tools &amp; weather</button>
+            <button role="tab" id="tab-settings" aria-controls="panel-settings" aria-selected="false">Settings</button>
+            <button role="tab" id="tab-help" aria-controls="panel-help" aria-selected="false">Help</button>
+          </nav>
+        </header>
+
+        <div class="tab-panels">
+          <section role="tabpanel" id="panel-start" aria-labelledby="tab-start">
+            <p class="hint" id="startHint">Set up the starting conditions, then press Start. The map shows a preview. Hover a name for what it does.</p>
+            <div class="controls">
+              <label title="The world's random seed: the same seed and settings always give the same world">Seed <input id="seed" type="number" /></label>
+              <button id="randomSeed" title="Pick a random seed">Random</button>
+            </div>
+            <div id="startSettings"></div>
+            <h2>This world</h2>
+            <table id="startSummary"></table>
+            <div class="controls start-actions">
+              <button id="startBtn" class="primary">Start</button>
+              <button id="resetStart" title="Put every starting condition back to its default">Reset starting conditions</button>
+            </div>
+          </section>
+
+          <section role="tabpanel" id="panel-world" aria-labelledby="tab-world" hidden>
+            <h2>View</h2>
+            <div class="controls">
+              <select id="view" aria-label="View">
+                <option value="normal">Normal</option>
+                <option value="nutrients">Nutrients</option>
+                <option value="energy">Plant energy</option>
+                <option value="moisture">Water &amp; soil moisture</option>
+                <option value="height">Height</option>
+                <option value="waterpref">Grass water preference</option>
+              </select>
+            </div>
+            <h2>World</h2>
+            <div class="controls">
+              <button id="restart" title="Rebuild this same world from scratch (same seed and starting conditions) and keep running">Restart</button>
+              <button id="setupNew" title="Pause and go to the Start tab to set up a new world">Set up a new world…</button>
+            </div>
+          </section>
+
+          <section role="tabpanel" id="panel-tools" aria-labelledby="tab-tools" hidden>
+            <h2>Cursor</h2>
+            <div class="controls" role="group" aria-label="Cursor tool">
+              <button class="tool" data-tool="select" aria-pressed="true" title="Drag to select an area and see its stats (S)">Select</button>
+              <button class="tool" data-tool="rain" aria-pressed="false" title="Hold to rain under the cursor, adding water to the world (R)">Rain</button>
+              <button class="tool" data-tool="dryer" aria-pressed="false" title="Hold to dry the ground under the cursor, removing water from the world (D)">Dryer</button>
+              <button class="tool" data-tool="seeds" aria-pressed="false" title="Hold to spray grass seeds at random under the cursor. They land only on empty land, and take their nutrients from the ground they land on (G)">Seeds</button>
+              <button class="tool" data-tool="fish" aria-pressed="false" title="Hold to release fish (with random genomes) at random points under the cursor. They land only in water and take their body nutrients from the water they land in (F)">Fish</button>
+              <button class="tool" data-tool="sharks" aria-pressed="false" title="Hold to release sharks (with random genomes) at random points under the cursor. They land only in water and gather their body nutrients from the water around them (K)">Sharks</button>
+              <button class="tool" data-tool="sheep" aria-pressed="false" title="Hold to release sheep (with random genomes) at random points under the cursor. They land only on land and gather their body nutrients from the ground around them (H)">Sheep</button>
+              <button class="tool" data-tool="cats" aria-pressed="false" title="Hold to release cats (with random genomes) at random points under the cursor. They land only on land and gather their body nutrients from the ground around them (C)">Cats</button>
+              <button class="tool" data-tool="rocs" aria-pressed="false" title="Hold to release rocs (with random genomes) at random points under the cursor. They land only on land and gather their body nutrients from the ground around them (B)">Rocs</button>
+              <button class="tool" data-tool="algae" aria-pressed="false" title="Hold to spray algae at random under the cursor. It lands only in empty water, and takes its nutrients from the water (A)">Algae</button>
+              <button class="tool" data-tool="destroy" aria-pressed="false" title="Hold to remove all life under the cursor: grass, seeds, algae, animals and their bodies. Their nutrients go back to the ground or water (X)">Destructor</button>
+            </div>
+            <div class="brush" id="brush">
+              <label class="setting" id="rateLabel" title="How much water per second the brush adds or removes at its centre (Rain / Dryer), or how many seeds, algae or animals it sprays per second">
+                <span class="setting-name">Rate</span><input id="rate" type="range" min="0" max="100" value="60" /><span id="rateVal" class="setting-value"></span>
+              </label>
+              <label class="setting" title="Radius of the brush, in squares">
+                <span class="setting-name">Size</span><input id="size" type="range" min="2" max="80" value="15" /><span id="sizeVal" class="setting-value"></span>
+              </label>
+            </div>
+            <h2>Weather</h2>
+            <div class="controls">
+              <label title="Turn off automatic rain and control it yourself"><input id="manualRain" type="checkbox" /> Manual rain</label>
+              <button id="rainToggle" disabled>Start rain</button>
+            </div>
+            <h2>Sounds</h2>
+            <p class="hint">The Sound button at the top switches all sound on or off. Here each sound has its own switch and volume; ▶ plays it once.</p>
+            <div id="soundSettings" class="sound-settings"></div>
+          </section>
+
+          <section role="tabpanel" id="panel-settings" aria-labelledby="tab-settings" hidden>
+            <p class="hint">These change the running world immediately. Hover a name for what it does; changed settings are highlighted. Starting conditions are on the Start tab.</p>
+            <div id="settings"></div>
+            <div class="controls settings-actions">
+              <button id="resetSettings" title="Put every setting back to its starting value">Reset all to defaults</button>
+            </div>
+          </section>
+
+          <section role="tabpanel" id="panel-help" aria-labelledby="tab-help" hidden>
+            <h2>Keys</h2>
+            <table class="keys">
+              <tr><td>Space</td><td>Pause / play</td></tr>
+              <tr><td>.</td><td>Step one tick</td></tr>
+              <tr><td>1 – 6</td><td>Switch view</td></tr>
+              <tr><td>S / R / D / X</td><td>Select / Rain / Dryer / Destructor cursor</td></tr>
+              <tr><td>G / A / F / K / H / C / B</td><td>Seeds / Algae / Fish / Sharks / Sheep / Cats / Rocs spray cursor</td></tr>
+              <tr><td>M</td><td>Sound on / off</td></tr>
+              <tr><td>Esc</td><td>Clear selection</td></tr>
+            </table>
+            <h2>Info cards</h2>
+            <p class="hint">The cards under the map scroll on their own. Click a card's title to collapse or expand it; drag the title to move the card, and it snaps into place when you let go. The layout is remembered.</p>
+            <h2>Map</h2>
+            <p class="hint">Brown ground is lighter on higher ground and darker when wet. Green is grass, pale specks are seeds, blue is water (deeper is more opaque), shallow running water shows as thin bright blue, a green tint in water is algae (faint pale-green specks drifting in the water are its spores), and white patches are clouds, which turn grey while raining. Wiggling coloured dashes are fish and the larger shark shapes are sharks (colour is genetic, so families share colours). Pastel rounded squares with black heads on land are sheep, and the bigger, longer dark shapes with curly tails are cats. Big tawny birds are rocs: wings spread with a shadow beneath while flying, folded when landed. Dead animals turn grey and fade away as they rot.</p>
+          </section>
         </div>
-        <table id="stats"></table>
-        <h2>Genes, whole world <span class="small">(mean ±sd)</span></h2>
-        <table id="genes"></table>
-        <h2>Selection</h2>
-        <div id="selection"></div>
-        <p class="hint">Keys: space = pause, . = step, 1–6 = views, Esc = clear selection</p>
       </aside>
     </main>
     <script type="module" src="/src/main.ts"></script>

@@ -62,7 +62,7 @@ export class Renderer {
     const { surface, sat, wet, cloudDensity } = w.water;
     const p = PARAMS;
     const minDepth = p.waterDepthMin;
-    const cloudShade = w.water.raining ? 175 : 245; // rain clouds are greyer
+    const rainFade = w.water.rainFade;
 
     for (let y = 0; y < GRID_H; y++) {
       for (let x = 0; x < GRID_W; x++) {
@@ -89,13 +89,6 @@ export class Renderer {
               b = b * (1 - s) + 70 * s;
             }
           } else {
-            if (depth > 0.01) {
-              // A thin film of standing water (puddles, run-off): faint sheen.
-              const a = 0.3 * depth / minDepth;
-              r = r * (1 - a) + 50 * a;
-              g = g * (1 - a) + 100 * a;
-              b = b * (1 - a) + 170 * a;
-            }
             if (k === GRASS) {
               const s = Math.min(1, w.floraN[i] / p.grassMaxN);
               const pref = w.genes[i * GENE_COUNT + G_WATER_PREF];
@@ -115,15 +108,25 @@ export class Renderer {
               g = g * 0.6 + 210 * 0.4;
               b = b * 0.6 + 120 * 0.4;
             }
+            if (depth > 0.003) {
+              // Shallow running water (streams, run-off, puddles), over grass too.
+              const a = Math.min(0.85, 0.45 + 0.4 * depth / minDepth);
+              r = r * (1 - a) + 55 * a;
+              g = g * (1 - a) + 125 * a;
+              b = b * (1 - a) + 225 * a;
+            }
           }
           // Clouds on top: white translucent, bilinear from the coarse cloud grid.
           if (view === "normal") {
             const c = cloudDensity.length ? w.water.cloudAt(x, y) : 0;
             if (c > 0.01) {
               const a = 0.65 * c; // thicker cloud is more opaque (and rains more)
-              r = r * (1 - a) + cloudShade * a;
-              g = g * (1 - a) + cloudShade * a;
-              b = b * (1 - a) + (cloudShade + 8) * a;
+              // Rain clouds grey gradually, most where they are thickest
+              // (where the rain is heaviest).
+              const shade = 245 - 80 * rainFade * c * c;
+              r = r * (1 - a) + shade * a;
+              g = g * (1 - a) + shade * a;
+              b = b * (1 - a) + (shade + 8) * a;
             }
           }
         } else if (view === "nutrients") {
@@ -131,8 +134,11 @@ export class Renderer {
           const v = Math.min(1, n / (wet[i] ? 0.5 : 1.2));
           r = 255 * v; g = 200 * v * v; b = wet[i] ? 120 : 20;
         } else if (view === "energy") {
-          const v = w.energy[i] / p.energyCap;
-          r = 255 * v; g = 230 * v; b = wet[i] ? 90 : 30;
+          // Energy stored in the plant or algae on each square.
+          const k2 = w.kind[i];
+          const maxE = k2 === ALGAE ? p.algaeMaxE : p.grassMaxE;
+          const v = k2 === 0 ? 0 : Math.min(1, w.floraE[i] / maxE);
+          r = 40 + 215 * v; g = 35 + 195 * v; b = wet[i] ? 90 : 30;
         } else if (view === "moisture") {
           if (wet[i]) {
             const v = Math.min(1, surface[i] / WATER_ALPHA_DEPTH);

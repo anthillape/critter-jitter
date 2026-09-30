@@ -36,6 +36,60 @@ export class Perlin {
     return lerp(x1, x2, v);
   }
 
+  /**
+   * 3D noise in roughly [-1, 1]. Using time as the third axis gives a 2D
+   * pattern that changes shape smoothly.
+   */
+  noise3(x: number, y: number, z: number): number {
+    const xi = Math.floor(x);
+    const yi = Math.floor(y);
+    const zi = Math.floor(z);
+    const xf = x - xi;
+    const yf = y - yi;
+    const zf = z - zi;
+    const X = xi & 255;
+    const Y = yi & 255;
+    const Z = zi & 255;
+    const p = this.perm;
+    const a = p[X] + Y;
+    const aa = p[a] + Z;
+    const ab = p[a + 1] + Z;
+    const b = p[X + 1] + Y;
+    const ba = p[b] + Z;
+    const bb = p[b + 1] + Z;
+    const u = fade(xf);
+    const v = fade(yf);
+    const w = fade(zf);
+    return lerp(
+      lerp(
+        lerp(grad3(p[aa], xf, yf, zf), grad3(p[ba], xf - 1, yf, zf), u),
+        lerp(grad3(p[ab], xf, yf - 1, zf), grad3(p[bb], xf - 1, yf - 1, zf), u),
+        v,
+      ),
+      lerp(
+        lerp(grad3(p[aa + 1], xf, yf, zf - 1), grad3(p[ba + 1], xf - 1, yf, zf - 1), u),
+        lerp(grad3(p[ab + 1], xf, yf - 1, zf - 1), grad3(p[bb + 1], xf - 1, yf - 1, zf - 1), u),
+        v,
+      ),
+      w,
+    );
+  }
+
+  /** fBm over 3D noise. */
+  fbm3(x: number, y: number, z: number, octaves: number, lacunarity = 2, gain = 0.5): number {
+    let amp = 1;
+    let freq = 1;
+    let sum = 0;
+    let norm = 0;
+    for (let o = 0; o < octaves; o++) {
+      sum += amp * this.noise3(x * freq, y * freq, z * freq);
+      norm += amp;
+      amp *= gain;
+      freq *= lacunarity;
+    }
+    return sum / norm;
+  }
+
   /** Fractal Brownian motion: several octaves of noise summed together. */
   fbm(x: number, y: number, octaves: number, lacunarity = 2, gain = 0.5): number {
     let amp = 1;
@@ -71,4 +125,12 @@ function grad(hash: number, x: number, y: number): number {
     case 6: return y;
     default: return -y;
   }
+}
+
+/** Ken Perlin's improved-noise gradient for 3D (12 edge directions). */
+function grad3(hash: number, x: number, y: number, z: number): number {
+  const h = hash & 15;
+  const u = h < 8 ? x : y;
+  const v = h < 4 ? y : h === 12 || h === 14 ? x : z;
+  return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
 }
