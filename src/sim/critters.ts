@@ -108,9 +108,9 @@ export const SHARK: SpeciesDef = {
   key: "shark", name: "shark", plural: "sharks", prefix: "shark", diet: "prey", hunt: "boost", glides: true, habitat: "water", stranded: "stranded on land",
   traits: traitList({
       maxFat: { def: 20 },
-      minSpeed: { def: 0.015 },
-      maxSpeed: { def: 0.1 },
-      roamSpeed: { def: 0.045 },
+      minSpeed: { def: 0.02 },
+      maxSpeed: { def: 0.13 },
+      roamSpeed: { def: 0.06 },
       hue: { def: 215, spread: 60 },
       sat: { def: 0.18, spread: 0.2 },
       lum: { def: 0.6, spread: 0.15 },
@@ -327,7 +327,7 @@ const PARAM_NAMES = [
   // Land animals caught in water; predators.
   "SwimEffort", "SwimWalkCost", "PounceSpeed", "PounceRest",
   // Gliders (sharks).
-  "StrokeTicks", "GlideDrag", "GlideSlack",
+  "StrokeTicks", "GlideDrag", "GlideSlack", "TailBeat",
   "BirthSize", "GrowthRate", "GrowthCost",
 ] as const;
 type ParamName = (typeof PARAM_NAMES)[number];
@@ -680,7 +680,7 @@ export class CritterSystem {
     if (this.species.glides) {
       // The tail only sweeps during a stroke, easing in and out.
       c.tailAmp += ((c.stroke > 0 ? 1 : 0) - c.tailAmp) * 0.12;
-      if (c.stroke > 0) c.phase += 0.4;
+      if (c.stroke > 0) c.phase += this.sp("TailBeat");
     } else {
       c.phase += speed * 12; // wiggle only while moving
     }

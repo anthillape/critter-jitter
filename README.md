@@ -152,8 +152,9 @@ Sharks glide. They swim in strokes: a few sweeps of the tail push them a
 little faster than they want to go, then the tail goes still and they glide,
 slowing gently, until they've dropped a quarter below that speed and take the
 next stroke (at roaming speed, roughly a short stroke every 2 s). While
-chasing prey, and while boosting, the tail beats without a break. Stroke length, glide slowing and
-how far they glide before the next stroke are settings. Sharks turn
+chasing prey, and while boosting, the tail beats without a break. The tail sweeps slowly (about
+one full sweep per 0.7 s). Stroke length, tail beat speed, glide slowing
+and how far they glide before the next stroke are settings. Sharks turn
 gradually (a slow turn rate), keep a steady course while roaming and only
 change course now and then. They look ahead for land and turn away before reaching the shore, and
 curve toward prey, turning harder only in the last few squares. They're

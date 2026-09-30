@@ -446,6 +446,11 @@ export const SETTINGS: Setting[] = [
     tip: "Sharks swim in strokes: a few sweeps of the tail speed them up, then they glide. This is the longest a stroke lasts, in ticks (it ends early once the shark is a little faster than it wants to go).",
     min: 5, max: 300, int: true, log: true,
   }),
+  param("sharkTailBeat", {
+    group: "Sharks", label: "Tail beat speed",
+    tip: "How fast a shark's tail sweeps side to side during a stroke (looks only). At 0.15 one full sweep takes about 0.7 s.",
+    min: 0.02, max: 1, log: true,
+  }),
   param("sharkGlideDrag", {
     group: "Sharks", label: "Glide slowing",
     tip: "Share of its speed a gliding shark loses each tick. Low values mean long glides between strokes." + PER_SEC,
