@@ -185,6 +185,11 @@ push that would shove one into water is skipped). A quadtree
 cheap. Two sheep mate once their bodies touch, and a cat catches a sheep when
 it reaches the sheep's body.
 
+Sheep also like their space: unless it's looking for a mate, a sheep steers
+away from any sheep within 3 squares of touching it (*Personal space*), more
+strongly the closer they are (*Keeping apart*), so flocks spread out rather
+than huddling.
+
 - **Meandering.** A sheep walks slowly in a general direction, and its path
   wanders to and fro within an arc around that direction. The arc is
   genetic (*Meander arc*, 20–90°). The general direction changes now and
@@ -218,6 +223,11 @@ drawn as a long rounded body with a round head of the same colour and a
 short curly tail (two-thirds of the body length) whose curl drifts slowly and
 randomly, and their hue-only colour is always a dark shade.
 
+- **Drawn to herds.** Like sharks sensing fish, every 10 s or so a cat that
+  is less than half full and has fewer than 3 sheep within sight looks all
+  round, in 32 straight lines across land up to 60 squares (water blocks its
+  view), counts the sheep along each, and meanders off toward the biggest
+  herd it saw.
 - **Stalking.** A hungry cat locks on to the nearest sheep it can see (up
   to 40 squares away) and walks slowly after it at its *Stalking speed*.
 - **Pouncing.** Once the sheep is within the cat's genetic *Pounce

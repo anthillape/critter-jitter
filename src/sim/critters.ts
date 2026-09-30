@@ -155,7 +155,7 @@ export const SHEEP: SpeciesDef = {
 const SWIM_ABILITY: TraitDef = { key: "swimAbility", label: "Swimming ability", tip: "0..1. Better swimmers spend less energy swimming but more walking.", def: 0.3, min: 0, max: 1, mode: "add", spread: 0.3 };
 
 export const CAT: SpeciesDef = {
-  key: "cat", name: "cat", plural: "cats", prefix: "cat", diet: "prey", hunt: "pounce", habitat: "land", shade: "dark", stranded: "swimming to shore",
+  key: "cat", name: "cat", plural: "cats", prefix: "cat", diet: "prey", hunt: "pounce", senses: true, habitat: "land", shade: "dark", stranded: "swimming to shore",
   traits: traitList({
     maxFat: { def: 20 },
     minSpeed: { def: 0.004 },
@@ -236,6 +236,9 @@ export interface Critter {
   /** Long-range sensing (sharks): the direction it's heading for the most prey it saw, and ticks left doing so. */
   senseDir: number;
   senseLeft: number;
+  /** Personal space (sheep): which way, and how strongly, it wants to move away from nearby others (worked out each tick). */
+  awayX: number;
+  awayY: number;
   readonly species: SpeciesDef;
   /** How grown it is: its current size as a share of its genetic adult body size (0..1). */
   grown: number;
@@ -356,6 +359,8 @@ const PARAM_NAMES = [
   "StrokeTicks", "GlideDrag", "GlideSlack", "TailBeat",
   // Long-range sensing (sharks).
   "SenseRange", "SenseInterval", "SenseRays", "SenseCrowd", "SenseFull",
+  // Personal space (sheep).
+  "Space", "SpaceWeight",
   "BirthSize", "GrowthRate", "GrowthCost",
 ] as const;
 type ParamName = (typeof PARAM_NAMES)[number];
@@ -456,7 +461,7 @@ export class CritterSystem {
       hue: traits[T_HUE],
       id: this.nextId++, x, y, heading: this.host.rng() * Math.PI * 2, speed: 0,
       fat, nutrients, age: 0, cooldown: 0, parents, genes, traits,
-      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, boostTried: false, stroke: 0, tailAmp: 0, pounceLeft: 0, pounceDir: 0, pounceRest: 0, desired: 0, general: 0, wander: 0, avoid: 0, shore: false, senseDir: 0, senseLeft: 0, species: this.species, grown: 1,
+      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, boostTried: false, stroke: 0, tailAmp: 0, pounceLeft: 0, pounceDir: 0, pounceRest: 0, desired: 0, general: 0, wander: 0, avoid: 0, shore: false, senseDir: 0, senseLeft: 0, awayX: 0, awayY: 0, species: this.species, grown: 1,
       phase: this.host.rng() * Math.PI * 2, alive: true, colour: colourOf(traits, this.species),
     };
     c.desired = c.general = c.heading;
@@ -653,11 +658,20 @@ export class CritterSystem {
     } else if (moving && land) {
       // Meander: the path wanders to and fro within the genetic arc around
       // its general direction, which itself changes now and then.
-      if (h.rng() < this.sp("WanderTurnChance")) c.general += (h.rng() - 0.5) * this.sp("WanderTurnSize");
+      // (Cats that sensed a herd from afar meander toward it.)
+      if (c.senseLeft > 0) {
+        c.senseLeft--;
+        c.general = c.senseDir;
+      } else if (h.rng() < this.sp("WanderTurnChance")) c.general += (h.rng() - 0.5) * this.sp("WanderTurnSize");
       const half = (t[T_WANDER_ARC] * Math.PI) / 360;
       c.wander = Math.max(-half, Math.min(half, c.wander + (h.rng() - 0.5) * 2 * this.sp("MeanderRate")));
       c.desired = c.general + c.wander;
       speed = t[T_ROAM_SPEED];
+      // Personal space: bend away from others that are too close.
+      if (c.awayX || c.awayY) {
+        const w = this.sp("SpaceWeight");
+        c.desired = Math.atan2(Math.sin(c.desired) + w * c.awayY, Math.cos(c.desired) + w * c.awayX);
+      }
     } else if (moving) {
       // Nothing in sight: roam, picking a new course now and then, or head
       // for the prey it sensed from afar.
@@ -856,7 +870,8 @@ export class CritterSystem {
     }
     if (best <= 0) return;
     c.senseDir = bestDir;
-    c.senseLeft = Math.ceil(bestDist / Math.max(1e-3, c.traits[T_ROAM_SPEED]));
+    // Head that way for as long as it takes to get there (but look again at the next scan).
+    c.senseLeft = Math.min(this.sp("SenseInterval"), Math.ceil(bestDist / Math.max(1e-3, c.traits[T_ROAM_SPEED])));
   }
 
   /** Calls `f` for each critter in the bucket map (bucket size = r) within r of `c`. */
@@ -877,6 +892,10 @@ export class CritterSystem {
    * apart, half each, along the line between them. A push that would move
    * one into water is skipped (unless it's already swimming). A quadtree
    * finds the neighbours, so this stays cheap with big flocks.
+   *
+   * The same pass works out personal space: two that aren't looking for a
+   * mate and are within Space squares of touching each want to steer away
+   * from the other, more strongly the closer they are (used next tick).
    */
   private collide(): void {
     const tree = new QuadTree<Critter>(0, 0, GRID_W, GRID_H);
@@ -885,18 +904,30 @@ export class CritterSystem {
       if (!c.alive) continue;
       tree.insert(c);
       maxR = Math.max(maxR, bodyRadius(c));
+      c.awayX = c.awayY = 0;
     }
     const rng = this.host.rng;
+    const space = Math.max(0, this.sp("Space"));
     for (const a of this.critters) {
       if (!a.alive) continue;
       const ra = bodyRadius(a);
-      tree.query(a.x, a.y, ra + maxR, (b) => {
+      tree.query(a.x, a.y, ra + maxR + space, (b) => {
         if (b.id <= a.id || !b.alive) return; // each pair once
         const min = ra + bodyRadius(b);
         let dx = b.x - a.x;
         let dy = b.y - a.y;
         let d = Math.hypot(dx, dy);
-        if (d >= min) return;
+        if (d >= min) {
+          // Not touching: just keep some space, unless either is after a mate.
+          if (d < min + space && a.mode !== Mode.Mating && b.mode !== Mode.Mating) {
+            const f = (1 - (d - min) / space) / d;
+            a.awayX -= dx * f;
+            a.awayY -= dy * f;
+            b.awayX += dx * f;
+            b.awayY += dy * f;
+          }
+          return;
+        }
         if (d < 1e-6) {
           const ang = rng() * Math.PI * 2;
           dx = Math.cos(ang);

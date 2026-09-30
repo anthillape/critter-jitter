@@ -116,6 +116,38 @@ function critterSettings(sp: SpeciesDef, group: string, noun: string, food: stri
   ];
 }
 
+/** Long-range sensing sliders for a species that scans for the most prey (sharks, cats). */
+function senseSettings(sp: SpeciesDef, group: string, prey: string, across: string, blocker: string): Setting[] {
+  const k = (name: string) => `${sp.prefix}${name}` as keyof Params;
+  return [
+    param(k("SenseRange"), {
+      group, label: "Long-range sense distance",
+      tip: `How far (squares) a ${sp.name} can sense ${prey}, looking in straight lines across ${across} in every direction. ${blocker[0].toUpperCase()}${blocker.slice(1)} blocks its view.`,
+      min: 0, max: 400, int: true,
+    }),
+    param(k("SenseInterval"), {
+      group, label: "Ticks between long-range looks",
+      tip: `How often a ${sp.name} scans far and wide for the most ${prey}, then heads that way.`,
+      min: 10, max: 2000, int: true, log: true,
+    }),
+    param(k("SenseRays"), {
+      group, label: "Directions scanned",
+      tip: `How many directions, all round, a ${sp.name} looks in when it scans. More directions miss less but cost more.`,
+      min: 4, max: 128, int: true, log: true,
+    }),
+    param(k("SenseCrowd"), {
+      group, label: `${prey[0].toUpperCase()}${prey.slice(1)} nearby to skip scanning`,
+      tip: `A ${sp.name} doesn't bother scanning far if it already has this many ${prey} within its food sight range.`,
+      min: 1, max: 50, int: true, log: true,
+    }),
+    param(k("SenseFull"), {
+      group, label: "Too full to scan",
+      tip: `A ${sp.name} doesn't bother scanning far once its fat is at least this share of what it can carry.`,
+      min: 0.05, max: 1, fmt: pct,
+    }),
+  ];
+}
+
 /** Sliders for a species' trait defaults (the values before genes act). */
 function critterTraitSettings(sp: SpeciesDef, group: string): Setting[] {
   return sp.traits.map((d): Setting => ({
@@ -461,31 +493,7 @@ export const SETTINGS: Setting[] = [
     tip: "How far below the speed it wants a shark lets itself slow before its next stroke (strokes push it half this far above). Larger values give longer glides and bigger surges.",
     min: 0.02, max: 0.9, fmt: pct,
   }),
-  param("sharkSenseRange", {
-    group: "Sharks", label: "Long-range sense distance",
-    tip: "How far (squares) a shark can sense fish, looking in straight lines across water in every direction. Land blocks its view.",
-    min: 0, max: 400, int: true,
-  }),
-  param("sharkSenseInterval", {
-    group: "Sharks", label: "Ticks between long-range looks",
-    tip: "How often a shark scans far and wide for the most fish, then heads that way.",
-    min: 10, max: 2000, int: true, log: true,
-  }),
-  param("sharkSenseRays", {
-    group: "Sharks", label: "Directions scanned",
-    tip: "How many directions, all round, a shark looks in when it scans. More directions miss fewer shoals but cost more.",
-    min: 4, max: 128, int: true, log: true,
-  }),
-  param("sharkSenseCrowd", {
-    group: "Sharks", label: "Fish nearby to skip scanning",
-    tip: "A shark doesn't bother scanning far if it already has this many fish within its food sight range.",
-    min: 1, max: 50, int: true, log: true,
-  }),
-  param("sharkSenseFull", {
-    group: "Sharks", label: "Too full to scan",
-    tip: "A shark doesn't bother scanning far once its fat is at least this share of what it can carry.",
-    min: 0.05, max: 1, fmt: pct,
-  }),
+  ...senseSettings(SHARK, "Sharks", "fish", "water", "land"),
   param("sharkBoostRange", {
     group: "Sharks", label: "Boost range",
     tip: "How close (squares) a shark gets to the prey it's locked on to before it may boost at it.",
@@ -523,6 +531,16 @@ export const SETTINGS: Setting[] = [
     tip: "Extra walking cost a perfect swimmer pays (1 = walking costs twice as much); scaled by swimming ability.",
     min: 0, max: 5,
   }),
+  param("sheepSpace", {
+    group: "Sheep", label: "Personal space",
+    tip: "Room (squares) a sheep likes to keep between its body and another sheep's. Sheep steer away from others closer than this, except when looking for a mate.",
+    min: 0, max: 15,
+  }),
+  param("sheepSpaceWeight", {
+    group: "Sheep", label: "Keeping apart",
+    tip: "How strongly a sheep steers away from sheep inside its personal space (0 = it doesn't).",
+    min: 0, max: 10,
+  }),
   param("sheepMeanderRate", {
     group: "Sheep", label: "Meander speed",
     tip: "How quickly a sheep's path swings about within its meander arc, in radians per tick.",
@@ -550,6 +568,7 @@ export const SETTINGS: Setting[] = [
     tip: "Extra walking cost a perfect swimmer pays (1 = walking costs twice as much); scaled by swimming ability.",
     min: 0, max: 5,
   }),
+  ...senseSettings(CAT, "Cats", "sheep", "land", "water"),
   param("catMeanderRate", {
     group: "Cats", label: "Meander speed",
     tip: "How quickly a cat's path swings about within its meander arc, in radians per tick.",

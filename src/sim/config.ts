@@ -200,6 +200,8 @@ export const PARAMS = {
   sheepGrazeFloor: 0.08, // grass grazed below this share of full size is eaten up entirely
   sheepSwimEffort: 0.0005, // energy per tick per unit of mass spent swimming (for the worst swimmer; the best pay a quarter)
   sheepSwimWalkCost: 1, // extra walking cost at full swimming ability (1 = twice the cost)
+  sheepSpace: 3, // squares of room a sheep likes between its body and another's (unless looking for a mate)
+  sheepSpaceWeight: 1.5, // how strongly it steers away from sheep inside that room
   sheepMeanderRate: 0.03, // how fast its path swings about within the meander arc (radians per tick)
 
   // --- Cats (hunt sheep on land) ---
@@ -231,6 +233,11 @@ export const PARAMS = {
   catPounceRest: 180, // ticks after a pounce before it can pounce again
   catSwimEffort: 0.0005,
   catSwimWalkCost: 1,
+  catSenseRange: 60, // how far (squares) a cat can see sheep, in a straight line across land
+  catSenseInterval: 600, // ticks between long looks for the biggest herd
+  catSenseRays: 32,
+  catSenseCrowd: 3, // it doesn't bother looking far if it already has this many sheep within sight
+  catSenseFull: 0.5, // ...or if its fat is at least this share of what it can carry
   catMeanderRate: 0.03,
 
   // --- Genetics ---
