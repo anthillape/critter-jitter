@@ -606,6 +606,26 @@ export const SETTINGS: Setting[] = [
     tip: "A roc keeps hunting until its fat reaches this share of what it can carry, building a big reserve (kept a little below Too fat to fly). It only breeds once it's this full. Its genetic hunger threshold still applies if higher.",
     min: 0, max: 1, fmt: pct,
   }),
+  param("rocCruiseHeight", {
+    group: "Rocs", label: "Flying height",
+    tip: "How high a roc cruises, in terrain height levels above the ground. It drops lower the closer it gets to prey, so it dives. Its shadow grows, fades and moves to the bottom left with height.",
+    min: 0.5, max: 16,
+  }),
+  param("rocClimbRate", {
+    group: "Rocs", label: "Climb speed",
+    tip: "Height a roc gains per tick climbing (it drops twice as fast when diving or coming in to land).",
+    min: 0.005, max: 1, log: true,
+  }),
+  param("rocCatchChance", {
+    group: "Rocs", label: "Dive success",
+    tip: "Share of dives that catch the prey (a roc can only strike once it's down low). Catching prey on foot always succeeds.",
+    min: 0.01, max: 1, fmt: pct,
+  }),
+  param("rocMissRest", {
+    group: "Rocs", label: "Rest after a miss",
+    tip: "Ticks after a missed dive before a roc picks a new target (it climbs away meanwhile).",
+    min: 0, max: 1200, int: true,
+  }),
   param("rocEdgeMargin", {
     group: "Rocs", label: "Keeps away from the edge",
     tip: "Squares from the edge of the map at which a flying roc starts turning back toward the middle, in an arc that tightens the closer it gets (0 = it doesn't; it just bounces off the edge).",

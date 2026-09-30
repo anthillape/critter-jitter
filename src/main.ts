@@ -329,6 +329,7 @@ function draw(): void {
   renderer.draw(viewSel.value as View);
   ctx.drawImage(renderer.canvas, 0, 0, GRID_W * CELL_PX, GRID_H * CELL_PX);
   drawSpores();
+  drawRocShadows(); // under everything that walks or swims
   drawSheep();
   drawCats();
   drawFish();
@@ -498,14 +499,36 @@ function drawCatShape(x: number, y: number, heading: number, mass: number, colou
 /**
  * Rocs, seen from above: a body with a small head and a fan tail. Flying,
  * their wings are spread (sweeping in and out as they flap, when turning or
- * speeding up) and a faint shadow falls below them; landed, the wings are
- * folded along the body. Dead ones lie still, grey, fading.
+ * speeding up); landed, the wings are folded along the body. Dead ones lie
+ * still, grey, fading.
  */
 function drawRocs(): void {
   const sys = world.rocs;
   for (const c of sys.corpses) drawRocShape(c.x, c.y, c.heading, c.mass, corpseColour(c), false, 0, 0);
   for (const r of sys.critters) {
     if (r.alive) drawRocShape(r.x, r.y, r.heading, bodyMass(r), r.colour, r.flying, r.tailAmp, r.phase);
+  }
+}
+
+/**
+ * Every roc casts a dark, blurry shadow. The higher it flies, the bigger,
+ * fainter and blurrier the shadow, and the further it falls to the bottom
+ * left (the sun is up and to the right).
+ */
+function drawRocShadows(): void {
+  for (const r of world.rocs.critters) {
+    if (!r.alive) continue;
+    const a = r.alt;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0.3, 0.8 - a * 0.1);
+    ctx.filter = `blur(${(0.6 + a * 0.45).toFixed(1)}px)`;
+    const ox = -1.5 - a * 3; // pixels left...
+    const oy = 1.5 + a * 3; // ...and down
+    ctx.translate((r.x) * CELL_PX + ox, (r.y) * CELL_PX + oy);
+    const k = 1 + a * 0.12;
+    ctx.scale(k, k);
+    drawRocShape(0, 0, r.heading, bodyMass(r), "#000", r.flying, r.tailAmp, r.phase);
+    ctx.restore();
   }
 }
 
@@ -543,7 +566,6 @@ function drawRocShape(x: number, y: number, heading: number, mass: number, colou
     ctx.fill();
     ctx.restore();
   };
-  if (flying) draw(5, 7, "rgba(0, 0, 0, 0.22)"); // shadow on the ground below
   draw(0, 0, colour);
 }
 

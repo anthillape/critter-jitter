@@ -184,8 +184,8 @@ export const ROC: SpeciesDef = {
   traits: traitList({
     maxFat: { def: 40, tip: "Most fat it can carry. Rocs eat a lot, but past a point they're too fat to fly (see Too fat to fly)." },
     minSpeed: { def: 0.005 },
-    maxSpeed: { def: 0.03, label: "Running speed", tip: "Speed on foot while chasing prey or heading for a mate, in squares per tick." },
-    roamSpeed: { def: 0.012, label: "Walking speed", tip: "Speed on foot while wandering, in squares per tick (flying speed is a separate trait)." },
+    maxSpeed: { def: 0.04, label: "Running speed", tip: "Speed on foot while chasing prey or heading for a mate, in squares per tick." },
+    roamSpeed: { def: 0.018, label: "Walking speed", tip: "Speed on foot while wandering, in squares per tick (flying speed is a separate trait)." },
     hue: { def: 30, spread: 60, tip: "Hue of its (tawny) feathers, in degrees." },
     breedAge: { def: 5000 },
     breedFat: { def: 12 },
@@ -263,6 +263,10 @@ export interface Critter {
   senseLeft: number;
   /** Rocs: in the air (else on foot, on land). */
   flying: boolean;
+  /** Rocs: height above the ground, 0 (landed) to CruiseHeight; eases up and down. */
+  alt: number;
+  /** Rocs: descending to land (touches down, and starts walking, once low enough). */
+  landing: boolean;
   /** Personal space (sheep): which way, and how strongly, it wants to move away from nearby others (worked out each tick). */
   awayX: number;
   awayY: number;
@@ -392,7 +396,7 @@ const PARAM_NAMES = [
   // Sensing: least prey seen before it bothers heading that way.
   "SenseMin",
   // Flying (rocs).
-  "TooFat", "FlightCheck", "DiveBoost", "LandedUpkeep", "HuntUntil", "EdgeMargin",
+  "TooFat", "FlightCheck", "DiveBoost", "LandedUpkeep", "HuntUntil", "EdgeMargin", "CruiseHeight", "ClimbRate", "CatchChance", "MissRest",
   "BirthSize", "GrowthRate", "GrowthCost",
 ] as const;
 type ParamName = (typeof PARAM_NAMES)[number];
@@ -453,7 +457,12 @@ export class CritterSystem {
     const genes: Gene[] = [];
     for (let g = 0; g < GENE_COUNT_CRITTER; g++) genes.push(randomGene(h.rng, this.sp("GeneStrength"), this.species.traits.length));
     const c = this.add(x, y, genes, [0, 0], n, 0);
-    c.fat = Math.min(this.sp("StartFat"), c.traits[T_MAX_FAT]);
+    c.fat = Math.min(this.sp("StartFat"), this.fatCap(c));
+    // Founder flyers start in the air as often as they'd choose to be.
+    if (this.species.flies && h.rng() < c.traits[T_FLY_PREF]) {
+      c.flying = true;
+      c.alt = this.sp("CruiseHeight");
+    }
     return true;
   }
 
@@ -493,7 +502,7 @@ export class CritterSystem {
       hue: traits[T_HUE],
       id: this.nextId++, x, y, heading: this.host.rng() * Math.PI * 2, speed: 0,
       fat, nutrients, age: 0, cooldown: 0, parents, genes, traits,
-      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, boostTried: false, stroke: 0, tailAmp: 0, pounceLeft: 0, pounceDir: 0, pounceRest: 0, desired: 0, general: 0, wander: 0, avoid: 0, shore: false, senseDir: 0, senseLeft: 0, awayX: 0, awayY: 0, flying: false, species: this.species, grown: 1,
+      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, boostTried: false, stroke: 0, tailAmp: 0, pounceLeft: 0, pounceDir: 0, pounceRest: 0, desired: 0, general: 0, wander: 0, avoid: 0, shore: false, senseDir: 0, senseLeft: 0, awayX: 0, awayY: 0, flying: false, alt: 0, landing: false, species: this.species, grown: 1,
       phase: this.host.rng() * Math.PI * 2, alive: true, colour: colourOf(traits, this.species),
     };
     c.desired = c.general = c.heading;
@@ -592,6 +601,15 @@ export class CritterSystem {
     return Math.max(t[T_HUNGER_FAT], share * t[T_MAX_FAT]);
   }
 
+  /**
+   * Most fat a newborn or founder starts with: what it can carry, and for
+   * flyers a little under too fat to fly, so none start out grounded.
+   */
+  private fatCap(c: Critter): number {
+    const max = c.traits[T_MAX_FAT];
+    return this.species.flies ? max * Math.max(0.05, this.sp("TooFat") - 0.1) : max;
+  }
+
   /** Rocs: fat enough that it can't get off the ground. */
   private tooFat(c: Critter): boolean {
     return c.fat > this.sp("TooFat") * c.traits[T_MAX_FAT];
@@ -614,14 +632,38 @@ export class CritterSystem {
       if (c.flying) c.wander = 0;
       return;
     }
-    if (!overLand) return;
+    // Only land over land: a descent over water is called off.
+    if (!overLand) {
+      c.landing = false;
+      return;
+    }
     const chasingFish = c.prey !== null && c.prey.species.habitat === "water";
-    if (fat || (!chasingFish && c.senseLeft <= 0 && (this.tick + c.id) % this.sp("FlightCheck") === 0 && h.rng() < 1 - c.traits[T_FLY_PREF])) {
-      c.flying = false;
-      c.general = c.heading;
-      c.wander = 0;
+    if (!c.landing && (fat || (!chasingFish && c.senseLeft <= 0 && (this.tick + c.id) % this.sp("FlightCheck") === 0 && h.rng() < 1 - c.traits[T_FLY_PREF]))) {
+      c.landing = true;
       if (chasingFish) this.dropTarget(c);
     }
+    // Touch down once low enough, and start walking.
+    if (c.landing && c.alt < 0.1) {
+      c.flying = false;
+      c.landing = false;
+      c.alt = 0;
+      c.general = c.heading;
+      c.wander = 0;
+    }
+  }
+
+  /**
+   * Rocs: ease toward the height it wants: cruising height in the air,
+   * lower and lower as it closes on prey (so it dives), the ground when
+   * landing. Diving drops twice as fast as climbing.
+   */
+  private fly(c: Critter): void {
+    const cruise = this.sp("CruiseHeight");
+    let want = cruise;
+    if (!c.flying || c.landing) want = 0;
+    else if (c.prey) want = Math.min(cruise, Math.hypot(c.prey.x - c.x, c.prey.y - c.y) * 0.5);
+    const rate = this.sp("ClimbRate");
+    c.alt += Math.max(-2 * rate, Math.min(rate, want - c.alt));
   }
 
   private update(c: Critter): void {
@@ -636,7 +678,10 @@ export class CritterSystem {
     }
 
     const here = Math.floor(c.y) * GRID_W + Math.floor(c.x);
-    if (this.species.flies) this.flight(c, here);
+    if (this.species.flies) {
+      this.flight(c, here);
+      this.fly(c);
+    }
     const flying = c.flying;
     const atHome = flying || this.home(here);
     const land = this.species.habitat === "land";
@@ -1120,6 +1165,8 @@ export class CritterSystem {
   }
 
   private findFood(c: Critter): void {
+    // A roc that just missed climbs away before picking a new target.
+    if (this.species.flies && c.pounceRest > 0) return;
     if (this.species.diet === "prey") this.findPrey(c);
     else if (this.species.diet === "grass") this.findGrass(c);
     else this.findAlgae(c);
@@ -1260,6 +1307,16 @@ export class CritterSystem {
       }
       return;
     }
+    if (c.prey && this.species.flies && c.flying) {
+      // A diving roc can only strike once it's down low...
+      if (c.alt > 1) return;
+      // ...and even then most dives miss: it climbs away and tries again later.
+      if (this.host.rng() >= this.sp("CatchChance")) {
+        this.dropTarget(c);
+        c.pounceRest = this.sp("MissRest");
+        return;
+      }
+    }
     if (c.prey) {
       // Catch: eat the whole animal: all its fat (its energy) and nutrients.
       const p = c.prey;
@@ -1317,7 +1374,7 @@ export class CritterSystem {
       b.nutrients -= nB;
       const child = this.add((a.x + b.x) / 2, (a.y + b.y) / 2, this.childGenes(a, b), [a.id, b.id], nA + nB, 0, this.childHue(a, b));
       child.grown = Math.min(1, this.sp("BirthSize")); // babies start small and grow
-      child.fat = Math.min(fA + fB, child.traits[T_MAX_FAT]); // any beyond what it can carry is lost
+      child.fat = Math.min(fA + fB, this.fatCap(child)); // any beyond what it can carry is lost
       made++;
     }
     if (made > 0) {

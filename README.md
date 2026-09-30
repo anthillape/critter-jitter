@@ -249,11 +249,14 @@ randomly, and their hue-only colour is always a dark shade.
 
 Rocs are huge birds that eat fish or sheep. They're long-lived (lifespan
 40,000 ticks), big (body size 8) and can carry a lot of fat (default 40).
-They're drawn from above as tawny birds: wings spread with a shadow on the
-ground below while flying, wings folded when landed.
+They're drawn from above as tawny birds: wings spread while flying, folded
+when landed. Every roc casts a dark, blurry shadow; the higher it flies, the
+bigger and fainter its shadow and the further it falls to the bottom left.
 
 - **Flying and landing.** A roc flies anywhere over the map, over land and
-  water alike, at its genetic *Flying speed*. It lands only on land, where
+  water alike, at its genetic *Flying speed*, cruising 4 height levels above
+  the ground (*Flying height*). It climbs after taking off and descends
+  before touching down (only over land). It lands only on land, where
   it walks and meanders at its separate genetic *Walking speed*, and burns
   half its upkeep (*Upkeep on the ground*). It never stands in water: if
   it finds itself in water it takes off. Every 5 s (*Ticks between flight
@@ -268,7 +271,10 @@ ground below while flying, wings folded when landed.
   diving at prey).
 - **Hunting.** A hungry roc dives at the nearest fish (only while flying) or
   sheep (flying or on foot) within 15 squares, diving at 1.5 times its
-  flying speed (*Dive speed*). It has a big appetite: it keeps hunting until
+  flying speed (*Dive speed*) and dropping lower the closer it gets. It can
+  only strike once it's down low, and only about 1 dive in 4 succeeds (*Dive
+  success*); after a miss it climbs away and waits 2 s (*Rest after a miss*)
+  before picking a new target. Catching a sheep on foot always succeeds. It has a big appetite: it keeps hunting until
   it has built up a big reserve, 65% of its fat store (*Hunts until this
   full*; its genetic hunger threshold applies if higher), and only breeds
   once it's that full.

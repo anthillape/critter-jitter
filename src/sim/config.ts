@@ -244,7 +244,7 @@ export const PARAMS = {
 
   // --- Rocs (huge birds: eat fish or sheep, fly anywhere, land on land) ---
   rocMoveCost: 0.05, // flying is efficient
-  rocMetabolism: 0.0002,
+  rocMetabolism: 0.0001, // big soaring birds are cheap to run
   rocFatMass: 0.05,
   rocNutrientLoss: 0.0002,
   rocMinNutrients: 0.03,
@@ -279,6 +279,10 @@ export const PARAMS = {
   rocDiveBoost: 1.5, // flying speed multiplier while diving at prey
   rocLandedUpkeep: 0.5, // share of its upkeep it burns while on the ground
   rocHuntUntil: 0.65, // it keeps hunting until its fat reaches this share of its store (a big reserve)
+  rocCruiseHeight: 4, // how high it flies (in terrain height levels above the ground)
+  rocClimbRate: 0.04, // height gained per tick climbing (it drops twice as fast when diving or landing)
+  rocCatchChance: 0.25, // share of dives that catch the prey
+  rocMissRest: 120, // ticks after a missed dive before it picks a new target
   rocEdgeMargin: 20, // squares from the map edge at which a flying roc starts arcing back toward the middle
 
   // --- Genetics ---
@@ -292,7 +296,7 @@ export const PARAMS = {
   initialSharks: 12,
   initialSheep: 40,
   initialCats: 20,
-  initialRocs: 4,
+  initialRocs: 10,
   startingSurfaceWater: 1.3, // standing water at the start, as an average depth over the whole world
   initialSoilWetness: 0.4, // how full the soil starts (0..1); full under the starting lakes
   initialWaterPrefSpread: 0.85, // starting seeds' water preference is spread over this range around the default
