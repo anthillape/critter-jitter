@@ -37,15 +37,15 @@ export interface TraitDef {
 // Trait indices shared by every species.
 export const T_MAX_FAT = 0, T_MIN_SPEED = 1, T_MAX_SPEED = 2, T_HUE = 3,
   T_BREED_AGE = 4, T_BREED_FAT = 5, T_HUNGER_FAT = 6, T_LIFESPAN = 7, T_PARENT_SHARE = 8, T_LITTER = 9,
-  T_MUTATION = 10, T_BODY = 11, T_ROAM_SPEED = 12;
+  T_MUTATION = 10, T_BODY = 11, T_ROAM_SPEED = 12, T_DIGEST = 13;
 // Species-specific traits follow the shared ones. Fish and sharks: full
 // colour (saturation, lightness); sharks also boosting.
-export const T_SAT = 13, T_LUM = 14, T_BOOST_CHANCE = 15, T_BOOST_POWER = 16;
+export const T_SAT = 14, T_LUM = 15, T_BOOST_CHANCE = 16, T_BOOST_POWER = 17;
 // Land animals (hue-only colour, so no saturation / lightness): meandering and
 // swimming; sheep also have grass sight, cats pounce distance, in the same slot.
-export const T_WANDER_ARC = 13, T_GRASS_SIGHT = 14, T_POUNCE = 14, T_SWIM = 15;
+export const T_WANDER_ARC = 14, T_GRASS_SIGHT = 15, T_POUNCE = 15, T_SWIM = 16;
 // Rocs: meandering on foot, then flying preference and flying speed in the same slots.
-export const T_FLY_PREF = 14, T_AIR_SPEED = 15;
+export const T_FLY_PREF = 15, T_AIR_SPEED = 16;
 
 type TraitDefaults = Partial<Record<string, Partial<TraitDef>>>;
 
@@ -68,6 +68,7 @@ function traitList(o: TraitDefaults, colour: boolean, extras: TraitDef[] = []): 
     { key: "mutation", label: "Mutation size", tip: "How much inherited genes change, randomly, in each child.", def: 0.45, min: 0.005, max: 1, mode: "mul", spread: 0.6 },
     { key: "bodySize", label: "Body size", tip: "Body mass: bigger critters cost more to move and to keep alive.", def: 1, min: 0.3, max: 12, mode: "mul", spread: 0.35 },
     { key: "roamSpeed", label: "Roaming speed", tip: "Speed while roaming randomly (with nothing in sight), in squares per tick. Kept between the minimum and top speeds.", def: 0.025, min: 0.001, max: 0.3, mode: "mul", spread: 0.6 },
+    { key: "digestRate", label: "Digestion speed", tip: "Share of its stomach's capacity it digests each tick. Faster digestion costs more: the share of the food used up digesting it rises with the speed, so the cost per tick rises with its square.", def: 0.004, min: 0.0002, max: 0.1, mode: "mul", spread: 0.5 },
   ];
   if (colour) {
     t.push(
@@ -261,6 +262,11 @@ export interface Critter {
   /** Long-range sensing (sharks): the direction it's heading for the most prey it saw, and ticks left doing so. */
   senseDir: number;
   senseLeft: number;
+  /** Stomach: food eaten but not yet digested (energy and nutrients). */
+  gutFat: number;
+  gutN: number;
+  /** Carrying young (no breeding meanwhile), or null. */
+  womb: Womb | null;
   /** Rocs: in the air (else on foot, on land). */
   flying: boolean;
   /** Rocs: height above the ground, 0 (landed) to CruiseHeight; eases up and down. */
@@ -283,6 +289,21 @@ export interface Critter {
   hue: number;
   /** CSS colour from the hue / saturation / lightness traits. */
   colour: string;
+}
+
+/**
+ * Young being carried. The partner's share of fat and nutrients is handed
+ * over at mating (`gotFat`, `gotN`); the carrier passes its own share
+ * across bit by bit (`needFat`, `needN` still to go), and the young are
+ * born, all together, once it's done.
+ */
+export interface Womb {
+  young: Array<{ genes: Gene[]; hue: number }>;
+  parents: [number, number];
+  needN: number;
+  needFat: number;
+  gotN: number;
+  gotFat: number;
 }
 
 /** A dead critter rotting where it died; it keeps its shape while it decomposes. */
@@ -395,6 +416,8 @@ const PARAM_NAMES = [
   "Space", "SpaceWeight",
   // Sensing: least prey seen before it bothers heading that way.
   "SenseMin",
+  // Eating and breeding.
+  "Stomach", "DigestCost", "GestationRate",
   // Flying (rocs).
   "TooFat", "FlightCheck", "DiveBoost", "LandedUpkeep", "HuntUntil", "EdgeMargin", "CruiseHeight", "ClimbRate", "CatchChance", "MissRest",
   "BirthSize", "GrowthRate", "GrowthCost",
@@ -502,7 +525,7 @@ export class CritterSystem {
       hue: traits[T_HUE],
       id: this.nextId++, x, y, heading: this.host.rng() * Math.PI * 2, speed: 0,
       fat, nutrients, age: 0, cooldown: 0, parents, genes, traits,
-      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, boostTried: false, stroke: 0, tailAmp: 0, pounceLeft: 0, pounceDir: 0, pounceRest: 0, desired: 0, general: 0, wander: 0, avoid: 0, shore: false, senseDir: 0, senseLeft: 0, awayX: 0, awayY: 0, flying: false, alt: 0, landing: false, species: this.species, grown: 1,
+      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, boostTried: false, stroke: 0, tailAmp: 0, pounceLeft: 0, pounceDir: 0, pounceRest: 0, desired: 0, general: 0, wander: 0, avoid: 0, shore: false, senseDir: 0, senseLeft: 0, awayX: 0, awayY: 0, gutFat: 0, gutN: 0, womb: null, flying: false, alt: 0, landing: false, species: this.species, grown: 1,
       phase: this.host.rng() * Math.PI * 2, alive: true, colour: colourOf(traits, this.species),
     };
     c.desired = c.general = c.heading;
@@ -532,8 +555,9 @@ export class CritterSystem {
     for (const c of this.critters) {
       if (!c.alive || (c.x - x) ** 2 + (c.y - y) ** 2 > r2) continue;
       c.alive = false;
-      n[squareOf(c)] += c.nutrients;
-      c.nutrients = 0;
+      n[squareOf(c)] += c.nutrients + c.gutN + (c.womb ? c.womb.gotN : 0);
+      c.nutrients = c.gutN = 0;
+      c.womb = null;
     }
     this.removeDead();
     this.corpses = this.corpses.filter((k) => {
@@ -550,7 +574,7 @@ export class CritterSystem {
 
   private isReady(c: Critter): boolean {
     const t = c.traits;
-    return c.alive && c.cooldown === 0 && c.grown >= 0.9 && c.age >= t[T_BREED_AGE] && c.fat >= t[T_BREED_FAT] && c.fat >= this.hunger(c);
+    return c.alive && !c.womb && c.cooldown === 0 && c.grown >= 0.9 && c.age >= t[T_BREED_AGE] && c.fat >= t[T_BREED_FAT] && c.fat >= this.hunger(c);
   }
 
   private buildBuckets(): void {
@@ -590,15 +614,23 @@ export class CritterSystem {
 
   /**
    * Fat below which it hunts (and grows, and can't breed): its genetic
-   * hunger threshold; rocs also keep hunting until they've built up a big
-   * reserve (HuntUntil, a share of their fat store, kept just short of too
-   * fat to fly).
+   * hunger threshold, raised to the fat it needs to breed once it's free to,
+   * and by what it still owes its young while pregnant; rocs also keep
+   * hunting until they've built up a big reserve (HuntUntil, a share of
+   * their fat store, kept just short of too fat to fly).
    */
   private hunger(c: Critter): number {
     const t = c.traits;
-    if (!this.species.flies) return t[T_HUNGER_FAT];
-    const share = Math.min(this.sp("HuntUntil"), this.sp("TooFat") - 0.05);
-    return Math.max(t[T_HUNGER_FAT], share * t[T_MAX_FAT]);
+    let want = t[T_HUNGER_FAT];
+    // An adult free to breed eats until it has the fat to; a pregnant one
+    // eats for its young too.
+    if (c.womb) want += c.womb.needFat;
+    else if (c.cooldown === 0 && c.grown >= 0.9 && c.age >= t[T_BREED_AGE]) want = Math.max(want, t[T_BREED_FAT]);
+    if (this.species.flies) {
+      const share = Math.min(this.sp("HuntUntil"), this.sp("TooFat") - 0.05);
+      want = Math.max(want, share * t[T_MAX_FAT]);
+    }
+    return Math.min(want, t[T_MAX_FAT]);
   }
 
   /**
@@ -702,7 +734,7 @@ export class CritterSystem {
       c.mode = Mode.Stranded;
     } else if (c.mode === Mode.Grazing) {
       // Still grazing.
-    } else if (grazer && c.fat < this.hunger(c) && h.kind[here] === GRASS_KIND) {
+    } else if (grazer && c.fat < this.hunger(c) && h.kind[here] === GRASS_KIND && this.room(c) > 0.05 * this.stomach(c)) {
       this.dropTarget(c);
       c.mode = Mode.Grazing;
     } else if (c.fat < this.hunger(c)) {
@@ -907,6 +939,9 @@ export class CritterSystem {
       else move = this.sp("SwimEffort") * mass * (1 - 0.75 * a);
     }
     c.fat -= move + upkeep;
+    this.digest(c);
+    if (c.womb) this.gestate(c);
+    if (!c.alive) return;
     // Growing up: while it isn't hungry it grows toward its adult size,
     // paying fat for each unit of body mass it adds.
     if (c.grown < 1 && c.fat > this.hunger(c)) {
@@ -1165,6 +1200,8 @@ export class CritterSystem {
   }
 
   private findFood(c: Critter): void {
+    // Too full to eat anything much yet.
+    if (this.room(c) < 0.2 * this.stomach(c)) return;
     // A roc that just missed climbs away before picking a new target.
     if (this.species.flies && c.pounceRest > 0) return;
     if (this.species.diet === "prey") this.findPrey(c);
@@ -1215,18 +1252,24 @@ export class CritterSystem {
     const bite = Math.min(n, this.sp("Bite"));
     const share = n > 0 ? bite / n : 1;
     const e = h.floraE[i] * share;
-    h.floraN[i] -= bite;
-    h.floraE[i] -= e;
-    c.nutrients += bite;
-    c.fat += e;
+    // Only as much as fits in its stomach.
+    const f = this.eat(c, e, bite);
+    h.floraN[i] -= bite * f;
+    h.floraE[i] -= e * f;
+    if (f < 1) {
+      c.mode = Mode.Wander; // full up
+      return;
+    }
     if (h.floraN[i] < this.sp("GrazeFloor") * h.p.grassMaxN) {
-      c.nutrients += h.floraN[i];
-      c.fat += h.floraE[i];
-      h.floraN[i] = 0;
-      h.clearFlora(i);
+      const g = this.eat(c, h.floraE[i], h.floraN[i]);
+      h.floraN[i] -= h.floraN[i] * g;
+      h.floraE[i] -= h.floraE[i] * g;
+      if (g >= 1) {
+        h.floraN[i] = 0;
+        h.clearFlora(i);
+      }
       c.mode = Mode.Wander;
     }
-    this.storeSurplus(c);
   }
 
   private findAlgae(c: Critter): void {
@@ -1325,30 +1368,115 @@ export class CritterSystem {
       c.pounceLeft = 0;
       if (!p.alive) return;
       p.alive = false;
-      c.fat += p.fat;
-      p.fat = 0;
-      c.nutrients += p.nutrients;
-      p.nutrients = 0;
       const sys = this.preySystems.find((sy) => sy.species === p.species)!;
+      // It eats as much of the body as fits in its stomach: all its energy
+      // (fat, and food it hadn't digested) and nutrients (body, stomach and
+      // any unborn young). What doesn't fit is left to rot.
+      const allN = p.nutrients + p.gutN + (p.womb ? p.womb.gotN : 0);
+      const f = this.eat(c, p.fat + p.gutFat, allN);
+      const left = allN * (1 - f);
+      p.fat = p.gutFat = p.nutrients = p.gutN = 0;
+      p.womb = null;
+      if (left > 1e-6) {
+        sys.corpses.push({ x: p.x, y: p.y, nutrients: left, startNutrients: left, heading: p.heading, mass: bodyMass(p) * (1 - f) });
+      }
       sys.eaten++;
       sys.deaths++;
       sys.sounds.deaths++;
       sys.sounds.x = p.x;
       this.sounds.kills++;
       this.sounds.x = c.x;
-      this.storeSurplus(c);
       return;
     }
-    // Algae: eat it in one go.
+    // Algae: eat as much as fits (all of it if there's room; else it's left smaller).
     this.dropTarget(c);
     const i = Math.floor(c.targetY) * GRID_W + Math.floor(c.targetX);
     if (h.kind[i] === ALGAE_KIND) {
-      c.fat += h.floraE[i];
-      c.nutrients += h.floraN[i];
-      h.floraN[i] = 0;
-      h.clearFlora(i);
-      this.storeSurplus(c);
+      const f = this.eat(c, h.floraE[i], h.floraN[i]);
+      if (f >= 1) {
+        h.floraN[i] = 0;
+        h.clearFlora(i);
+      } else {
+        h.floraN[i] *= 1 - f;
+        h.floraE[i] *= 1 - f;
+      }
     }
+  }
+
+  /** Stomach capacity (energy plus nutrients): Stomach per unit of current body mass. */
+  private stomach(c: Critter): number {
+    return this.sp("Stomach") * bodyMass(c);
+  }
+
+  /** Room left in its stomach. */
+  private room(c: Critter): number {
+    return Math.max(0, this.stomach(c) - c.gutFat - c.gutN);
+  }
+
+  /**
+   * Puts food into its stomach, as much as fits: returns the share of it
+   * eaten (0..1), taking that share of both the energy and the nutrients.
+   */
+  private eat(c: Critter, fat: number, n: number): number {
+    const total = Math.max(0, fat) + Math.max(0, n);
+    if (total <= 0) return 1;
+    const f = Math.min(1, this.room(c) / total);
+    c.gutFat += Math.max(0, fat) * f;
+    c.gutN += Math.max(0, n) * f;
+    return f;
+  }
+
+  /**
+   * Digestion: each tick it digests its genetic share of its stomach's
+   * capacity, moving that food's energy into fat and its nutrients into its
+   * body. Digesting uses up DigestCost × speed of the food's worth of fat,
+   * so the cost per tick goes up with the square of the speed.
+   */
+  private digest(c: Critter): void {
+    const total = c.gutFat + c.gutN;
+    if (total <= 0) return;
+    const rate = c.traits[T_DIGEST];
+    const amount = Math.min(total, rate * this.stomach(c));
+    const f = amount / total;
+    const df = c.gutFat * f;
+    const dn = c.gutN * f;
+    c.gutFat -= df;
+    c.gutN -= dn;
+    c.fat += df - this.sp("DigestCost") * rate * amount;
+    c.nutrients += dn;
+    this.storeSurplus(c);
+  }
+
+  /**
+   * Gestation: the carrier passes nutrients to its young at GestationRate
+   * per unit of its body mass per tick (with fat in proportion), so the
+   * more nutrients the young need, the longer it takes. It only gives what
+   * it can spare; when it's all across, the young are born together.
+   */
+  private gestate(c: Critter): void {
+    const w = c.womb!;
+    let dn = Math.min(this.sp("GestationRate") * bodyMass(c), w.needN, Math.max(0, c.nutrients - 2 * this.sp("MinNutrients")));
+    if (w.needN <= 1e-9) dn = 0;
+    const df = Math.min(w.needN > 1e-9 ? (w.needFat * dn) / w.needN : w.needFat, Math.max(0, c.fat));
+    c.nutrients -= dn;
+    c.fat -= df;
+    w.needN -= dn;
+    w.needFat -= df;
+    w.gotN += dn;
+    w.gotFat += df;
+    if (w.needN > 1e-9 || w.needFat > 1e-9) return;
+    // Birth: the young share what was passed to them.
+    const k = w.young.length;
+    for (const y of w.young) {
+      const child = this.add(c.x, c.y, y.genes, w.parents, w.gotN / k, 0, y.hue);
+      child.grown = Math.min(1, this.sp("BirthSize")); // babies start small and grow
+      child.fat = Math.min(w.gotFat / k, this.fatCap(child)); // any beyond what it can carry is lost
+    }
+    c.womb = null;
+    c.cooldown = this.sp("BreedCooldown");
+    this.births += k;
+    this.sounds.births++;
+    this.sounds.x = c.x;
   }
 
   /** Fat beyond what it can carry is lost. */
@@ -1356,33 +1484,40 @@ export class CritterSystem {
     if (c.fat > c.traits[T_MAX_FAT]) c.fat = c.traits[T_MAX_FAT];
   }
 
-  /** Parents make as many children (up to their preferred litter) as they can afford. */
+  /**
+   * Mating: they conceive as many young (up to their preferred litter) as
+   * they can afford, each parent giving its genetic share of fat and
+   * nutrients per child. One of them, at random, carries the young: the
+   * partner hands its share over now, and the carrier passes its own across
+   * during gestation (see gestate).
+   */
   private breed(a: Critter, b: Critter): void {
     const want = Math.max(1, Math.round((a.traits[T_LITTER] + b.traits[T_LITTER]) / 2));
-    let made = 0;
+    const [carrier, other] = this.host.rng() < 0.5 ? [a, b] : [b, a];
+    const shareC = carrier.traits[T_PARENT_SHARE];
+    const shareO = other.traits[T_PARENT_SHARE];
+    const w: Womb = { young: [], parents: [a.id, b.id], needN: 0, needFat: 0, gotN: 0, gotFat: 0 };
+    let cf = carrier.fat;
+    let cn = carrier.nutrients;
     for (let k = 0; k < want; k++) {
-      const shareA = a.traits[T_PARENT_SHARE];
-      const shareB = b.traits[T_PARENT_SHARE];
-      const fA = a.fat * shareA;
-      const fB = b.fat * shareB;
-      const nA = a.nutrients * shareA;
-      const nB = b.nutrients * shareB;
-      if (fA + fB < this.sp("MinChildFat") || nA + nB < this.sp("MinChildNutrients")) break;
-      a.fat -= fA;
-      b.fat -= fB;
-      a.nutrients -= nA;
-      b.nutrients -= nB;
-      const child = this.add((a.x + b.x) / 2, (a.y + b.y) / 2, this.childGenes(a, b), [a.id, b.id], nA + nB, 0, this.childHue(a, b));
-      child.grown = Math.min(1, this.sp("BirthSize")); // babies start small and grow
-      child.fat = Math.min(fA + fB, this.fatCap(child)); // any beyond what it can carry is lost
-      made++;
+      const fC = cf * shareC;
+      const nC = cn * shareC;
+      const fO = other.fat * shareO;
+      const nO = other.nutrients * shareO;
+      if (fC + fO < this.sp("MinChildFat") || nC + nO < this.sp("MinChildNutrients")) break;
+      cf -= fC;
+      cn -= nC;
+      w.needFat += fC;
+      w.needN += nC;
+      other.fat -= fO;
+      other.nutrients -= nO;
+      w.gotFat += fO;
+      w.gotN += nO;
+      w.young.push({ genes: this.childGenes(a, b), hue: this.childHue(a, b) });
     }
-    if (made > 0) {
-      this.births += made;
-      this.sounds.births++;
-      this.sounds.x = a.x;
-      a.cooldown = b.cooldown = this.sp("BreedCooldown");
-    }
+    if (!w.young.length) return;
+    carrier.womb = w;
+    other.cooldown = this.sp("BreedCooldown");
   }
 
   /**
@@ -1428,10 +1563,11 @@ export class CritterSystem {
     this.deaths++;
     this.sounds.deaths++;
     this.sounds.x = c.x;
-    this.corpses.push({
-      x: c.x, y: c.y, nutrients: c.nutrients, startNutrients: c.nutrients, heading: c.heading, mass: bodyMass(c),
-    });
-    c.nutrients = 0;
+    // The body keeps all its nutrients: its own, its stomach's and any unborn young's.
+    const n = c.nutrients + c.gutN + (c.womb ? c.womb.gotN : 0);
+    this.corpses.push({ x: c.x, y: c.y, nutrients: n, startNutrients: n, heading: c.heading, mass: bodyMass(c) });
+    c.nutrients = c.gutN = c.gutFat = 0;
+    c.womb = null;
   }
 
   private rot(): void {
@@ -1477,7 +1613,7 @@ export class CritterSystem {
   /** Nutrients held in living critters and in their bodies. */
   nutrientTotal(): number {
     let n = 0;
-    for (const c of this.critters) n += c.nutrients;
+    for (const c of this.critters) n += c.nutrients + c.gutN + (c.womb ? c.womb.gotN : 0);
     for (const k of this.corpses) n += k.nutrients;
     return n;
   }

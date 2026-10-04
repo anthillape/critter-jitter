@@ -913,6 +913,7 @@ function critterCard(
   const rows: Array<[string, string]> = [
     [title, n.alive.toLocaleString()],
     ["Births / deaths (last 20 frames)", `${n.births} / ${n.deaths}`],
+    ["Pregnant", sys.critters.filter((c) => c.alive && c.womb).length.toLocaleString()],
     ["Deaths: starved / old age", `${n.starved} / ${n.oldAge}`],
   ];
   if (eatenLabel) rows.push([eatenLabel, String(n.eaten)]);
@@ -1005,7 +1006,7 @@ function showInspect(): void {
     if (!c) continue;
     const tr = sys.species.traits.map((d, j) => `${d.label.toLowerCase()} ${j === T_LITTER ? c.traits[j].toFixed(1) : fmtNum(c.traits[j])}`).join(", ");
     line2 += (line2 ? "\n" : "") +
-      `${sys.species.name} #${c.id} (${c.mode === Mode.Stranded ? sys.species.stranded : MODE_NAMES[c.mode]}${c.boostLeft > 0 ? ", boosting" : ""}${c.pounceLeft > 0 ? ", pouncing" : ""}${sys === world.rocs ? (c.flying ? ", flying" : ", on the ground") : ""}): age ${c.age} · size ${bodyMass(c).toFixed(2)}${c.grown < 1 ? ` (${Math.round(c.grown * 100)}% grown)` : ""} · fat ${c.fat.toFixed(2)} · nutrients ${c.nutrients.toFixed(3)}` +
+      `${sys.species.name} #${c.id} (${c.mode === Mode.Stranded ? sys.species.stranded : MODE_NAMES[c.mode]}${c.boostLeft > 0 ? ", boosting" : ""}${c.pounceLeft > 0 ? ", pouncing" : ""}${sys === world.rocs ? (c.flying ? ", flying" : ", on the ground") : ""}): age ${c.age} · size ${bodyMass(c).toFixed(2)}${c.grown < 1 ? ` (${Math.round(c.grown * 100)}% grown)` : ""} · fat ${c.fat.toFixed(2)}${c.gutFat + c.gutN > 0.005 ? ` · digesting ${(c.gutFat + c.gutN).toFixed(2)}` : ""}${c.womb ? ` · pregnant with ${c.womb.young.length} (${Math.round((100 * c.womb.gotN) / (c.womb.gotN + c.womb.needN))}% along)` : ""} · nutrients ${c.nutrients.toFixed(3)}` +
       (c.parents[0] ? ` · parents #${c.parents[0]} & #${c.parents[1]}` : " · founder") + `\n  traits: ${tr}`;
     break;
   }

@@ -99,12 +99,32 @@ founders.
     looks, less often, for another ready fish within 14 squares.
   - Fish can't move on land and slowly starve there. They pass through
     each other freely, and can sit on a square with grass.
+- **Eating and digesting.** Food goes into the stomach first, not straight
+  into fat. The stomach holds a limited amount of food (energy plus
+  nutrients), *Stomach size* × body mass, so an animal only eats what fits: a
+  predator leaves the rest of the carcass to rot, a fish nibbles algae down
+  rather than eating it whole, and a sheep stops grazing when full. Nobody
+  looks for food while nearly full. Each tick it digests its genetic
+  *Digestion speed* share of its stomach's capacity into fat and body
+  nutrients. Digesting costs fat: the share of the food used up is *Cost of
+  digesting* × digestion speed (10% at the defaults), so digesting twice as
+  fast loses twice the share, and four times as much per tick.
+- **Appetite.** An animal hunts or grazes when its fat is below its hunger
+  threshold, or, once it's free to breed, below the fat it needs to breed;
+  while pregnant it also eats for its young.
 - **Breeding.** Both fish must be ready. Any two can mate (no sexes),
   except a fish and its own parent. They make up to their preferred litter
   size (the parents' genetic average), as long as they can afford it. Each
   parent gives each child its genetic share of its nutrients and fat.
-  Children appear straight away between the parents, and the parents then
-  rest for a while before mating again.
+- **Gestation.** One parent, at random, carries the young. Its partner hands
+  over its share at mating; the carrier passes its own share of nutrients
+  across bit by bit (*Gestation speed* per unit of its body mass per tick,
+  with fat in proportion), so young that need more nutrients take longer.
+  The whole litter is born together when it's done. A pregnant animal
+  can't mate again, and both parents rest for a while afterwards. If the
+  carrier dies first, the unborn young's nutrients go into its body. The
+  species card counts pregnant animals and the inspector shows how far
+  along a pregnancy is.
 - **Death.** Fish die of old age (genetic lifespan), starvation, or
   running out of body nutrients. Any remaining fat is lost, and the body
   rots, returning its nutrients to the square gradually. Dead bodies stay

@@ -120,7 +120,7 @@ export const PARAMS = {
   fishMateRadius: 14, // squares searched for a mate
   fishFoodInterval: 10, // ticks between food searches
   fishMateInterval: 40, // ticks between mate searches (less often than food)
-  fishBreedCooldown: 1500, // ticks after mating before a fish can mate again
+  fishBreedCooldown: 600, // ticks after mating before a fish can mate again
   fishMinChildFat: 0.3, // parents won't make a child with less fat than this
   fishMinChildNutrients: 0.04, // ...or fewer nutrients than this
   fishRotRate: 0.004, // share of a corpse's nutrients returned to its square each tick
@@ -135,6 +135,9 @@ export const PARAMS = {
   fishBirthSize: 1, // newborn size as a share of adult body size (1 = born full size)
   fishGrowthRate: 0.001, // share of adult size grown per tick while it has spare energy
   fishGrowthCost: 1, // energy per unit of body mass grown
+  fishStomach: 2, // stomach capacity (energy plus nutrients) per unit of body mass
+  fishDigestCost: 25, // share of food used up digesting it = this x digestion speed (so the cost per tick goes with speed squared)
+  fishGestationRate: 0.001, // nutrients passed to unborn young per tick per unit of the carrier's mass
 
   // --- Sharks (eat fish) ---
   sharkMoveCost: 0.04, // sharks are efficient swimmers
@@ -174,6 +177,9 @@ export const PARAMS = {
   sharkBirthSize: 0.15, // newborn sharks are this share of their adult size...
   sharkGrowthRate: 0.0004, // ...and grow by this share per tick while they have spare energy
   sharkGrowthCost: 1, // energy per unit of body mass grown
+  sharkStomach: 2,
+  sharkDigestCost: 25,
+  sharkGestationRate: 0.00004,
 
   // --- Sheep (graze grass on land) ---
   sheepMoveCost: 1,
@@ -184,7 +190,7 @@ export const PARAMS = {
   sheepMateRadius: 30,
   sheepFoodInterval: 90, // ticks between looks for the grassiest direction while hungry
   sheepMateInterval: 60,
-  sheepBreedCooldown: 1500,
+  sheepBreedCooldown: 800,
   sheepMinChildFat: 0.6,
   sheepMinChildNutrients: 0.08,
   sheepRotRate: 0.003,
@@ -199,6 +205,9 @@ export const PARAMS = {
   sheepBirthSize: 0.4,
   sheepGrowthRate: 0.0005,
   sheepGrowthCost: 1,
+  sheepStomach: 3,
+  sheepDigestCost: 25,
+  sheepGestationRate: 0.001,
   sheepBite: 0.008, // nutrients (with a matching share of energy) taken from grass per tick of grazing
   sheepGrazeFloor: 0.08, // grass grazed below this share of full size is eaten up entirely
   sheepSwimEffort: 0.0005, // energy per tick per unit of mass spent swimming (for the worst swimmer; the best pay a quarter)
@@ -232,6 +241,9 @@ export const PARAMS = {
   catBirthSize: 0.3,
   catGrowthRate: 0.0004,
   catGrowthCost: 1,
+  catStomach: 2.5,
+  catDigestCost: 25,
+  catGestationRate: 0.0001,
   catPounceSpeed: 0.25, // squares per tick while pouncing
   catPounceRest: 180, // ticks after a pounce before it can pounce again
   catSwimEffort: 0.0005,
@@ -269,6 +281,9 @@ export const PARAMS = {
   rocBirthSize: 0.3,
   rocGrowthRate: 0.0003,
   rocGrowthCost: 1,
+  rocStomach: 2,
+  rocDigestCost: 25,
+  rocGestationRate: 0.00005,
   rocMeanderRate: 0.03,
   rocSenseRange: 200, // it can see a long way from the air, over anything
   rocSenseInterval: 600,
