@@ -653,6 +653,21 @@ export const SETTINGS: Setting[] = [
   ...senseSettings(ROC, "Rocs", "fish or sheep", "anything (it flies)", "nothing"),
   ...critterTraitSettings(ROC, "Roc traits (defaults)"),
 
+  // --- The gardener ---
+  param("gardenerMaxFat", { group: "Gardener", label: "Fat store max", tip: "Most fat the gardener can carry (a person stores a lot).", min: 5, max: 500, log: true }),
+  param("gardenerUpkeep", { group: "Gardener", label: "Living cost", tip: "Fat the gardener burns each tick just living.", min: 0.0001, max: 0.05, log: true }),
+  param("gardenerEfficiency", { group: "Gardener", label: "Food efficiency", tip: "Share of the energy in what they eat that becomes fat.", min: 0.05, max: 1, fmt: pct }),
+  param("gardenerMass", { group: "Gardener", label: "Body mass", tip: "Body mass, for the cost of moving (½·m·v²); doubled while carrying the boat over land.", min: 1, max: 50, log: true }),
+  param("gardenerMoveCost", { group: "Gardener", label: "Moving cost", tip: "Multiplies the cost of moving (½·m·v² per tick). People walk efficiently.", min: 0.005, max: 2, log: true }),
+  param("gardenerWalkSpeed", { group: "Gardener", label: "Walking speed", tip: "Squares per tick on foot.", min: 0.01, max: 0.5, log: true }),
+  param("gardenerRowSpeed", { group: "Gardener", label: "Rowing speed", tip: "Squares per tick rowing the boat over water.", min: 0.01, max: 0.5, log: true }),
+  param("gardenerCarrySpeed", { group: "Gardener", label: "Boat carrying speed", tip: "Squares per tick carrying the boat over land.", min: 0.005, max: 0.3, log: true }),
+  param("gardenerSwimSpeed", { group: "Gardener", label: "Swimming speed", tip: "Squares per tick swimming, if they're caught in water without the boat (by a flood).", min: 0.002, max: 0.2, log: true }),
+  param("gardenerSpearRange", { group: "Gardener", label: "Spear range", tip: "How far they can throw a spear, in squares.", min: 1, max: 60 }),
+  param("gardenerSpearHit", { group: "Gardener", label: "Spear accuracy", tip: "Chance a throw hits.", min: 0.01, max: 1, fmt: pct }),
+  param("gardenerDecideInterval", { group: "Gardener", label: "Rethink interval", tip: "Ticks between rethinking what to do while just wandering (they always decide again when a task is done).", min: 30, max: 3000, int: true, log: true }),
+  param("gardenerGiveUp", { group: "Gardener", label: "Patience", tip: "Ticks before they give up on a task that isn't working out (a creature they can't catch, a trip that takes too long).", min: 300, max: 20000, int: true, log: true }),
+
   // --- Both plants ---
   param("growEnergyPerN", {
     group: "Grass & algae", label: "Energy cost of growing",
@@ -815,6 +830,16 @@ export const SETTINGS: Setting[] = [
     group: "Life", label: "Starting roc nutrients",
     tip: "Nutrients each starting roc gathers from the ground to build its body.",
     min: 0.05, max: 3, log: true, newWorld: true,
+  }),
+  param("initialGardener", {
+    group: "Life", label: "Gardener",
+    tip: "1 = a gardener (a person who tries to keep every species alive) starts on a random land square with their boat; 0 = no gardener.",
+    min: 0, max: 1, int: true, newWorld: true,
+  }),
+  param("gardenerStartFat", {
+    group: "Life", label: "Starting gardener fat",
+    tip: "Fat (their energy) the gardener begins with.",
+    min: 1, max: 500, log: true, newWorld: true,
   }),
   param("initialWaterPrefSpread", {
     group: "Life", label: "Spread of starting water preferences",

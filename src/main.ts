@@ -7,6 +7,7 @@ import { bodyMass, sheepSide, CritterSystem, Mode, MODE_NAMES, T_LITTER, type Co
 import type { CritterCounts } from "./sim/world";
 import { Sound, SOUNDS, type SoundName } from "./sound";
 import { setupCards } from "./cards";
+import type { Chooser } from "./sim/gardener";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -37,6 +38,10 @@ const rocChart = $<HTMLCanvasElement>("rocChart");
 const rocChartCtx = rocChart.getContext("2d")!;
 const statsRocs = $<HTMLTableElement>("statsRocs");
 const rocTraits = $<HTMLTableElement>("rocTraits");
+const statsGardener = $<HTMLTableElement>("statsGardener");
+const gardenerLog = $<HTMLOListElement>("gardenerLog");
+const brainSel = $<HTMLSelectElement>("brain");
+const brainStatus = $<HTMLParagraphElement>("brainStatus");
 const playBtn = $<HTMLButtonElement>("play");
 const speedSel = $<HTMLSelectElement>("speed");
 const viewSel = $<HTMLSelectElement>("view");
@@ -291,10 +296,83 @@ function newWorld(seed: number): void {
   history = [];
   selection = null;
   applyWeatherSettings();
+  attachBrain();
   draw();
   refreshStats();
   refreshStartSummary();
 }
+
+// ---------------------------------------------------------------------------
+// The gardener's optional language-model brain (see brain.worker.ts). It's
+// only loaded when chosen; until it's ready, and whenever it can't answer,
+// the built-in rules decide.
+
+let brainWorker: Worker | null = null;
+let brainReady = false;
+let brainAsks = 0;
+const brainWaiting = new Map<number, (text: string | null) => void>();
+
+function startBrain(): void {
+  if (brainWorker) return;
+  brainStatus.textContent = "Starting the model…";
+  brainWorker = new Worker(new URL("./brain.worker.ts", import.meta.url), { type: "module" });
+  brainWorker.onmessage = (e: MessageEvent) => {
+    const m = e.data as { type: string; text?: string; device?: string; id?: number; message?: string };
+    if (m.type === "progress") brainStatus.textContent = m.text!;
+    else if (m.type === "ready") {
+      brainReady = true;
+      brainStatus.textContent = `Model ready (running on the ${m.device}). It makes the gardener's next decisions.`;
+      attachBrain();
+    } else if (m.type === "answer") {
+      brainWaiting.get(m.id!)?.(m.text!);
+      brainWaiting.delete(m.id!);
+    } else if (m.type === "error") {
+      if (m.id !== undefined) {
+        brainWaiting.get(m.id)?.(null);
+        brainWaiting.delete(m.id);
+      }
+      if (!brainReady) brainStatus.textContent = `Couldn't load the model (${m.message}). The built-in rules decide instead.`;
+    }
+  };
+  brainWorker.onerror = (e) => {
+    brainStatus.textContent = `The model stopped working (${e.message || "unknown error"}). The built-in rules decide instead.`;
+    brainWorker?.terminate();
+    brainWorker = null;
+    brainReady = false;
+    for (const f of brainWaiting.values()) f(null);
+    brainWaiting.clear();
+    attachBrain();
+  };
+  brainWorker.postMessage({ type: "load" });
+}
+
+/** Asks the model to pick an option; null if it doesn't answer with a number within 30 seconds. */
+const modelChooser: Chooser = (p) =>
+  new Promise((resolve) => {
+    if (!brainWorker || !brainReady) return resolve(null);
+    const id = ++brainAsks;
+    const timer = window.setTimeout(() => {
+      brainWaiting.delete(id);
+      resolve(null);
+    }, 30000);
+    brainWaiting.set(id, (text) => {
+      clearTimeout(timer);
+      const m = text?.match(/\d+/);
+      resolve(m ? Number(m[0]) : null);
+    });
+    brainWorker.postMessage({ type: "ask", id, system: p.system, user: p.user });
+  });
+
+/** Hands the gardener the model as their brain (once it's ready and chosen), else the rules. */
+function attachBrain(): void {
+  if (world.gardener) world.gardener.chooser = brainSel.value === "model" && brainReady ? modelChooser : null;
+}
+
+brainSel.addEventListener("change", () => {
+  if (brainSel.value === "model") startBrain();
+  else brainStatus.textContent = "";
+  attachBrain();
+});
 
 const startSummary = $<HTMLTableElement>("startSummary");
 const startBtn = $<HTMLButtonElement>("startBtn");
@@ -368,6 +446,7 @@ function draw(): void {
   drawCats();
   drawFish();
   drawSharks();
+  drawGardener();
   drawRocs(); // on top: they fly over everything
   if (hover >= 0) {
     ctx.strokeStyle = "rgba(255,255,255,0.8)";
@@ -482,6 +561,110 @@ function drawCats(): void {
   for (const c of sys.corpses) drawCatShape(c.x, c.y, c.heading, c.mass, corpseColour(c), c.x * 7.3 + c.y * 3.1, null);
   for (const s of sys.critters) {
     if (s.alive) drawCatShape(s.x, s.y, s.heading, bodyMass(s), s.colour, s.id, world.tick);
+  }
+}
+
+/** A wooden rowing boat seen from above, centred on (x, y) in pixels. */
+function drawBoat(x: number, y: number, heading: number, alpha: number): void {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(x, y);
+  ctx.rotate(heading);
+  ctx.fillStyle = "#8a5a2b";
+  ctx.strokeStyle = "#4a2f14";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(8, 0);
+  ctx.quadraticCurveTo(3, -3.4, -6, -2.6);
+  ctx.lineTo(-6, 2.6);
+  ctx.quadraticCurveTo(3, 3.4, 8, 0);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#b07a42";
+  ctx.fillRect(-1, -2.4, 1.6, 4.8); // the seat
+  ctx.restore();
+}
+
+/**
+ * The gardener: a person in a red cloak seen from above, with their boat
+ * (under them while rowing, over their head while carrying it, or left on
+ * the shore), anything they carry, a spear in flight, and a faint dashed
+ * line to where they're heading.
+ */
+function drawGardener(): void {
+  const g = world.gardener;
+  if (!g) return;
+  const px = g.x * CELL_PX;
+  const py = g.y * CELL_PX;
+  if (!g.hasBoat) drawBoat(g.boatX * CELL_PX, g.boatY * CELL_PX, g.boatHeading, 1);
+  if (!g.alive) {
+    ctx.fillStyle = "rgba(150,150,150,0.8)";
+    ctx.beginPath();
+    ctx.ellipse(px, py, 4, 2.5, g.heading, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  }
+  const aim = g.aim();
+  if (aim) {
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,255,255,0.35)";
+    ctx.setLineDash([3, 4]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    ctx.lineTo(aim.x * CELL_PX, aim.y * CELL_PX);
+    ctx.stroke();
+    ctx.restore();
+  }
+  if (g.carcass) {
+    ctx.fillStyle = "rgba(170,170,170,0.9)";
+    ctx.beginPath();
+    ctx.arc(g.carcass.x * CELL_PX, g.carcass.y * CELL_PX, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const rowing = g.hasBoat && g.mode() === "rowing";
+  if (rowing) drawBoat(px, py, g.heading, 1);
+  // Body: shoulders and a head.
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(g.heading);
+  ctx.fillStyle = "#e0483a";
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 3, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#f1c9a0";
+  ctx.beginPath();
+  ctx.arc(0.8, 0, 2.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  if (g.hasBoat && !rowing) drawBoat(px, py, g.heading, 0.75); // carried overhead
+  if (g.carried) {
+    ctx.fillStyle = g.carried.c.colour;
+    ctx.strokeStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(px + 3, py - 3, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  if (g.seeds.length) {
+    ctx.fillStyle = "#efe6b8";
+    for (let k = 0; k < Math.min(5, g.seeds.length); k++) ctx.fillRect(px - 4 + k * 1.5, py + 3, 1, 1);
+  }
+  if (g.spear) {
+    const s = g.spear;
+    const f = 1 - s.t / 12; // how far it has flown
+    const sx = (s.x0 + (s.x1 - s.x0) * f) * CELL_PX;
+    const sy = (s.y0 + (s.y1 - s.y0) * f) * CELL_PX;
+    const a = Math.atan2(s.y1 - s.y0, s.x1 - s.x0);
+    ctx.strokeStyle = "#f4ead0";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(sx - Math.cos(a) * 6, sy - Math.sin(a) * 6);
+    ctx.lineTo(sx, sy);
+    ctx.stroke();
   }
 }
 
@@ -859,6 +1042,7 @@ function refreshStats(): void {
   critterCard(world.sheep, s.sheep, statsSheep, sheepTraits, "Sheep", "Eaten by cats, or by sharks while swimming");
   critterCard(world.cats, s.cats, statsCats, catTraits, "Cats", null);
   critterCard(world.rocs, s.rocs, statsRocs, rocTraits, "Rocs", "Eaten by cats (while landed)");
+  gardenerCard();
   drawLineChart(fishChartCtx, fishChart, [["fish", "#e07a5f"]]);
   drawLineChart(sharkChartCtx, sharkChart, [["sharks", "#aabed7"]]);
   drawLineChart(sheepChartCtx, sheepChart, [["sheep", "#f0e6d8"]]);
@@ -963,6 +1147,7 @@ function critterCard(
     ["Deaths: starved / old age", `${n.starved} / ${n.oldAge}`],
   ];
   if (eatenLabel) rows.push([eatenLabel, String(n.eaten)]);
+  if (world.gardener) rows.push(["Culled or taken by the gardener", String(n.culled)]);
   rows.push(["Bodies rotting", n.corpses.toLocaleString()]);
   statsEl.innerHTML = rows.map(([k, v]) => `<tr><td class="muted">${k}</td><td>${v}</td></tr>`).join("");
   const defs = sys.species.traits;
@@ -970,6 +1155,36 @@ function critterCard(
   traitsEl.innerHTML = defs.map((d, t) =>
     `<tr><td class="muted" title="${d.tip}">${d.label}</td><td>${Number.isNaN(ts[t].mean) ? "–" : `${fmtNum(ts[t].mean)} <span class="muted">±${fmtNum(ts[t].sd)}</span>`}</td></tr>`,
   ).join("");
+}
+
+let gardenerLogShown = "";
+function gardenerCard(): void {
+  const g = world.gardener;
+  const rows: Array<[string, string]> = !g
+    ? [["Gardener", "none (see Initial gardener on the Settings tab)"]]
+    : [
+      ["Gardener", g.alive ? `alive, ${g.mode()}` : "dead"],
+      ["Fat", `${Math.max(0, g.fat).toFixed(1)} of ${PARAMS.gardenerMaxFat}`],
+      ["Doing", g.alive ? g.doing || "–" : "–"],
+      ["Right now", g.status],
+      ["Boat", g.hasBoat ? "with them" : `left at (${g.boatX | 0}, ${g.boatY | 0})`],
+    ];
+  statsGardener.innerHTML = rows.map(([k, v]) => `<tr><td class="muted">${k}</td><td>${v}</td></tr>`).join("");
+  const log = g ? g.log.slice(-12).reverse() : [];
+  const key = log.map((l) => l.tick + l.text).join("|");
+  if (key === gardenerLogShown) return;
+  gardenerLogShown = key;
+  gardenerLog.replaceChildren(...log.map((l) => {
+    const li = document.createElement("li");
+    li.textContent = `${formatGameTime(l.tick)}: ${l.text}`;
+    if (l.by) {
+      const by = document.createElement("span");
+      by.className = "by";
+      by.textContent = ` (decided by ${l.by})`;
+      li.append(by);
+    }
+    return li;
+  }));
 }
 
 function critterRows(sys: CritterSystem, label: string, x0: number, y0: number, x1: number, y1: number): Array<[string, string]> {
@@ -1209,6 +1424,10 @@ function showInspect(): void {
       ? `germinates in ${world.age[i]} ticks`
       : `age ${world.age[i]} · size ${((world.floraN[i] / maxN) * 100).toFixed(0)}% · energy ${world.floraE[i].toFixed(2)}`;
     line2 += ` · genes ` + GENE_NAMES.map((n, j) => `${n} ${g[j].toPrecision(3)}`).join(", ");
+  }
+  const g = world.gardener;
+  if (g && Math.hypot(g.x - x - 0.5, g.y - y - 0.5) < 4) {
+    line2 += (line2 ? "\n" : "") + `gardener (${g.alive ? g.mode() : "dead"}): ${g.status} · fat ${Math.max(0, g.fat).toFixed(1)} · nutrients ${g.nutrients.toFixed(3)}` + (g.doing && g.alive ? `\n  doing: ${g.doing}` : "");
   }
   // The nearest critter under the cursor (sharks first, they're bigger).
   for (const sys of [world.rocs, world.sharks, world.cats, world.sheep, world.fish]) {

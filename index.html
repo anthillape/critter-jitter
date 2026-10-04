@@ -70,6 +70,21 @@
             <table id="rocTraits"></table>
           </section>
           <section class="card">
+            <h2>Gardener</h2>
+            <table id="statsGardener"></table>
+            <div class="controls">
+              <label title="Who makes the gardener's decisions. Either way the game works out the same short list of options; the built-in rules score them, or the language model reads them as text and picks one.">Brain
+                <select id="brain">
+                  <option value="rules">Built-in rules</option>
+                  <option value="model">Tiny language model (SmolLM2-135M, ~100 MB download)</option>
+                </select>
+              </label>
+            </div>
+            <p class="hint" id="brainStatus"></p>
+            <h2>Recent decisions</h2>
+            <ol id="gardenerLog" class="gardener-log"></ol>
+          </section>
+          <section class="card">
             <h2>World</h2>
             <table id="statsWorld"></table>
           </section>
@@ -212,7 +227,9 @@
             <h2>Info cards</h2>
             <p class="hint">The cards under the map scroll on their own. Click a card's title to collapse or expand it; drag the title to move the card, and it snaps into place when you let go. The layout is remembered.</p>
             <h2>Map</h2>
-            <p class="hint">Brown ground is lighter on higher ground and darker when wet. Green is grass, pale specks are seeds, blue is water (deeper is more opaque), shallow running water shows as thin bright blue, a green tint in water is algae (faint pale-green specks drifting in the water are its spores), and white patches are clouds, which turn grey while raining. Wiggling coloured dashes are fish and the larger shark shapes are sharks (colour is genetic, so families share colours). Pastel rounded squares with black heads on land are sheep, and the bigger, longer dark shapes with curly tails are cats. Big tawny birds are rocs: wings spread with a shadow beneath while flying, folded when landed. Dead animals turn grey and fade away as they rot.</p>
+            <p class="hint">Brown ground is lighter on higher ground and darker when wet. Green is grass, pale specks are seeds, blue is water (deeper is more opaque), shallow running water shows as thin bright blue, a green tint in water is algae (faint pale-green specks drifting in the water are its spores), and white patches are clouds, which turn grey while raining. Wiggling coloured dashes are fish and the larger shark shapes are sharks (colour is genetic, so families share colours). Pastel rounded squares with black heads on land are sheep, and the bigger, longer dark shapes with curly tails are cats. Big tawny birds are rocs: wings spread with a shadow beneath while flying, folded when landed. Dead animals turn grey and fade away as they rot. The gardener is the small figure in a red cloak; their wooden boat is drawn under them while they row, over their head while they carry it, and on the shore where they leave it. A faint dashed line shows where they're heading, and a thin line flies out when they throw a spear.</p>
+            <h2>The gardener</h2>
+            <p class="hint">A person who roams the world trying to keep every species alive. They can see the whole map and every population. Whenever they're free, the game lists a handful of things they could do (eat, cull a predator of a scarce species or one that has outgrown its food, carry a lonely or endangered animal somewhere better, carry seeds to bare damp ground, wander) and they pick one: by built-in rules that score each option, or, if you choose it on the Gardener card, by a tiny open language model (SmolLM2-135M-Instruct) running in your browser, which reads the situation and the options as text and answers with a number. If the model can't answer, the rules decide. They walk fast, row a boat on water, and carry the boat over land (slowly) when a route needs it, planning the fastest way. They eat anything but spores, store lots of fat, and starve if it runs out.</p>
           </section>
         </div>
       </aside>

@@ -9,12 +9,20 @@ import { Wind } from "./wind";
 import { CAT, CritterSystem, FISH, ROC, SHARK, SHEEP, type CritterHost } from "./critters";
 import { mulberry32, type Rng } from "./rng";
 import { generateTerrain, type Terrain } from "./terrain";
+import { Gardener } from "./gardener";
 
 /** What occupies a square in the flora layer. Only one thing per square. */
 export const EMPTY = 0;
 export const SEED = 1;
 export const GRASS = 2;
 export const ALGAE = 3;
+
+/** A seed the gardener carries: its genes, nutrients and energy. */
+export interface SeedPack {
+  genes: Float32Array;
+  n: number;
+  e: number;
+}
 
 
 export interface Stats {
@@ -65,6 +73,8 @@ export interface CritterCounts {
   starved: number;
   oldAge: number;
   eaten: number;
+  /** Killed or taken by the gardener. */
+  culled: number;
 }
 
 function counts(c: CritterSystem): CritterCounts {
@@ -76,6 +86,7 @@ function counts(c: CritterSystem): CritterCounts {
     starved: c.starved,
     oldAge: c.oldAge,
     eaten: c.eaten,
+    culled: c.culled,
   };
 }
 
@@ -90,6 +101,8 @@ export class World {
   readonly rocs: CritterSystem;
   /** Algae spores drifting in the water (how algae breed). */
   readonly spores: SporeSystem;
+  /** The person looking after the world (null if there isn't one). */
+  gardener: Gardener | null = null;
   readonly p: Params;
   readonly rng: Rng;
   tick = 0;
@@ -200,6 +213,69 @@ export class World {
     for (let tries = 0; placed < this.p.initialRocs && tries < 1e6; tries++) {
       if (this.rocs.spawnRandom(rng() * GRID_W, rng() * GRID_H)) placed++;
     }
+    if (this.p.initialGardener >= 1) this.spawnGardener();
+  }
+
+  /**
+   * Puts the gardener on a random land square. Their body's nutrients come
+   * from the ground around them, so nutrients stay conserved.
+   */
+  spawnGardener(): void {
+    for (let tries = 0; tries < 10000; tries++) {
+      const x = Math.floor(this.rng() * GRID_W);
+      const y = Math.floor(this.rng() * GRID_H);
+      if (this.water.isWater(y * GRID_W + x)) continue;
+      let want = 2;
+      for (let r = 0; r <= 12 && want > 0; r++) {
+        for (let sy = Math.max(0, y - r); sy <= Math.min(GRID_H - 1, y + r); sy++) {
+          for (let sx = Math.max(0, x - r); sx <= Math.min(GRID_W - 1, x + r); sx++) {
+            const i = sy * GRID_W + sx;
+            const take = Math.min(want, this.nutrients[i] * 0.5);
+            this.nutrients[i] -= take;
+            want -= take;
+          }
+        }
+      }
+      this.gardener = new Gardener(this, x + 0.5, y + 0.5, 2 - want);
+      return;
+    }
+  }
+
+  /**
+   * The gardener eats the plant or seed on square i: returns its nutrients
+   * and energy and clears the square (not counted as a death). Never spores.
+   */
+  eatFlora(i: number): { n: number; e: number } | null {
+    if (this.kind[i] === EMPTY) return null;
+    const got = { n: this.floraN[i], e: this.floraE[i] };
+    this.kind[i] = EMPTY;
+    this.floraN[i] = 0;
+    this.floraE[i] = 0;
+    this.age[i] = 0;
+    return got;
+  }
+
+  /** The gardener picks up the seed on square i (with its genes). */
+  takeSeed(i: number): SeedPack | null {
+    if (this.kind[i] !== SEED) return null;
+    const pack = { genes: this.genes.slice(i * GENE_COUNT, (i + 1) * GENE_COUNT), n: this.floraN[i], e: this.floraE[i] };
+    this.kind[i] = EMPTY;
+    this.floraN[i] = 0;
+    this.floraE[i] = 0;
+    this.age[i] = 0;
+    return pack;
+  }
+
+  /** The gardener sows a seed on square i (empty land only). */
+  plantSeed(i: number, pack: SeedPack): boolean {
+    if (this.water.isWater(i) || this.kind[i] !== EMPTY) return false;
+    this.kind[i] = SEED;
+    this.floraN[i] = pack.n;
+    this.floraE[i] = pack.e;
+    this.genes.set(pack.genes, i * GENE_COUNT);
+    this.age[i] = 1 + Math.floor(this.rng() * pack.genes[G_GERM]);
+    this.bornTick[i] = this.tick;
+    return true;
   }
 
   /**
@@ -282,6 +358,7 @@ export class World {
     this.sheep.step();
     this.cats.step();
     this.rocs.step();
+    this.gardener?.step();
     this.fish.removeDead(); // fish eaten by sharks and rocs this tick
     this.sheep.removeDead(); // sheep eaten by cats and rocs this tick
     this.rocs.removeDead(); // rocs eaten by cats this tick // fish eaten by sharks this tick
@@ -551,7 +628,7 @@ export class World {
     flora += this.spores.nutrientTotal(); // spores are algae on the move
     algaeN += this.spores.nutrientTotal();
     algaeE += this.spores.energyTotal();
-    const animals = sw.nutrientTotal() + sh.nutrientTotal() + this.sheep.nutrientTotal() + this.cats.nutrientTotal() + this.rocs.nutrientTotal();
+    const animals = sw.nutrientTotal() + sh.nutrientTotal() + this.sheep.nutrientTotal() + this.cats.nutrientTotal() + this.rocs.nutrientTotal() + (this.gardener ? this.gardener.nutrientTotal() : 0);
     const s: Stats = {
       tick: this.tick,
       seeds, grass, algae, spores: this.spores.spores.length,
@@ -585,7 +662,7 @@ export class World {
     this.starved = 0;
     this.oldAge = 0;
     this.habitatLost = 0;
-    for (const c of [sw, sh, this.sheep, this.cats, this.rocs]) c.births = c.deaths = c.starved = c.oldAge = c.eaten = 0;
+    for (const c of [sw, sh, this.sheep, this.cats, this.rocs]) c.births = c.deaths = c.starved = c.oldAge = c.eaten = c.culled = 0;
     return s;
   }
 

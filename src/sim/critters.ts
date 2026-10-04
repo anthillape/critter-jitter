@@ -433,6 +433,8 @@ export class CritterSystem {
   oldAge = 0;
   /** Killed and eaten by a predator. */
   eaten = 0;
+  /** Killed or taken by the gardener. */
+  culled = 0;
   /**
    * Events since the UI last read them (for sounds): matings that made
    * children, deaths (including being eaten), kills (predators), and the
@@ -565,6 +567,59 @@ export class CritterSystem {
       n[Math.floor(k.y) * GRID_W + Math.floor(k.x)] += k.nutrients;
       return false;
     });
+  }
+
+  /** The gardener's spear: it dies where it stands, leaving a body to rot. */
+  cull(c: Critter): void {
+    if (!c.alive) return;
+    this.culled++;
+    this.die(c);
+  }
+
+  /**
+   * The gardener kills it to eat: no body is left; returns all its energy
+   * (fat, undigested food, energy passed to unborn young) and nutrients.
+   */
+  take(c: Critter): { fat: number; nutrients: number } {
+    const fat = Math.max(0, c.fat) + c.gutFat + (c.womb ? c.womb.gotFat : 0);
+    const nutrients = c.nutrients + c.gutN + (c.womb ? c.womb.gotN : 0);
+    c.alive = false;
+    c.fat = c.gutFat = c.nutrients = c.gutN = 0;
+    c.womb = null;
+    this.culled++;
+    this.deaths++;
+    this.sounds.deaths++;
+    this.sounds.x = c.x;
+    this.removeDead();
+    return { fat, nutrients };
+  }
+
+  /**
+   * The gardener picks it up to carry it somewhere: it leaves the world
+   * (others stop chasing or courting it) until `release`d.
+   */
+  lift(c: Critter): void {
+    c.alive = false; // so hunters and mates let it go
+    this.critters = this.critters.filter((o) => o !== c);
+  }
+
+  /** Puts a lifted critter back into the world at (x, y). */
+  release(c: Critter, x: number, y: number): void {
+    c.alive = true;
+    c.x = x;
+    c.y = y;
+    c.speed = 0;
+    c.hasTarget = false;
+    c.mate = c.prey = null;
+    c.flying = false;
+    c.alt = 0;
+    c.landing = false;
+    this.critters.push(c);
+  }
+
+  /** Nutrients held by a critter (body, stomach, unborn young). */
+  static nutrientsIn(c: Critter): number {
+    return c.nutrients + c.gutN + (c.womb ? c.womb.gotN : 0);
   }
 
   /** Drops dead critters from the list (also those eaten by predators). */

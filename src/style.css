@@ -203,3 +203,8 @@ button.primary:hover { background: #46702a; }
 }
 .chart-tip .row { display: flex; align-items: center; gap: 6px; }
 .chart-tip .row b { margin-left: auto; padding-left: 10px; font-weight: normal; font-variant-numeric: tabular-nums; }
+.gardener-log { margin: 4px 0 0; padding-left: 20px; font-size: 12px; max-height: 180px; overflow-y: auto; }
+.gardener-log li { margin: 2px 0; }
+.gardener-log .by { color: var(--muted); }
+.card .controls label { min-width: 0; width: 100%; }
+#brain { display: block; width: 100%; margin-top: 4px; }

@@ -302,6 +302,22 @@ export const PARAMS = {
   rocMissRest: 120, // ticks after a missed dive before it picks a new target
   rocEdgeMargin: 20, // squares from the map edge at which a flying roc starts arcing back toward the middle
 
+  // --- Gardener (a person who tries to keep every species alive) ---
+  gardenerStartFat: 50,
+  gardenerMaxFat: 100, // a person can carry a lot of fat
+  gardenerUpkeep: 0.002, // fat burned per tick just living
+  gardenerEfficiency: 0.8, // share of the energy in food that becomes fat
+  gardenerMass: 10, // body mass, for the cost of moving (doubled while carrying the boat)
+  gardenerMoveCost: 0.05, // moving costs this x ½·m·v² per tick (people walk efficiently)
+  gardenerWalkSpeed: 0.12, // squares per tick on foot
+  gardenerRowSpeed: 0.08, // squares per tick rowing the boat
+  gardenerCarrySpeed: 0.03, // squares per tick carrying the boat over land
+  gardenerSwimSpeed: 0.02, // squares per tick swimming (caught in a flood without the boat)
+  gardenerSpearRange: 12, // how far they can throw a spear, in squares
+  gardenerSpearHit: 0.75, // chance a throw hits
+  gardenerDecideInterval: 300, // ticks between rethinking what to do while wandering
+  gardenerGiveUp: 3000, // ticks before they give up on a task that isn't working out
+
   // --- Genetics ---
   fullGrowth: 0.98, // fraction of max nutrients considered "fully grown"
   hueMutation: 6, // animals: a child's hue is its parents' midpoint, nudged by up to this many degrees
@@ -314,6 +330,7 @@ export const PARAMS = {
   initialSheep: 40,
   initialCats: 20,
   initialRocs: 10,
+  initialGardener: 1, // 1 = there's a gardener, 0 = none
   startingSurfaceWater: 1.3, // standing water at the start, as an average depth over the whole world
   initialSoilWetness: 0.4, // how full the soil starts (0..1); full under the starting lakes
   initialWaterPrefSpread: 0.85, // starting seeds' water preference is spread over this range around the default

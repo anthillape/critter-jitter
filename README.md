@@ -319,6 +319,59 @@ Nutrients stay conserved: starting fish and sharks gather theirs from
 the water and starting sheep, cats and rocs from the ground, and everything a critter eats, sheds or leaves behind is
 accounted for.
 
+## The gardener
+
+A person who roams the world trying to keep every species alive
+(`src/sim/gardener.ts`). They can see the whole map and every
+population. Whenever they're free, the game works out a handful of
+concrete options, each in plain words:
+
+- **eat**: graze grass and seeds (or algae from the boat), or spear a
+  plentiful animal and eat it. They eat anything but spores.
+- **protect** a scarce species by culling a predator near its biggest
+  group (sharks and rocs eat fish; cats and rocs eat sheep; cats eat
+  landed rocs), or by culling grazers when grass or algae is scarce.
+- **curb** a species that has outgrown its food.
+- **reunite** the last few of a species, carrying one to another so they
+  can breed.
+- **rescue** a scarce animal, carrying it to a stretch of its habitat
+  with food and no hunters.
+- **sow**: collect seeds and carry them to bare, damp ground.
+- **wander** and keep watch.
+
+They pick one. By default the **built-in rules** score each option and
+take the best. On the Gardener card you can switch to a **tiny language
+model** instead: SmolLM2-135M-Instruct, an open model of about 100 MB,
+run in your browser by transformers.js (`src/brain.worker.ts`, on the GPU
+with WebGPU, else the CPU). It's downloaded from Hugging Face the first
+time and cached by the browser. It reads their fat, the populations (with
+which are scarce) and the numbered options, and answers with a number.
+While it thinks they carry on, and if it doesn't answer usefully within
+30 seconds the rules decide. The card lists recent decisions and who made
+them.
+
+Getting around: they walk fast, row a boat over water, and carry the boat
+over land, slowly, when a route needs it. Each trip is planned as the
+fastest route over a coarse map in two layers, with and without the boat
+(`src/sim/navigate.ts`). A route can be "walk to the boat, carry it to the
+lake, row across, leave it on the far shore and walk on". Caught in a
+flood without the boat, they swim for the shore.
+
+Their spear reaches a dozen squares and hits three times in four. A cull
+leaves a body to rot. A kill to eat is walked to and eaten. They can't
+spear a roc in the air.
+
+They burn fat living and moving (½·m·v², twice the mass while carrying the
+boat). They store a lot of fat, turn most of what they eat into fat, and
+starve if it runs out. When fat is low they drop what they're doing to
+eat. A task that drags on too long is given up.
+
+Their body's nutrients come from the ground where they start, and
+everything they eat, carry, shed or leave behind is accounted for, so
+nutrients stay conserved. Set *Gardener* to 0 on the Settings tab (Life)
+for a world without them. Their abilities are under Settings →
+*Gardener*.
+
 ## Water cycle
 
 The total amount of water is constant apart from the tools (the panel shows it). It is split
@@ -500,4 +553,6 @@ All tunables can be changed live from the Settings panel.
 - `src/sim/`: pure simulation with no DOM (`terrain`, `world`, `genes`, `perlin`, `rng`)
 - `src/render.ts`: draws one pixel per square, which is then scaled ×2
 - `src/main.ts`: loop, controls, stats, inspector
+- `src/sim/gardener.ts`, `src/sim/navigate.ts`: the gardener and their route planner
+- `src/brain.worker.ts`: the optional language-model brain (a Web Worker)
 - `scripts/headless.ts`: runs the sim in Node for balancing
