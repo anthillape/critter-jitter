@@ -187,3 +187,19 @@ button.primary:hover { background: #46702a; }
 .start-actions { margin-top: 10px; }
 .speed-status { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .speed-status.behind { color: #e0a060; }
+
+/* Nutrient / energy distribution charts: legend with current values, hover tooltip. */
+.flow-chart { position: relative; }
+.flow-chart canvas { cursor: crosshair; }
+.flow-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 1px 12px; font-size: 12px; margin: 4px 0 2px; }
+.flow-legend .item { display: flex; align-items: center; gap: 6px; color: var(--muted); min-width: 0; }
+.flow-legend .item b { margin-left: auto; color: var(--text); font-weight: normal; font-variant-numeric: tabular-nums; }
+.line-swatch { display: inline-block; width: 16px; height: 0; border-top: 2px solid; flex: none; }
+.line-swatch.dashed { border-top-style: dashed; }
+.chart-tip {
+  position: absolute; pointer-events: none; z-index: 5;
+  background: #2a231b; border: 1px solid var(--line); border-radius: 4px;
+  padding: 4px 8px; font-size: 11px; white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.chart-tip .row { display: flex; align-items: center; gap: 6px; }
+.chart-tip .row b { margin-left: auto; padding-left: 10px; font-weight: normal; font-variant-numeric: tabular-nums; }

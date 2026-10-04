@@ -396,6 +396,17 @@ speed.
 Total water is conserved apart from what the Rain and Dryer tools add and
 remove.
 
+Two more cards chart, over time, **where the nutrients are** (the ground,
+the water, grass with its seeds, algae with its spores, and each animal
+species, counting their stomachs, unborn young and rotting bodies) and
+**where the energy is** (plants' stored energy and each species' fat,
+undigested food and energy passed to unborn young; the ground and water
+store none). Both use a log scale, since the ground holds tens of thousands
+of times what a few rocs do. Each species keeps one colour in both charts
+(a colour-blind-safe set, checked against the chart background), the
+environment is drawn in dashed neutral lines, the legend shows current
+values, and hovering shows every value at that moment.
+
 The **Water** card charts cloud water, free water (lakes, puddles and
 streams) and water in the ground over time. Shaded vertical bands mark when
 it was raining.

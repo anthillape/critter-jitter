@@ -124,6 +124,12 @@ export class SporeSystem {
     });
   }
 
+  energyTotal(): number {
+    let e = 0;
+    for (const s of this.spores) e += s.e;
+    return e;
+  }
+
   nutrientTotal(): number {
     let n = 0;
     for (const s of this.spores) n += s.n;

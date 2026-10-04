@@ -23,6 +23,18 @@
             <table id="statsLife"></table>
           </section>
           <section class="card">
+            <h2>Where the nutrients are</h2>
+            <div class="flow-chart"><canvas id="nutrientFlow" class="chart" width="360" height="170" aria-label="Nutrients held by the ground, the water, each kind of plant and each animal species over time (log scale)"></canvas><div class="chart-tip" hidden></div></div>
+            <div class="flow-legend" id="nutrientFlowLegend"></div>
+            <p class="hint">Log scale: each gridline is ten times the one below. Dashed lines are the environment. Grass includes seeds and algae its drifting spores; animals include their stomachs, unborn young and rotting bodies. Hover to read values.</p>
+          </section>
+          <section class="card">
+            <h2>Where the energy is</h2>
+            <div class="flow-chart"><canvas id="energyFlow" class="chart" width="360" height="170" aria-label="Energy held by each kind of plant and each animal species over time (log scale)"></canvas><div class="chart-tip" hidden></div></div>
+            <div class="flow-legend" id="energyFlowLegend"></div>
+            <p class="hint">Log scale. Energy isn't stored by the ground or water (sunlight is used or lost each tick), so it's all in living things: plants' stored energy (with seeds and spores) and animals' fat, undigested food and what they've passed to unborn young. Hover to read values.</p>
+          </section>
+          <section class="card">
             <h2>Fish</h2>
             <canvas id="fishChart" class="chart" width="360" height="110"></canvas>
             <table id="statsFish"></table>

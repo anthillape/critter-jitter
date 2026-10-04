@@ -86,7 +86,41 @@ interface Sample {
   rocs: number;
   /** It rained at some point since the previous sample. */
   rained: boolean;
+  /** Nutrients and energy held by each holder (see FLOW_SERIES), for the distribution charts. */
+  nutrients: Record<string, number>;
+  energy: Record<string, number>;
 }
+type NumericKey = { [K in keyof Sample]: Sample[K] extends number ? K : never }[keyof Sample];
+
+/**
+ * Holders for the nutrient and energy charts. The seven living holders use
+ * the categorical palette in its validated slot order (blue, orange, aqua,
+ * yellow, magenta, green, violet; checked for colour-blind separation on
+ * the chart background), each given to the species it suits. The
+ * environment's lines are neutral and dashed, so they never compete with a
+ * species colour.
+ */
+interface FlowSeries {
+  key: string;
+  label: string;
+  colour: string;
+  dash?: number[];
+}
+const LIFE_SERIES: FlowSeries[] = [
+  { key: "fish", label: "Fish", colour: "#3987e5" },
+  { key: "cats", label: "Cats", colour: "#d95926" },
+  { key: "algae", label: "Algae", colour: "#199e70" },
+  { key: "sheep", label: "Sheep", colour: "#c98500" },
+  { key: "rocs", label: "Rocs", colour: "#d55181" },
+  { key: "grass", label: "Grass", colour: "#008300" },
+  { key: "sharks", label: "Sharks", colour: "#9085e9" },
+];
+const NUTRIENT_SERIES: FlowSeries[] = [
+  { key: "ground", label: "Ground", colour: "#a39683", dash: [5, 3] },
+  { key: "water", label: "Water", colour: "#d8d0c2", dash: [2, 3] },
+  ...LIFE_SERIES,
+];
+const ENERGY_SERIES: FlowSeries[] = LIFE_SERIES;
 let history: Sample[] = [];
 /** Set whenever a tick rains; cleared each time a sample is taken. */
 let rainedSinceSample = false;
@@ -765,6 +799,16 @@ function refreshStats(): void {
     grass: s.grass, seeds: s.seeds, algae: s.algae,
     cloud: s.waterCloud, surface: s.waterSurface, soil: s.waterSoil, fish: s.fish.alive, sharks: s.sharks.alive, sheep: s.sheep.alive, cats: s.cats.alive, rocs: s.rocs.alive,
     rained: rainedSinceSample || s.raining,
+    nutrients: {
+      ground: s.nutrientsGround, water: s.nutrientsWater, grass: s.nutrientsGrass, algae: s.nutrientsAlgae,
+      fish: world.fish.nutrientTotal(), sharks: world.sharks.nutrientTotal(), sheep: world.sheep.nutrientTotal(),
+      cats: world.cats.nutrientTotal(), rocs: world.rocs.nutrientTotal(),
+    },
+    energy: {
+      grass: s.energyGrass, algae: s.energyAlgae,
+      fish: world.fish.energyTotal(), sharks: world.sharks.energyTotal(), sheep: world.sheep.energyTotal(),
+      cats: world.cats.energyTotal(), rocs: world.rocs.energyTotal(),
+    },
   });
   rainedSinceSample = false;
   if (history.length > HISTORY) history.shift();
@@ -820,6 +864,8 @@ function refreshStats(): void {
   drawLineChart(sheepChartCtx, sheepChart, [["sheep", "#f0e6d8"]]);
   drawLineChart(catChartCtx, catChart, [["cats", "#c8966e"]]);
   drawLineChart(rocChartCtx, rocChart, [["rocs", "#d2aa64"]]);
+  drawFlowChart(nutrientFlow);
+  drawFlowChart(energyFlow);
   drawLineChart(waterChartCtx, waterChart, [
     ["cloud", "#e4ded2"],
     ["surface", "#4f94e0"],
@@ -937,10 +983,174 @@ function critterRows(sys: CritterSystem, label: string, x0: number, y0: number, 
   ];
 }
 
+/** One distribution chart: its canvas, holders, which sample field it reads, and the hovered sample. */
+interface FlowChart {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  tip: HTMLDivElement;
+  legend: HTMLDivElement;
+  series: FlowSeries[];
+  pick: (p: Sample) => Record<string, number>;
+  hover: number | null;
+}
+
+function flowChart(id: string, series: FlowSeries[], pick: (p: Sample) => Record<string, number>): FlowChart {
+  const canvas = $<HTMLCanvasElement>(id);
+  const fc: FlowChart = {
+    canvas, ctx: canvas.getContext("2d")!, tip: canvas.parentElement!.querySelector<HTMLDivElement>(".chart-tip")!,
+    legend: $<HTMLDivElement>(`${id}Legend`), series, pick, hover: null,
+  };
+  // Hover: a crosshair on the nearest sample and a tooltip with every holder's value there.
+  canvas.addEventListener("mousemove", (e) => {
+    if (history.length < 2) return;
+    const r = canvas.getBoundingClientRect();
+    const x = ((e.clientX - r.left) / r.width) * canvas.width;
+    const plotX = (x - FLOW_LEFT) / (canvas.width - FLOW_LEFT - FLOW_RIGHT);
+    fc.hover = Math.max(0, Math.min(history.length - 1, Math.round(plotX * (history.length - 1))));
+    drawFlowChart(fc);
+    showFlowTip(fc, e.clientX - r.left, e.clientY - r.top, r.width);
+  });
+  canvas.addEventListener("mouseleave", () => {
+    fc.hover = null;
+    fc.tip.hidden = true;
+    drawFlowChart(fc);
+  });
+  return fc;
+}
+
+const FLOW_LEFT = 34; // room for the axis labels
+const FLOW_RIGHT = 6;
+const FLOW_TOP = 8;
+const FLOW_BOTTOM = 8;
+
+function fmtFlow(v: number): string {
+  if (v >= 10000) return `${(v / 1000).toFixed(0)}k`;
+  if (v >= 1000) return `${(v / 1000).toFixed(1)}k`;
+  if (v >= 100) return v.toFixed(0);
+  if (v >= 1) return v.toFixed(1);
+  return v.toFixed(2);
+}
+
+/**
+ * Log-scale line chart of where nutrients or energy are held over time.
+ * One y-axis (powers of ten); values at or below the bottom of the scale
+ * leave a gap rather than a line along the floor.
+ */
+function drawFlowChart(fc: FlowChart): void {
+  const { canvas, ctx: c } = fc;
+  const w = canvas.width;
+  const h = canvas.height;
+  c.clearRect(0, 0, w, h);
+  if (fc.hover !== null && fc.hover >= history.length) fc.hover = null; // history was reset
+  if (history.length < 2) return;
+  let lo = Infinity;
+  let hi = 0;
+  for (const p of history) {
+    const v = fc.pick(p);
+    for (const sr of fc.series) {
+      const x = v[sr.key] ?? 0;
+      if (x > 0.01) lo = Math.min(lo, x);
+      hi = Math.max(hi, x);
+    }
+  }
+  if (hi <= 0) return;
+  const d0 = Math.floor(Math.log10(Math.max(0.01, Math.min(lo, hi))));
+  const d1 = Math.max(d0 + 1, Math.ceil(Math.log10(hi)));
+  const plotW = w - FLOW_LEFT - FLOW_RIGHT;
+  const plotH = h - FLOW_TOP - FLOW_BOTTOM;
+  const xAt = (i: number) => FLOW_LEFT + (i / (history.length - 1)) * plotW;
+  const yAt = (v: number) => FLOW_TOP + plotH - ((Math.log10(v) - d0) / (d1 - d0)) * plotH;
+  // Recessive grid: one line and label per power of ten.
+  c.font = "10px system-ui, sans-serif";
+  c.textAlign = "right";
+  c.textBaseline = "middle";
+  for (let d = d0; d <= d1; d++) {
+    const y = yAt(10 ** d);
+    c.strokeStyle = "rgba(233, 225, 211, 0.1)";
+    c.lineWidth = 1;
+    c.beginPath();
+    c.moveTo(FLOW_LEFT, Math.round(y) + 0.5);
+    c.lineTo(w - FLOW_RIGHT, Math.round(y) + 0.5);
+    c.stroke();
+    c.fillStyle = "rgba(233, 225, 211, 0.55)";
+    c.fillText(fmtFlow(10 ** d), FLOW_LEFT - 4, y);
+  }
+  // Lines, 2px, environment first so the living lines sit on top.
+  c.lineJoin = "round";
+  c.lineCap = "round";
+  for (const sr of fc.series) {
+    c.strokeStyle = sr.colour;
+    c.lineWidth = 2;
+    c.setLineDash(sr.dash ?? []);
+    c.beginPath();
+    let drawing = false;
+    history.forEach((p, i) => {
+      const v = fc.pick(p)[sr.key] ?? 0;
+      if (v <= 10 ** d0) {
+        drawing = false;
+        return;
+      }
+      if (drawing) c.lineTo(xAt(i), yAt(v));
+      else c.moveTo(xAt(i), yAt(v));
+      drawing = true;
+    });
+    c.stroke();
+  }
+  c.setLineDash([]);
+  // Crosshair on the hovered sample, with a dot on each line.
+  if (fc.hover !== null) {
+    const x = xAt(fc.hover);
+    c.strokeStyle = "rgba(233, 225, 211, 0.45)";
+    c.lineWidth = 1;
+    c.beginPath();
+    c.moveTo(Math.round(x) + 0.5, FLOW_TOP);
+    c.lineTo(Math.round(x) + 0.5, FLOW_TOP + plotH);
+    c.stroke();
+    const v = fc.pick(history[fc.hover]);
+    for (const sr of fc.series) {
+      const val = v[sr.key] ?? 0;
+      if (val <= 10 ** d0) continue;
+      c.fillStyle = sr.colour;
+      c.strokeStyle = "#1a1611"; // surface ring so overlapping dots stay distinct
+      c.lineWidth = 2;
+      c.beginPath();
+      c.arc(x, yAt(val), 3.5, 0, Math.PI * 2);
+      c.fill();
+      c.stroke();
+    }
+  }
+  // Legend: every holder with its current value (text in text colours, not the series colour).
+  const now = fc.pick(history[history.length - 1]);
+  fc.legend.innerHTML = fc.series.map((sr) =>
+    `<span class="item"><span class="line-swatch${sr.dash ? " dashed" : ""}" style="border-top-color:${sr.colour}"></span>${sr.label}<b>${fmtFlow(now[sr.key] ?? 0)}</b></span>`,
+  ).join("");
+}
+
+function showFlowTip(fc: FlowChart, mx: number, my: number, width: number): void {
+  if (fc.hover === null) return;
+  const p = history[fc.hover];
+  const v = fc.pick(p);
+  const rows = fc.series
+    .map((sr) => ({ sr, val: v[sr.key] ?? 0 }))
+    .sort((a, b) => b.val - a.val)
+    .map(({ sr, val }) => `<div class="row"><span class="line-swatch${sr.dash ? " dashed" : ""}" style="border-top-color:${sr.colour}"></span>${sr.label}<b>${fmtFlow(val)}</b></div>`)
+    .join("");
+  const ago = history.length - 1 - fc.hover;
+  fc.tip.innerHTML = `<div class="muted">${ago === 0 ? "now" : `${ago} sample${ago === 1 ? "" : "s"} ago`}</div>${rows}`;
+  fc.tip.hidden = false;
+  // Keep the tooltip inside the card: flip to the left of the cursor near the right edge.
+  const tw = fc.tip.offsetWidth;
+  fc.tip.style.left = `${mx + 12 + tw > width ? Math.max(0, mx - tw - 12) : mx + 12}px`;
+  fc.tip.style.top = `${Math.max(0, my - 20)}px`;
+}
+
+const nutrientFlow = flowChart("nutrientFlow", NUTRIENT_SERIES, (p) => p.nutrients);
+const energyFlow = flowChart("energyFlow", ENERGY_SERIES, (p) => p.energy);
+
 function drawLineChart(
   ctx2: CanvasRenderingContext2D,
   canvas2: HTMLCanvasElement,
-  series: Array<[keyof Omit<Sample, "rained">, string]>,
+  series: Array<[NumericKey, string]>,
   rainBands = false,
 ): void {
   const w = canvas2.width;

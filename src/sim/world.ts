@@ -35,6 +35,11 @@ export interface Stats {
   nutrientsGround: number;
   nutrientsWater: number;
   nutrientsFlora: number;
+  /** Nutrients and energy held by grass (with seeds) and by algae (with drifting spores). */
+  nutrientsGrass: number;
+  nutrientsAlgae: number;
+  energyGrass: number;
+  energyAlgae: number;
   /** Nutrients in living animals (fish, sharks, sheep, cats) and their rotting bodies. */
   nutrientsAnimals: number;
   nutrientsTotal: number;
@@ -523,6 +528,7 @@ export class World {
     const sh = this.sharks;
     let seeds = 0, grass = 0, algae = 0;
     let ground = 0, waterN = 0, flora = 0, waterSquares = 0;
+    let grassN = 0, algaeN = 0, grassE = 0, algaeE = 0;
     const water = this.water;
     for (let i = 0; i < CELL_COUNT; i++) {
       const k = this.kind[i];
@@ -534,12 +540,22 @@ export class World {
         waterSquares++;
       } else ground += this.nutrients[i];
       flora += this.floraN[i];
+      if (k === ALGAE) {
+        algaeN += this.floraN[i];
+        algaeE += this.floraE[i];
+      } else if (k !== EMPTY) {
+        grassN += this.floraN[i];
+        grassE += this.floraE[i];
+      }
     }
     flora += this.spores.nutrientTotal(); // spores are algae on the move
+    algaeN += this.spores.nutrientTotal();
+    algaeE += this.spores.energyTotal();
     const animals = sw.nutrientTotal() + sh.nutrientTotal() + this.sheep.nutrientTotal() + this.cats.nutrientTotal() + this.rocs.nutrientTotal();
     const s: Stats = {
       tick: this.tick,
       seeds, grass, algae, spores: this.spores.spores.length,
+      nutrientsGrass: grassN, nutrientsAlgae: algaeN, energyGrass: grassE, energyAlgae: algaeE,
       grassBirths: this.births[0],
       grassDeaths: this.deaths[0],
       algaeBirths: this.births[1],

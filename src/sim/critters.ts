@@ -1610,6 +1610,13 @@ export class CritterSystem {
     return best;
   }
 
+  /** Energy held by living critters: fat, undigested food, and what's been passed to unborn young. */
+  energyTotal(): number {
+    let e = 0;
+    for (const c of this.critters) if (c.alive) e += Math.max(0, c.fat) + c.gutFat + (c.womb ? c.womb.gotFat : 0);
+    return e;
+  }
+
   /** Nutrients held in living critters and in their bodies. */
   nutrientTotal(): number {
     let n = 0;
