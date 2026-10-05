@@ -254,6 +254,11 @@ than huddling.
   over several ticks. Once the plant is grazed below *Grazed down to*, the
   sheep eats the rest and the plant is gone. A sheep keeps grazing a plant
   it has started until the plant is gone or its fat store is full.
+- **Small, hungry and well stocked.** Sheep are small (body size 1.2) but
+  eat fast (big bites, a roomy stomach and quick digestion) and store a lot
+  of fat (up to 30), needing 20 before they'll breed. Each sheep eats a lot
+  of grass and carries a lot of energy and nutrients in its body, so a
+  predator that catches one is fed for a long time.
 - **Finding grass.** Every so often a hungry sheep looks over the grass
   within its genetic *Grass sight* (10–30 squares), and turns its general
   direction toward the grassiest of eight directions.
@@ -272,7 +277,7 @@ than huddling.
 Cats hunt sheep on land. They're based on sheep: the same lifecycle,
 meandering walk (with its genetic *Meander arc*), turning right round at
 water, swimming for the shore when caught in water, and genetic *Swimming
-ability*. They are bigger (body size 4 against the sheep's 2) and longer,
+ability*. They are bigger (body size 4 against the sheep's 1.2) and longer,
 drawn as a long rounded body with a round head of the same colour and a
 short curly tail (two-thirds of the body length) whose curl drifts slowly and
 randomly, and their hue-only colour is always a dark shade.
@@ -293,6 +298,13 @@ randomly, and their hue-only colour is always a dark shade.
   (*Rest after pouncing*) before it can pounce again, though it keeps
   stalking. Pouncing costs fat like any movement (½·m·v²), so it's
   expensive.
+- **Resting after a meal.** After a catch a cat lies still to digest for its
+  genetic *Rest after a meal* (default 1,500 ticks). It doesn't hunt or
+  breed meanwhile, and burns only half its usual living cost (*Resting
+  cost*); its tail lies still.
+- **A body like a sheep's.** A cat stores about as much fat as a sheep (30
+  at most), and its stomach holds a whole sheep. So one sheep keeps it going
+  for a long while, and it can spend its time breeding rather than hunting.
 - Sheep in water are out of a cat's reach, and so are sheep that reach
   water: a cat loses a sheep that isn't on land.
 
@@ -543,6 +555,13 @@ prevailing direction, but its bearing and speed wander slowly and smoothly
 usually stays within a quarter turn or so of the prevailing wind but can
 swing to any direction. The panel shows where it's blowing from and its
 speed.
+
+## The map
+
+Drag the map's bottom-right corner to make it take up more or less of the
+screen. It keeps the same squares and shape, and the size is remembered.
+Double-click the corner to go back to automatic sizing (as wide as fits,
+leaving room for the cards).
 
 ## Tools and weather controls
 

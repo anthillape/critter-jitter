@@ -33,12 +33,23 @@ body {
   display: flex;
   flex-direction: column;
 }
+/* The map's frame: automatically full width (unless that would make it
+   taller than the window minus room for the cards), or whatever size the
+   user drags its bottom-right corner to. The canvas inside keeps its
+   squares and pixels; only its display size changes. */
+.map-frame {
+  position: relative;
+  flex: none;
+  width: min(100%, calc((100vh - 32px - 260px) * var(--map-aspect, 1.667)));
+  aspect-ratio: var(--map-aspect, 1.667);
+  max-width: 100%;
+  min-width: 160px;
+  min-height: 96px;
+  resize: both;
+  overflow: hidden;
+}
 #world {
   display: block;
-  flex: none;
-  /* Full width, unless that would make it taller than the window minus room for the cards. */
-  width: min(100%, calc((100vh - 32px - 260px) * var(--map-aspect, 2.667)));
-  height: auto;
   image-rendering: pixelated;
   border: 1px solid var(--line);
   cursor: crosshair;
@@ -129,7 +140,7 @@ body {
   .app { grid-template-columns: minmax(0, 1fr); padding: 8px; }
   .sidebar { position: static; height: auto; }
   .main-col { position: static; height: auto; }
-  #world { width: 100%; }
+  .map-frame { width: 100%; }
   .cards-scroll { overflow: visible; }
 }
 h1 { font-size: 18px; margin: 0 0 10px; }

@@ -148,17 +148,18 @@ export const SHARK: SpeciesDef = {
 export const SHEEP: SpeciesDef = {
   key: "sheep", name: "sheep", plural: "sheep", prefix: "sheep", diet: "grass", habitat: "land", collides: true, shade: "pastel", stranded: "swimming to shore",
   traits: traitList({
-    maxFat: { def: 12 },
+    maxFat: { def: 30 },
     minSpeed: { def: 0.004 },
     maxSpeed: { def: 0.03, tip: "Speed while heading for a mate, in squares per tick." },
     roamSpeed: { def: 0.012, tip: "Walking speed while meandering (including looking for grass), in squares per tick. Kept between the minimum and top speeds." },
     hue: { def: 0, spread: 180, tip: "Hue of its (always pastel) fleece, in degrees. Founders take it from their genes; lambs inherit the midpoint of their parents' hues, slightly mutated." },
     breedAge: { def: 2000 },
-    breedFat: { def: 8 },
-    hungerFat: { def: 4, tip: "When fat falls below this, it grazes any grass it walks over, and now and then heads for the grassiest direction it can see." },
+    breedFat: { def: 20 },
+    hungerFat: { def: 12, tip: "When fat falls below this, it grazes any grass it walks over, and now and then heads for the grassiest direction it can see." },
     lifespan: { def: 12000 },
     litterSize: { def: 1.3 },
-    bodySize: { def: 2 },
+    bodySize: { def: 1.2 },
+    digestRate: { def: 0.012 },
   }, false, [
     { key: "wanderArc", label: "Meander arc", tip: "Width of the arc (degrees) its path wanders within, around its general direction.", def: 50, min: 20, max: 90, mode: "add", spread: 25 },
     { key: "grassSight", label: "Grass sight", tip: "How far (squares) a hungry sheep looks to find the grassiest direction.", def: 18, min: 10, max: 30, mode: "add", spread: 8 },
@@ -172,14 +173,14 @@ const SWIM_ABILITY: TraitDef = { key: "swimAbility", label: "Swimming ability", 
 export const CAT: SpeciesDef = {
   key: "cat", name: "cat", plural: "cats", prefix: "cat", diet: "prey", hunt: "pounce", senses: true, habitat: "land", shade: "dark", stranded: "swimming to shore",
   traits: traitList({
-    maxFat: { def: 20 },
+    maxFat: { def: 30 },
     minSpeed: { def: 0.004 },
-    maxSpeed: { def: 0.02, label: "Stalking speed", tip: "Speed while following the sheep it's locked on to (or heading for a mate), in squares per tick." },
-    roamSpeed: { def: 0.01, tip: "Walking speed while meandering, in squares per tick. Kept between the minimum and stalking speeds." },
+    maxSpeed: { def: 0.035, label: "Stalking speed", tip: "Speed while following the sheep it's locked on to (or heading for a mate), in squares per tick." },
+    roamSpeed: { def: 0.015, tip: "Walking speed while meandering, in squares per tick. Kept between the minimum and stalking speeds." },
     hue: { def: 20, spread: 180, tip: "Hue of its (always dark) fur, in degrees. Founders take it from their genes; kittens inherit the midpoint of their parents' hues, slightly mutated." },
     breedAge: { def: 3000 },
-    breedFat: { def: 8 },
-    hungerFat: { def: 6 },
+    breedFat: { def: 20 },
+    hungerFat: { def: 8 },
     lifespan: { def: 15000 },
     litterSize: { def: 1.5 },
     bodySize: { def: 4 },
@@ -187,6 +188,7 @@ export const CAT: SpeciesDef = {
     { key: "wanderArc", label: "Meander arc", tip: "Width of the arc (degrees) its path wanders within, around its general direction.", def: 60, min: 20, max: 90, mode: "add", spread: 25 },
     { key: "pounceDistance", label: "Pounce distance", tip: "How close (squares) it stalks a sheep before pouncing at it.", def: 5, min: 1.5, max: 15, mode: "mul", spread: 0.4 },
     { ...SWIM_ABILITY, def: 0.2 },
+    { key: "restTime", label: "Rest after a meal", tip: "Ticks it lies resting after catching a meal, digesting (cheaply: see Resting cost). It doesn't hunt or breed meanwhile.", def: 1500, min: 0, max: 10000, mode: "mul", spread: 0.5 },
   ]),
 };
 
@@ -224,9 +226,9 @@ export interface Gene {
   deltas: Float32Array;
 }
 
-export const enum Mode { Wander, Hungry, Mating, Stranded, Grazing, Fleeing }
+export const enum Mode { Wander, Hungry, Mating, Stranded, Grazing, Fleeing, Resting }
 /** Mode descriptions (Stranded is described per species, see SpeciesDef.stranded). */
-export const MODE_NAMES = ["roaming", "hunting for food", "looking for a mate", "stranded", "grazing", "running from a hunter"];
+export const MODE_NAMES = ["roaming", "hunting for food", "looking for a mate", "stranded", "grazing", "running from a hunter", "resting after a meal"];
 
 export interface Critter {
   id: number;
@@ -276,6 +278,8 @@ export interface Critter {
   /** Prey running from a hunter: the way it's running, and ticks left running. */
   fleeDir: number;
   fleeLeft: number;
+  /** Ticks left resting after a meal (species with a rest-time trait). */
+  restLeft: number;
   /** Stomach: food eaten but not yet digested (energy and nutrients). */
   gutFat: number;
   gutN: number;
@@ -467,6 +471,8 @@ const PARAM_NAMES = [
   "Stomach", "DigestCost", "GestationRate", "BirthEfficiency", "YoungRadius",
   // Prey: the cost of staying alert (per square of wariness).
   "WaryCost",
+  // Resting after a meal: share of the normal living cost.
+  "RestUpkeep",
   // Flying (rocs).
   "TooFat", "FlightCheck", "DiveBoost", "LandedUpkeep", "HuntUntil", "EdgeMargin", "CruiseHeight", "ClimbRate", "CatchChance", "MissRest",
   "BirthSize", "GrowthRate", "GrowthCost",
@@ -506,11 +512,14 @@ export class CritterSystem {
   ) {
     this.keys = Object.fromEntries(PARAM_NAMES.map((n) => [n, `${species.prefix}${n}` as keyof Params])) as Record<ParamName, keyof Params>;
     this.wary = species.traits.findIndex((d) => d.key === "wariness");
+    this.rest = species.traits.findIndex((d) => d.key === "restTime");
     for (const p of preySystems) p.hunters.push(this);
   }
 
   /** Index of the wariness trait (-1 for species that aren't prey). */
   private readonly wary: number;
+  /** Index of the rest-after-a-meal trait (-1 for species without one). */
+  private readonly rest: number;
   /** The species that hunt this one. */
   readonly hunters: CritterSystem[] = [];
 
@@ -609,7 +618,7 @@ export class CritterSystem {
       hue: traits[T_HUE],
       id: this.nextId++, x, y, heading: this.host.rng() * Math.PI * 2, speed: 0,
       fat, nutrients, age: 0, cooldown: 0, parents, genes, traits,
-      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, boostTried: false, stroke: 0, tailAmp: 0, pounceLeft: 0, pounceDir: 0, pounceRest: 0, desired: 0, general: 0, wander: 0, avoid: 0, shore: false, senseDir: 0, senseLeft: 0, fleeDir: 0, fleeLeft: 0, awayX: 0, awayY: 0, gutFat: 0, gutN: 0, womb: null, flying: false, alt: 0, landing: false, species: this.species, grown: 1,
+      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, boostTried: false, stroke: 0, tailAmp: 0, pounceLeft: 0, pounceDir: 0, pounceRest: 0, desired: 0, general: 0, wander: 0, avoid: 0, shore: false, senseDir: 0, senseLeft: 0, fleeDir: 0, fleeLeft: 0, restLeft: 0, awayX: 0, awayY: 0, gutFat: 0, gutN: 0, womb: null, flying: false, alt: 0, landing: false, species: this.species, grown: 1,
       phase: this.host.rng() * Math.PI * 2, alive: true, colour: colourOf(traits, this.species),
     };
     c.desired = c.general = c.heading;
@@ -909,8 +918,13 @@ export class CritterSystem {
       }
     }
 
+    if (c.restLeft > 0) c.restLeft--;
+
     // Choose what to do.
-    if (!atHome) {
+    if (atHome && c.restLeft > 0 && !flying) {
+      if (c.mode !== Mode.Resting) this.dropTarget(c);
+      c.mode = Mode.Resting;
+    } else if (!atHome) {
       if (c.mode !== Mode.Stranded) {
         this.dropTarget(c);
         c.shore = false;
@@ -945,7 +959,7 @@ export class CritterSystem {
     // critters caught in water wade on until they reach land. Grazers stand still.
     let speed = 0;
     let boosting = false;
-    const moving = c.mode !== Mode.Grazing && (land || c.mode !== Mode.Stranded);
+    const moving = c.mode !== Mode.Grazing && c.mode !== Mode.Resting && (land || c.mode !== Mode.Stranded);
     if (c.mode === Mode.Grazing) {
       c.speed = 0;
       this.graze(c, here);
@@ -1121,6 +1135,7 @@ export class CritterSystem {
     const mass = bodyMass(c) + c.fat * this.sp("FatMass");
     let upkeep = this.sp("Metabolism") * mass * (boosting ? this.host.p.sharkBoostMetabolism : 1);
     if (this.wary >= 0) upkeep *= 1 + this.sp("WaryCost") * t[this.wary]; // staying alert costs fat
+    if (c.mode === Mode.Resting) upkeep *= this.sp("RestUpkeep"); // lying still is cheap
     if (this.species.flies && !flying) upkeep *= this.sp("LandedUpkeep"); // resting on the ground is cheaper
     let move = this.sp("MoveCost") * 0.5 * mass * speed * speed;
     if (land && !this.species.flies) {
@@ -1604,6 +1619,8 @@ export class CritterSystem {
       if (left > 1e-6) {
         sys.corpses.push({ x: p.x, y: p.y, nutrients: left, startNutrients: left, heading: p.heading, mass: bodyMass(p) * (1 - f) });
       }
+      // Species that rest after a meal lie down to digest it.
+      if (this.rest >= 0) c.restLeft = Math.round(c.traits[this.rest]);
       sys.eaten++;
       sys.deaths++;
       sys.sounds.deaths++;

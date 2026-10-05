@@ -129,6 +129,9 @@ export class Gardener {
   x: number;
   y: number;
   heading = 0;
+  /** Distance walked (or rowed) so far, which drives the walking animation. */
+  stride = 0;
+  private movedAt = -1;
   fat: number;
   nutrients: number;
   alive = true;
@@ -639,6 +642,8 @@ export class Gardener {
       this.heading = Math.atan2(dy, dx);
       this.x += (dx / d) * step;
       this.y += (dy / d) * step;
+      this.stride += step;
+      this.movedAt = this.w.tick;
     }
     // ½·m·v², more when carrying the boat; swimming is hard work for its speed.
     const mass = p.gardenerMass * (this.hasBoat ? (this.w.water.isWater(this.square()) ? 1 : 2) : this.inWater() ? 20 : 1);
@@ -1309,6 +1314,11 @@ export class Gardener {
       case "sow":
         return this.stage === 0 ? { x: t.fx, y: t.fy } : { x: t.tx, y: t.ty };
     }
+  }
+
+  /** Whether they moved this tick (for the walking animation). */
+  get moving(): boolean {
+    return this.w.tick - this.movedAt <= 1;
   }
 
   /** In words: walking, rowing, or carrying the boat. */

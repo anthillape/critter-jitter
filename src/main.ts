@@ -12,6 +12,56 @@ import type { Chooser, Gardener } from "./sim/gardener";
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 const canvas = $<HTMLCanvasElement>("world");
+const mapFrame = $<HTMLDivElement>("mapFrame");
+
+/**
+ * Fits the map canvas into its frame: the largest size with the map's
+ * shape (same squares and pixels, only the display size changes), so
+ * mouse positions still map straight onto squares.
+ */
+function fitMap(): void {
+  const aspect = GRID_W / GRID_H;
+  const fw = mapFrame.clientWidth - 2; // the canvas's 1px border
+  const fh = mapFrame.clientHeight - 2;
+  if (fw <= 0 || fh <= 0) return;
+  const w = Math.min(fw, fh * aspect);
+  canvas.style.width = `${Math.floor(w)}px`;
+  canvas.style.height = `${Math.floor(w / aspect)}px`;
+}
+
+// Dragging the frame's corner sets an inline size: remember it. Double-
+// clicking the corner goes back to automatic sizing.
+const MAP_SIZE_KEY = "critterJitter.mapSize";
+try {
+  const saved = JSON.parse(localStorage.getItem(MAP_SIZE_KEY) ?? "null");
+  if (saved && saved.w > 0 && saved.h > 0) {
+    mapFrame.style.width = `${saved.w}px`;
+    mapFrame.style.height = `${saved.h}px`;
+  }
+} catch {
+  // Storage unavailable: automatic sizing.
+}
+new ResizeObserver(() => {
+  fitMap();
+  if (mapFrame.style.width && mapFrame.style.height) {
+    try {
+      localStorage.setItem(MAP_SIZE_KEY, JSON.stringify({ w: mapFrame.offsetWidth, h: mapFrame.offsetHeight }));
+    } catch {
+      // Storage unavailable: it just won't be remembered.
+    }
+  }
+}).observe(mapFrame);
+mapFrame.addEventListener("dblclick", (e) => {
+  const r = mapFrame.getBoundingClientRect();
+  if (r.right - e.clientX > 18 || r.bottom - e.clientY > 18) return; // only on the corner grip
+  mapFrame.style.width = "";
+  mapFrame.style.height = "";
+  try {
+    localStorage.removeItem(MAP_SIZE_KEY);
+  } catch {
+    // Nothing to forget.
+  }
+});
 const ctx = canvas.getContext("2d")!;
 ctx.imageSmoothingEnabled = false;
 const chart = $<HTMLCanvasElement>("chart");
@@ -294,7 +344,8 @@ function newWorld(seed: number): void {
   applyWorldSize();
   canvas.width = GRID_W * CELL_PX;
   canvas.height = GRID_H * CELL_PX;
-  canvas.style.setProperty("--map-aspect", String(GRID_W / GRID_H)); // lets CSS shrink it to fit the window
+  mapFrame.style.setProperty("--map-aspect", String(GRID_W / GRID_H)); // lets CSS shrink it to fit the window
+  fitMap();
   ctx.imageSmoothingEnabled = false;
   hover = -1;
   world = new World(seed);
@@ -558,8 +609,11 @@ function drawSheepShape(x: number, y: number, heading: number, mass: number, col
   ctx.beginPath();
   ctx.roundRect(-side / 2, -side / 2, side, side, side * 0.3);
   ctx.fill();
+  // A round head at the front.
   ctx.fillStyle = head ?? colour;
-  ctx.fillRect(side / 2 - hs * 0.4, -hs / 2, hs, hs);
+  ctx.beginPath();
+  ctx.arc(side / 2 + hs * 0.1, 0, hs * 0.55, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 
@@ -567,7 +621,7 @@ function drawSheepShape(x: number, y: number, heading: number, mass: number, col
 function drawSpores(): void {
   const list = world.spores.spores;
   if (!list.length) return;
-  ctx.fillStyle = "rgba(190, 240, 170, 0.55)";
+  ctx.fillStyle = "rgba(190, 230, 180, 0.16)"; // barely there
   ctx.beginPath();
   for (const s of list) ctx.rect(s.x * CELL_PX - 0.5, s.y * CELL_PX - 0.5, 1, 1);
   ctx.fill();
@@ -583,7 +637,102 @@ function drawCats(): void {
   const sys = world.cats;
   for (const c of sys.corpses) drawCatShape(c.x, c.y, c.heading, c.mass, corpseColour(c), c.x * 7.3 + c.y * 3.1, null);
   for (const s of sys.critters) {
-    if (s.alive) drawCatShape(s.x, s.y, s.heading, bodyMass(s), s.colour, s.id, world.tick);
+    if (s.alive) drawCatShape(s.x, s.y, s.heading, bodyMass(s), s.colour, s.id, s.mode === Mode.Resting ? null : world.tick); // resting: tail still
+  }
+}
+
+/**
+ * A gardener as a little pixel-art person (7 x 11 canvas pixels, drawn on
+ * whole pixels), seen from the front, back or side depending on which way
+ * they're heading. Walking runs a 4-frame cycle from the distance they've
+ * covered: legs stepping, arms swinging opposite. Rowing shows them seated
+ * and pulling the oars; carrying the boat, arms raised to hold it overhead.
+ */
+function drawPerson(g: Gardener, px: number, py: number, pose: "walking" | "rowing" | "carrying" | "dead"): void {
+  const cloak = cloakOf(g);
+  const SKIN = "#f0c49a", HAIR = "#4a2e1a", LEGS = "#3b3249", BELT = "#2a1d12", EYE = "#1b1410";
+  // Sprite origin: feet at (px, py + 3).
+  const ox = Math.round(px) - 3;
+  const oy = Math.round(py) - 8;
+  if (pose === "dead") {
+    // Lying on their side, greyed.
+    ctx.fillStyle = "rgba(150,150,150,0.85)";
+    ctx.fillRect(ox - 2, oy + 7, 10, 3);
+    ctx.fillStyle = "rgba(190,190,190,0.85)";
+    ctx.fillRect(ox - 4, oy + 7, 2, 3);
+    return;
+  }
+  const dx = Math.cos(g.heading), dy = Math.sin(g.heading);
+  const facing = Math.abs(dx) > Math.abs(dy) ? "side" : dy > 0 ? "front" : "back";
+  const mirror = facing === "side" && dx < 0;
+  const px1 = (x: number, y: number, w: number, h: number, c: string) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(ox + (mirror ? 7 - x - w : x), oy + y, w, h);
+  };
+  // Walking: frame 0 and 2 stand straight, 1 and 3 step (opposite legs and arms).
+  const frame = pose === "walking" && g.moving ? Math.floor(g.stride / 0.9) % 4 : 0;
+  const step = frame === 1 ? 1 : frame === 3 ? -1 : 0;
+  const row = pose === "rowing" && g.moving ? Math.floor(g.stride / 0.7) % 2 : 0;
+
+  // A soft shadow on the ground.
+  if (pose !== "rowing") {
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    ctx.fillRect(ox + 1, oy + 11, 5, 1);
+  }
+  // Head: hair, then the face (front), back of the head, or a profile.
+  px1(1, 0, 5, 2, HAIR);
+  if (facing === "back") px1(1, 2, 5, 2, HAIR);
+  else if (facing === "front") {
+    px1(1, 2, 5, 2, SKIN);
+    px1(1, 2, 1, 1, HAIR);
+    px1(5, 2, 1, 1, HAIR);
+    px1(2, 2, 1, 1, EYE);
+    px1(4, 2, 1, 1, EYE);
+  } else {
+    px1(1, 2, 2, 2, HAIR);
+    px1(3, 2, 3, 2, SKIN);
+    px1(4, 2, 1, 1, EYE);
+  }
+  // Body: cloak and belt.
+  px1(1, 4, 5, 4, cloak);
+  px1(1, 7, 5, 1, BELT);
+  // Arms.
+  if (pose === "carrying") {
+    // Both raised to hold the boat overhead.
+    px1(0, 0, 1, 5, cloak);
+    px1(6, 0, 1, 5, cloak);
+    px1(0, 0, 1, 1, SKIN);
+    px1(6, 0, 1, 1, SKIN);
+  } else if (pose === "rowing") {
+    // Pulling the oars: hands forward, then back to the chest.
+    const reach = row ? 1 : 0;
+    px1(0, 4, 1, 2, cloak);
+    px1(6, 4, 1, 2, cloak);
+    px1(0 - reach, 6, 1, 1, SKIN);
+    px1(6 + reach, 6, 1, 1, SKIN);
+  } else if (facing === "side") {
+    // The near arm swings forward and back with the stride.
+    px1(3, 4, 1, 3, cloak);
+    px1(3 + step, 7, 1, 1, SKIN);
+  } else {
+    // Front or back: arms swing, one up as the other comes down.
+    px1(0, 4, 1, 3 + step, cloak);
+    px1(6, 4, 1, 3 - step, cloak);
+    px1(0, 7 + step, 1, 1, SKIN);
+    px1(6, 7 - step, 1, 1, SKIN);
+  }
+  if (pose === "rowing") return; // legs are in the boat
+  // Legs: stepping.
+  if (facing === "side") {
+    px1(2 - step, 8, 1, 3, LEGS);
+    px1(4 + step, 8, 1, 3, LEGS);
+    px1(2 - step, 10, 2, 1, BELT);
+    px1(4 + step, 10, 2, 1, BELT);
+  } else {
+    px1(2, 8, 1, step > 0 ? 2 : 3, LEGS);
+    px1(4, 8, 1, step < 0 ? 2 : 3, LEGS);
+    px1(2, step > 0 ? 9 : 10, 1, 1, BELT);
+    px1(4, step < 0 ? 9 : 10, 1, 1, BELT);
   }
 }
 
@@ -627,10 +776,7 @@ function drawGardener(g: Gardener): void {
   const py = g.y * CELL_PX;
   if (!g.hasBoat) drawBoat(g.boatX * CELL_PX, g.boatY * CELL_PX, g.boatHeading, 1);
   if (!g.alive) {
-    ctx.fillStyle = "rgba(150,150,150,0.8)";
-    ctx.beginPath();
-    ctx.ellipse(px, py, 4, 2.5, g.heading, 0, Math.PI * 2);
-    ctx.fill();
+    drawPerson(g, px, py, "dead");
     return;
   }
   const aim = g.aim();
@@ -653,23 +799,9 @@ function drawGardener(g: Gardener): void {
   }
   const rowing = g.hasBoat && g.mode() === "rowing";
   if (rowing) drawBoat(px, py, g.heading, 1);
-  // Body: shoulders and a head.
-  ctx.save();
-  ctx.translate(px, py);
-  ctx.rotate(g.heading);
-  ctx.fillStyle = cloakOf(g);
-  ctx.strokeStyle = "#fff";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 3, 5, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = "#f1c9a0";
-  ctx.beginPath();
-  ctx.arc(0.8, 0, 2.3, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-  if (g.hasBoat && !rowing) drawBoat(px, py, g.heading, 0.75); // carried overhead
+  const carrying = g.hasBoat && !rowing;
+  drawPerson(g, px, py, rowing ? "rowing" : carrying ? "carrying" : "walking");
+  if (carrying) drawBoat(px, py - 7, g.heading, 0.85); // held up overhead
   if (g.carried.length === 1) {
     // One animal, carried in the arms.
     ctx.fillStyle = g.carried[0].c.colour;
