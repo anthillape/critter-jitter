@@ -7,7 +7,7 @@ export let GRID_H = 150;
 export let CELL_COUNT = GRID_W * GRID_H;
 
 /** World size wanted for the next world (edited on the Start tab). */
-export const WORLD_SIZE = { width: 400, height: 150 };
+export const WORLD_SIZE = { width: 200, height: 120 };
 
 /** Applies WORLD_SIZE; call only while building a new world. */
 export function applyWorldSize(): void {
@@ -117,6 +117,7 @@ export const PARAMS = {
   fishFatMass: 0.1, // mass added per unit of fat (fat is the only energy store)
   fishNutrientLoss: 0.0004, // share of body nutrients shed into the water each tick
   fishMinNutrients: 0.005, // a fish whose body nutrients fall below this dies
+  fishCannibalism: 0.3, // a fish twice another's size goes after it this often when the two are opposite colours (less the closer their hues; never the same hue)
   fishFoodRadius: 7, // squares searched for algae when hungry
   fishMinAlgaeSize: 0.6, // fish only eat algae grown to at least this share of full size
   fishMateRadius: 14, // squares searched for a mate
@@ -134,7 +135,7 @@ export const PARAMS = {
   fishWanderTurnChance: 1, // chance per tick of changing course while roaming (1 = constant jitter)
   fishWanderTurnSize: 0.5, // size of those course changes (radians)
   fishLookAhead: 0, // squares ahead it checks for land (0 = just bumps into the shore)
-  fishBirthSize: 1, // newborn size as a share of adult body size (1 = born full size)
+  fishBirthSize: 0.4, // newborn size as a share of adult body size (1 = born full size); small fry can be eaten by big fish
   fishGrowthRate: 0.001, // share of adult size grown per tick while it has spare energy
   fishGrowthCost: 1, // energy per unit of body mass grown
   fishStomach: 2, // stomach capacity (energy plus nutrients) per unit of body mass
@@ -326,10 +327,10 @@ export const PARAMS = {
   gardenerEfficiency: 0.8, // share of the energy in food that becomes fat
   gardenerMass: 10, // body mass, for the cost of moving (doubled while carrying the boat)
   gardenerMoveCost: 0.05, // moving costs this x ½·m·v² per tick (people walk efficiently)
-  gardenerWalkSpeed: 0.12, // squares per tick on foot
-  gardenerRowSpeed: 0.08, // squares per tick rowing the boat
-  gardenerCarrySpeed: 0.03, // squares per tick carrying the boat over land
-  gardenerSwimSpeed: 0.02, // squares per tick swimming (caught in a flood without the boat)
+  gardenerWalkSpeed: 0.24, // squares per tick on foot
+  gardenerRowSpeed: 0.16, // squares per tick rowing the boat
+  gardenerCarrySpeed: 0.06, // squares per tick carrying the boat over land
+  gardenerSwimSpeed: 0.04, // squares per tick swimming (caught in a flood without the boat)
   gardenerSpearRange: 12, // how far they can throw a spear, in squares
   gardenerSpearHit: 0.75, // chance a throw hits
   gardenerNetRadius: 3, // the net's radius in squares (it lands a spear's throw away and catches every fish under it)
@@ -355,6 +356,7 @@ export const PARAMS = {
   initialGardeners: 0, // how many gardeners start in the world
   startingSurfaceWater: 1.3, // standing water at the start, as an average depth over the whole world
   initialSoilWetness: 0.4, // how full the soil starts (0..1); full under the starting lakes
+  initialHueSpread: 1, // starting (and sprayed) grass and algae colours are spread over this range around the default colour
   initialWaterPrefSpread: 0.85, // starting seeds' water preference is spread over this range around the default
 };
 

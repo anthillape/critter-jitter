@@ -138,7 +138,7 @@ export const SHARK: SpeciesDef = {
       hungerFat: { def: 6 },
       lifespan: { def: 15000 },
       litterSize: { def: 1.5 },
-      bodySize: { def: 6, max: 20, tip: "Adult body mass (babies start small and grow into it). Bigger sharks cost more to move and to keep alive." },
+      bodySize: { def: 6, max: 7, tip: "Adult body mass (babies start small and grow into it). Bigger sharks cost more to move and to keep alive." },
     }, true, [
     { key: "boostChance", label: "Boost likelihood", tip: "Chance a shark bursts into a boost once it has closed in on the prey it's locked on to.", def: 0.5, min: 0, max: 1, mode: "add", spread: 0.3 },
     { key: "boostPower", label: "Boost power", tip: "Boost speed as a multiple of top speed.", def: 2, min: 1, max: 5, mode: "mul", spread: 0.3 },
@@ -527,6 +527,7 @@ export class CritterSystem {
     for (const sys of this.hunters) {
       for (const k of sys.critters) {
         if (!k.alive || (sys.species.flies && !k.flying)) continue;
+        if (sys === this && 2 * bodyMass(c) > bodyMass(k)) continue; // of its own kind, only those twice its size are a danger
         const dx = k.x - c.x;
         const dy = k.y - c.y;
         if (Math.abs(dx) > r || Math.abs(dy) > r) continue;
@@ -1396,7 +1397,40 @@ export class CritterSystem {
     if (this.species.flies && c.pounceRest > 0) return;
     if (this.species.diet === "prey") this.findPrey(c);
     else if (this.species.diet === "grass") this.findGrass(c);
-    else this.findAlgae(c);
+    else if (!(this.species.key === "fish" && this.findSmallFish(c))) this.findAlgae(c);
+  }
+
+  /**
+   * A fish may go after a fish no more than half its size (by body mass):
+   * the more different their colours, the likelier (never one of exactly
+   * its own hue; fishCannibalism of the time for one of the opposite hue).
+   */
+  private findSmallFish(c: Critter): boolean {
+    const h = this.host;
+    const chance = h.p.fishCannibalism;
+    if (chance <= 0) return false;
+    const r = this.sp("FoodRadius");
+    const m = bodyMass(c);
+    let best: Critter | null = null;
+    let bd = r * r;
+    for (const o of this.critters) {
+      if (o === c || !o.alive || 2 * bodyMass(o) > m) continue;
+      const dx = o.x - c.x;
+      const dy = o.y - c.y;
+      if (Math.abs(dx) > r || Math.abs(dy) > r) continue;
+      const d = dx * dx + dy * dy;
+      if (d < bd && this.catchable(o)) (bd = d), (best = o);
+    }
+    if (!best) return false;
+    const apart = 180 - Math.abs(((c.hue - best.hue) % 360 + 540) % 360 - 180); // 0 (same hue) .. 180 (opposite)
+    if (h.rng() >= (chance * apart) / 180) return false;
+    this.dropTarget(c);
+    c.prey = best;
+    c.boostTried = false;
+    c.hasTarget = true;
+    c.targetX = best.x;
+    c.targetY = best.y;
+    return true;
   }
 
   /** Grass (nutrients) per direction, in 8 sectors; reused between searches. */
@@ -1558,7 +1592,7 @@ export class CritterSystem {
       c.pounceLeft = 0;
       if (!p.alive) return;
       p.alive = false;
-      const sys = this.preySystems.find((sy) => sy.species === p.species)!;
+      const sys = p.species === this.species ? this : this.preySystems.find((sy) => sy.species === p.species)!;
       // It eats as much of the body as fits in its stomach: all its energy
       // (fat, and food it hadn't digested) and nutrients (body, stomach and
       // any unborn young). What doesn't fit is left to rot.

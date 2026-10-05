@@ -2,7 +2,7 @@ import { PARAMS, TERRAIN, TICKS_PER_SECOND, WORLD_SIZE, type Params } from "./si
 import { CAT, FISH, ROC, SHARK, SHEEP, type SpeciesDef } from "./sim/critters";
 import {
   ALGAE_DEFAULTS, G_BREED, G_GERM, G_GROWTH, G_LIFESPAN, G_MUTATION, G_RANGE, G_WATER_PREF,
-  G_WATER_TOL, GRASS_DEFAULTS,
+  G_HUE, G_WATER_TOL, GRASS_DEFAULTS,
 } from "./sim/genes";
 
 /** One adjustable number, described for the settings panel. */
@@ -498,6 +498,11 @@ export const SETTINGS: Setting[] = [
     min: 0, max: 90, fmt: (v) => `±${v.toFixed(0)}°`,
   }),
   ...critterSettings(FISH, "Fish", "fish", "algae"),
+  param("fishCannibalism", {
+    group: "Fish", label: "Eating smaller fish",
+    tip: "A hungry fish may go after a fish no more than half its size. This is how often it does for one of the opposite colour; the closer their hues, the less likely, and never one of exactly its own hue. 0 = fish never eat fish.",
+    min: 0, max: 1, fmt: pct,
+  }),
   param("fishMinAlgaeSize", {
     group: "Fish", label: "Smallest algae worth eating",
     tip: "Fish only eat algae grown to at least this share of full size, so young algae can regrow.",
@@ -857,6 +862,11 @@ export const SETTINGS: Setting[] = [
     tip: "Fat (their energy) the gardener begins with.",
     min: 1, max: 500, log: true, newWorld: true,
   }),
+  param("initialHueSpread", {
+    group: "Life", label: "Spread of starting plant colours",
+    tip: "New grass seeds and algae (at the start, and from the sprays) get colours spread over this range around the default colour (0..1 of each plant's colour range). The colour is inherited, drifting a little in each generation.",
+    min: 0, max: 1,
+  }),
   param("initialWaterPrefSpread", {
     group: "Life", label: "Spread of starting water preferences",
     tip: "Starting seeds get random water preferences spread over this range around the starting water preference, so different moisture niches can be tried from the outset.",
@@ -871,12 +881,14 @@ export const SETTINGS: Setting[] = [
   gene("grass", G_MUTATION, { group: "Starting genes", label: "Grass: mutation size", tip: "How much each gene can change, either way, in each seed.", min: 0.002, max: 0.5, log: true, fmt: pct }),
   gene("grass", G_LIFESPAN, { group: "Starting genes", label: "Grass: lifespan", tip: "Age in ticks at which a grass plant dies.", min: 100, max: 30000, log: true }),
   gene("grass", G_WATER_PREF, { group: "Starting genes", label: "Grass: water preference", tip: "Soil wetness (0 = dry, 1 = soaked) grass works best at. Starting seeds are spread around this value.", min: 0.01, max: 1 }),
+  gene("grass", G_HUE, { group: "Starting genes", label: "Grass: colour", tip: "Grass colour, 0..1: light orange (0) through yellow and green to turquoise (1). It's inherited, drifting a little each generation.", min: 0, max: 1 }),
   gene("grass", G_WATER_TOL, { group: "Starting genes", label: "Grass: water tolerance", tip: "How far from its preferred wetness grass still copes. Wider tolerance lowers peak efficiency.", min: 0.05, max: 1 }),
   gene("algae", G_GROWTH, { group: "Starting genes", label: "Algae: growth speed", tip: "Nutrients an algae cell takes up per tick while growing.", min: 0.0005, max: 0.05, log: true }),
   gene("algae", G_BREED, { group: "Starting genes", label: "Algae: spore release chance", tip: "Chance per tick that grown algae releases a spore (if it can spare the energy and nutrients).", min: 0.0005, max: 0.2, log: true }),
   gene("algae", G_GERM, { group: "Starting genes", label: "Algae: spore time", tip: "Ticks a spore drifts before settling as a new algae cell (300 = 5 s at 1×).", min: 1, max: 800, log: true }),
   gene("algae", G_MUTATION, { group: "Starting genes", label: "Algae: mutation size", tip: "How much each gene can change, either way, in each new cell.", min: 0.002, max: 0.5, log: true, fmt: pct }),
   gene("algae", G_LIFESPAN, { group: "Starting genes", label: "Algae: lifespan", tip: "Age in ticks at which an algae cell dies.", min: 100, max: 30000, log: true }),
+  gene("algae", G_HUE, { group: "Starting genes", label: "Algae: colour", tip: "Algae colour, 0..1: dark green (0) to burnt orange (1). It's inherited, drifting a little each generation.", min: 0, max: 1 }),
 ];
 
 for (const s of SETTINGS) s.defaultValue = s.get();

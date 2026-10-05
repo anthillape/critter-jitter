@@ -1,6 +1,6 @@
 import { CELL_COUNT, GRID_H, GRID_W, PARAMS, type Params } from "./config";
 import {
-  ALGAE_DEFAULTS, G_BREED, G_GERM, G_GROWTH, G_LIFESPAN, G_RANGE, G_WATER_PREF, G_WATER_TOL,
+  ALGAE_DEFAULTS, G_BREED, G_GERM, G_GROWTH, G_HUE, G_LIFESPAN, G_RANGE, G_WATER_PREF, G_WATER_TOL,
   ALGAE_UNUSED_GENES, GENE_COUNT, GRASS_DEFAULTS, inheritGenes, mutateInto, setGenes, wildGenes,
 } from "./genes";
 import { SporeSystem } from "./spores";
@@ -157,6 +157,8 @@ export class World {
     this.sharks = new CritterSystem(host, SHARK, [this.fish, this.sheep]);
     this.rocs = new CritterSystem(host, ROC, [this.fish, this.sheep]);
     this.cats = new CritterSystem(host, CAT, [this.sheep, this.rocs]);
+    // Big fish may eat small ones (see findSmallFish), so fish keep an eye out for big fish too.
+    this.fish.hunters.push(this.fish);
     this.spores = new SporeSystem({
       p: this.p,
       rng: this.rng,
@@ -330,6 +332,8 @@ export class World {
     // a chance from the outset; evolution then refines them.
     const pref = GRASS_DEFAULTS[G_WATER_PREF] + (rng() - 0.5) * this.p.initialWaterPrefSpread;
     this.genes[i * GENE_COUNT + G_WATER_PREF] = Math.max(0.01, Math.min(1, pref));
+    // And a spread of colours, which then drift as they're inherited.
+    this.genes[i * GENE_COUNT + G_HUE] = Math.max(0, Math.min(1, GRASS_DEFAULTS[G_HUE] + (rng() - 0.5) * this.p.initialHueSpread));
     return true;
   }
 
@@ -346,6 +350,7 @@ export class World {
     this.bornTick[i] = this.tick;
     this.age[i] = 0;
     setGenes(this.genes, i, wild ? wildGenes(this.rng, ALGAE_DEFAULTS, ALGAE_UNUSED_GENES) : ALGAE_DEFAULTS);
+    if (!wild) this.genes[i * GENE_COUNT + G_HUE] = Math.max(0, Math.min(1, ALGAE_DEFAULTS[G_HUE] + (this.rng() - 0.5) * this.p.initialHueSpread));
     return true;
   }
 

@@ -1,5 +1,5 @@
 import { CELL_COUNT, GRID_H, GRID_W, MAX_HEIGHT, MIN_HEIGHT, PARAMS } from "./sim/config";
-import { G_WATER_PREF, GENE_COUNT } from "./sim/genes";
+import { G_HUE, G_WATER_PREF, GENE_COUNT } from "./sim/genes";
 import { ALGAE, GRASS, SEED, type World } from "./sim/world";
 
 export type View = "normal" | "nutrients" | "energy" | "moisture" | "height" | "waterpref";
@@ -82,11 +82,12 @@ export class Renderer {
             g = g * (1 - a) + 92 * a;
             b = b * (1 - a) + 178 * a;
             if (k === ALGAE) {
-              // Subtle green cast, stronger for bigger algae.
-              const s = 0.05 + 0.13 * (w.floraN[i] / p.algaeMaxN);
-              r = r * (1 - s) + 40 * s;
-              g = g * (1 - s) + 150 * s;
-              b = b * (1 - s) + 70 * s;
+              // A cast of its inherited colour (dark green to burnt orange), stronger for bigger algae.
+              const s = 0.08 + 0.22 * (w.floraN[i] / p.algaeMaxN);
+              const hue = w.genes[i * GENE_COUNT + G_HUE];
+              r = r * (1 - s) + (30 + 170 * hue) * s;
+              g = g * (1 - s) + (110 - 20 * hue) * s;
+              b = b * (1 - s) + (50 - 25 * hue) * s;
             }
           } else {
             if (k === GRASS) {
@@ -96,12 +97,13 @@ export class Renderer {
                 // Dry-lovers yellow/orange through to wet-lovers blue.
                 r = 230 - 200 * pref; g = 170 + 40 * s - 40 * pref; b = 40 + 200 * pref;
               } else {
+                // Its inherited colour: light orange through yellow and green
+                // to turquoise; young plants paler, full-grown deeper, and a
+                // little darker on wet ground.
                 const shade = 1 - 0.2 * sat[i];
-                // Dry-loving grass is a touch more olive, wet-loving a touch bluer.
-                const tint = (0.5 - pref) * 40;
-                r = (170 - 130 * s + tint) * shade;
-                g = (200 - 70 * s) * shade;
-                b = (80 - 50 * s - tint * 0.5) * shade;
+                const hue = 30 + 145 * w.genes[i * GENE_COUNT + G_HUE];
+                [r, g, b] = hsl(hue, 0.55, 0.7 - 0.32 * s);
+                r *= shade; g *= shade; b *= shade;
               }
             } else if (k === SEED) {
               r = r * 0.6 + 230 * 0.4;
@@ -162,4 +164,14 @@ export class Renderer {
 
 function clamp(v: number): number {
   return v < 0 ? 0 : v > 255 ? 255 : v | 0;
+}
+
+/** HSL (hue in degrees, saturation and lightness 0..1) to RGB 0..255. */
+function hsl(h: number, s: number, l: number): [number, number, number] {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const hp = (((h % 360) + 360) % 360) / 60;
+  const x = c * (1 - Math.abs((hp % 2) - 1));
+  const [r1, g1, b1] = hp < 1 ? [c, x, 0] : hp < 2 ? [x, c, 0] : hp < 3 ? [0, c, x] : hp < 4 ? [0, x, c] : hp < 5 ? [x, 0, c] : [c, 0, x];
+  const m = l - c / 2;
+  return [(r1 + m) * 255, (g1 + m) * 255, (b1 + m) * 255];
 }

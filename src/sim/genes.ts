@@ -9,9 +9,10 @@ export const G_MUTATION = 4; // max fractional change applied to every gene in a
 export const G_LIFESPAN = 5; // age (ticks) at which the organism dies
 export const G_WATER_PREF = 6; // soil saturation (0..1) the plant works best at (grass only)
 export const G_WATER_TOL = 7; // how far from its preference it still copes (grass only)
-export const GENE_COUNT = 8;
+export const G_HUE = 8; // colour, 0..1 (grass: light orange through yellow and green to turquoise; algae: dark green to burnt orange)
+export const GENE_COUNT = 9;
 
-export const GENE_NAMES = ["growth", "breed", "range", "germ / spore", "mutation", "lifespan", "water pref", "water tol"];
+export const GENE_NAMES = ["growth", "breed", "range", "germ / spore", "mutation", "lifespan", "water pref", "water tol", "colour"];
 /** Genes that have no effect on algae. */
 export const ALGAE_UNUSED_GENES: ReadonlySet<number> = new Set([G_RANGE, G_WATER_PREF, G_WATER_TOL]);
 
@@ -25,11 +26,12 @@ export const GENE_LIMITS: ReadonlyArray<readonly [number, number]> = [
   [100, 30000],
   [0.01, 1],
   [0.05, 1],
+  [0, 1],
 ];
 
 /** Starting genes for new worlds (editable in the settings panel). */
-export const GRASS_DEFAULTS = [0.008, 0.01, 8, 80, 0.15, 3000, 0.525, 0.35];
-export const ALGAE_DEFAULTS = [0.006, 0.008, 1, 300, 0.15, 2000, 1, 1];
+export const GRASS_DEFAULTS = [0.008, 0.01, 8, 80, 0.15, 3000, 0.525, 0.35, 0.45];
+export const ALGAE_DEFAULTS = [0.006, 0.008, 1, 300, 0.15, 2000, 1, 1, 0.3];
 
 /**
  * Copies genes from parent slot `src` to child slot `dst`. Every gene mutates
@@ -45,7 +47,8 @@ export function mutateInto(from: Float32Array, s: number, to: Float32Array, d: n
   const m = from[s + G_MUTATION];
   for (let g = 0; g < GENE_COUNT; g++) {
     const [lo, hi] = GENE_LIMITS[g];
-    const v = from[s + g] * (1 + (rng() * 2 - 1) * m);
+    // Colour drifts by a small step either way (a scaled step would get stuck near 0).
+    const v = g === G_HUE ? from[s + g] + (rng() * 2 - 1) * m * 0.3 : from[s + g] * (1 + (rng() * 2 - 1) * m);
     to[d + g] = v < lo ? lo : v > hi ? hi : v;
   }
 }
@@ -60,7 +63,7 @@ export function wildGenes(rng: Rng, base: readonly number[], keep: ReadonlySet<n
   return base.map((b, g) => {
     if (keep.has(g)) return b;
     const [lo, hi] = GENE_LIMITS[g];
-    if (g === G_WATER_PREF || g === G_WATER_TOL) return lo + rng() * (hi - lo);
+    if (g === G_WATER_PREF || g === G_WATER_TOL || g === G_HUE) return lo + rng() * (hi - lo);
     return lo * Math.exp(rng() * Math.log(hi / lo));
   });
 }

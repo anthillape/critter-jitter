@@ -1,7 +1,7 @@
 # Critter Jitter
 
 A grid ecosystem simulation in HTML / CSS / TypeScript. The world is a grid
-of squares drawn 3×3 pixels each. It starts as a 400×150 strip (1200×450
+of squares drawn 3×3 pixels each. It starts as a 200×120 world (600×360
 pixels), and its width and height can be changed on the Start tab. Stats and
 graphs sit in masonry-style cards under the map, and a tabbed sidebar (Start,
 World, Tools & weather, Settings, Help) fills the rest of the window.
@@ -104,6 +104,13 @@ founders.
   - *Hungry*: when fat drops below its hunger threshold, it looks for the
     nearest algae within 7 squares every so often, swims to it at top speed,
     and eats it in one go (the algae's nutrients, and its energy as fat).
+  - *Eating smaller fish*: when it looks for food, a fish may instead go
+    after a fish no more than half its size (by body mass). The more
+    different their colours, the likelier: never one of exactly its own hue,
+    and *Eating smaller fish* (30% by default) of the time for the opposite
+    hue. Fish hatch at 40% of their adult size and grow up, so it's mostly
+    big fish eating other families' fry. Fish also keep a wary eye out for
+    fish twice their size.
   - *Looking for a mate*: once it's old and fat enough (both genetic) it
     looks, less often, for another ready fish within 14 squares.
   - Fish can't move on land and slowly starve there. They pass through
@@ -663,6 +670,15 @@ peak, so generalists pay for their flexibility. The initial seeds get random
 water preferences, so dry hills and soggy lake margins can both be colonised
 and then specialise. The "Grass water preference" view colours grass from
 yellow (dry-loving) to blue (wet-loving).
+
+**Colour** is a gene too (`colour`, 0–1). Grass ranges from light orange
+through yellow and green to turquoise; algae from dark green to burnt
+orange. It's inherited, drifting a small step either way in each
+generation. New seeds and algae get colours spread around the default
+(*Spread of starting plant colours*, the whole range by default), so the
+map starts mottled and families of colour spread and drift. In the normal
+view grass shows its colour, paler while young and deeper when full-grown,
+and algae tint the water with theirs.
 
 Other trade-offs: faster growth and a longer lifespan both raise metabolic
 cost, and a longer seed range raises seed cost.
