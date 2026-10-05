@@ -315,6 +315,7 @@ export const PARAMS = {
   gardenerSwimSpeed: 0.02, // squares per tick swimming (caught in a flood without the boat)
   gardenerSpearRange: 12, // how far they can throw a spear, in squares
   gardenerSpearHit: 0.75, // chance a throw hits
+  gardenerRareShare: 0.4, // they think a species is rare once it falls below this share of the most they remember seeing
   gardenerDecideInterval: 300, // ticks between rethinking what to do while wandering
   gardenerGiveUp: 3000, // ticks before they give up on a task that isn't working out
 

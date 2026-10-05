@@ -2,13 +2,14 @@ import { GRID_H, GRID_W } from "./config";
 
 /**
  * Route planning for the gardener, who walks on land, rows a boat on water,
- * and can carry the boat over land (slowly). The map is planned on a coarse
- * grid of NAV_CELL-square cells, in two layers: without the boat (land
- * only) and with it (land, carried, or water, rowed). The boat can only be
- * picked up in the cell where it lies, and can be put down on any land
- * cell. A shortest-time search over both layers finds routes like "walk to
- * the boat, carry it to the lake, row across, leave it on the far shore,
- * walk on".
+ * carries the boat over land (slowly), and can swim (more slowly still).
+ * The map is planned on a coarse grid of NAV_CELL-square cells, in two
+ * layers: without the boat (walking or swimming) and with it (rowing on
+ * water, carrying it on land). The boat can be picked up in the cell where
+ * it lies or from one next to it, and put down on any land cell. A
+ * shortest-time search over both layers finds routes like "walk to the
+ * boat, carry it to the lake, row across, leave it on the far shore, walk
+ * on".
  */
 export const NAV_CELL = 3;
 
@@ -16,7 +17,7 @@ export interface Speeds {
   walk: number;
   row: number;
   carry: number;
-  /** Swimming, without the boat: only to get out of water it's caught in. */
+  /** Swimming, without the boat (slow, so only when there's no better way). */
   swim: number;
 }
 
@@ -92,8 +93,13 @@ export class Navigator {
         found = node;
         break;
       }
-      // Pick the boat up (only where it lies, and only if it wasn't with us to begin with).
-      if (!withBoat && !hasBoat && c === boatCell) relax(node, c + n, d);
+      // Pick the boat up where it lies, or reach it from next to it (it may lie
+      // in water that has risen around it); only if it wasn't with us to begin with.
+      if (!withBoat && !hasBoat) {
+        const bx = boatCell % this.cw - (c % this.cw);
+        const by = ((boatCell / this.cw) | 0) - ((c / this.cw) | 0);
+        if (Math.abs(bx) <= 1 && Math.abs(by) <= 1) relax(node, boatCell + n, d + Math.hypot(bx, by) * NAV_CELL / sp.walk);
+      }
       // Put the boat down (on land).
       if (withBoat && this.water[c] === 0) relax(node, c, d);
       const cx = c % this.cw;
@@ -108,9 +114,8 @@ export class Navigator {
           const len = (dx && dy ? Math.SQRT2 : 1) * NAV_CELL;
           const wet = this.water[nc] === 1;
           if (!withBoat) {
-            // Can't walk on water; caught in it (only ever at the start), it swims out.
-            if (this.water[c] === 1) relax(node, nc, d + len / sp.swim);
-            else if (!wet) relax(node, nc, d + len / sp.walk);
+            // Walking on land; swimming (slowly) through water, for want of the boat.
+            relax(node, nc, d + len / (wet || this.water[c] === 1 ? sp.swim : sp.walk));
           } else {
             // Rowing over water; carrying the boat over land.
             const speed = wet && this.water[c] === 1 ? sp.row : wet || this.water[c] === 1 ? (sp.row + sp.carry) / 2 : sp.carry;

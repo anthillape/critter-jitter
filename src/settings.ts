@@ -665,6 +665,7 @@ export const SETTINGS: Setting[] = [
   param("gardenerSwimSpeed", { group: "Gardener", label: "Swimming speed", tip: "Squares per tick swimming, if they're caught in water without the boat (by a flood).", min: 0.002, max: 0.2, log: true }),
   param("gardenerSpearRange", { group: "Gardener", label: "Spear range", tip: "How far they can throw a spear, in squares.", min: 1, max: 60 }),
   param("gardenerSpearHit", { group: "Gardener", label: "Spear accuracy", tip: "Chance a throw hits.", min: 0.01, max: 1, fmt: pct }),
+  param("gardenerRareShare", { group: "Gardener", label: "Worries below", tip: "The gardener judges for themselves which species are rare, from what they've seen: rare once a population falls below this share of the most they remember (they slowly forget old peaks), or to a handful. Plentiful (fair game to eat) at twice this share.", min: 0.05, max: 0.95, fmt: pct }),
   param("gardenerDecideInterval", { group: "Gardener", label: "Rethink interval", tip: "Ticks between rethinking what to do while just wandering (they always decide again when a task is done).", min: 30, max: 3000, int: true, log: true }),
   param("gardenerGiveUp", { group: "Gardener", label: "Patience", tip: "Ticks before they give up on a task that isn't working out (a creature they can't catch, a trip that takes too long).", min: 300, max: 20000, int: true, log: true }),
 

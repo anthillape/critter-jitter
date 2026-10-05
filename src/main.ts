@@ -1168,6 +1168,8 @@ function gardenerCard(): void {
       ["Doing", g.alive ? g.doing || "–" : "–"],
       ["Right now", g.status],
       ["Boat", g.hasBoat ? "with them" : `left at (${g.boatX | 0}, ${g.boatY | 0})`],
+      ["How they see it", (["grass", "algae", "fish", "shark", "sheep", "cat", "roc"] as const)
+        .map((n) => `${n === "roc" ? "rocs (sacred)" : n === "grass" || n === "algae" || n === "fish" || n === "sheep" ? n : n + "s"}: ${g.judge(n)}`).join("<br>")],
     ];
   statsGardener.innerHTML = rows.map(([k, v]) => `<tr><td class="muted">${k}</td><td>${v}</td></tr>`).join("");
   const log = g ? g.log.slice(-12).reverse() : [];
