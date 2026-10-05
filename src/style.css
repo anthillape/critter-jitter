@@ -208,3 +208,6 @@ button.primary:hover { background: #46702a; }
 .gardener-log .by { color: var(--muted); }
 .card .controls label { min-width: 0; width: 100%; }
 #brain { display: block; width: 100%; margin-top: 4px; }
+#statsGardener td:last-child { text-align: left; }
+#gardenerView, #gardenerPlaces { max-height: none; }
+#statsGardener td:first-child { padding-right: 10px; white-space: nowrap; }

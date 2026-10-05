@@ -322,30 +322,64 @@ accounted for.
 ## The gardener
 
 A person who roams the world trying to keep every species alive
-(`src/sim/gardener.ts`). They can see the whole map and every
-population. Whenever they're free, the game works out a handful of
-concrete options, each in plain words:
+(`src/sim/gardener.ts`). They can see the whole map and every population.
 
-- **eat**: graze grass and seeds (or algae from the boat), or spear a
-  plentiful animal (never a roc) and eat it. They eat anything but spores.
-- **protect** a rare species by culling a predator near its biggest
-  group (sharks eat fish; cats eat sheep and landed rocs), or by culling
-  grazers when grass or algae is rare.
-- **curb** a species that has outgrown its food.
-- **reunite** the last few of a species, carrying one to another so they
-  can breed.
-- **rescue** a rare animal, carrying it to a stretch of its habitat
-  with food and no hunters.
-- **sow**: collect seeds and carry them to bare, damp ground.
+**What they know.** Every 100 ticks they survey the world
+(`src/sim/survey.ts`):
+- **Land and water:** they map its separate land masses and lakes
+  (contiguous areas, so a thin stream doesn't split a land mass). For each
+  they count its grass, seeds, algae, bare damp ground, and every animal
+  in it. The Gardener card lists them, as "land A (north-west)",
+  "lake 2 (east)" and so on.
+- **Populations:** for each species, and for grass and algae, they remember
+  the most they've seen (slowly forgetting old peaks), its usual number,
+  and its recent counts.
+- **Trajectory:** a straight line through the last 2,000 ticks of counts
+  gives each population's trend ("falling 30% per 1,000 ticks") and when
+  it would be gone at that rate.
+- **Their own rating:**
+  - *rare*: below a share of the remembered peak (*Worries below*, 40% by
+    default) or down to a handful;
+  - *plentiful*: at twice that share;
+  - *too many*: well over its usual number and short of food.
+- **Urgency and what can be spared:** together, rarity, a falling trend and
+  a near "gone in" give how urgently a species needs help. A species can
+  be spared (eaten or culled) only if it's plentiful and not falling.
+- **Who eats what:** fish eat algae, sheep eat grass, sharks eat fish and
+  swimming sheep, cats eat sheep and landed rocs, rocs eat fish and sheep.
+  With the counts, this tells them how much food each species has, and
+  how many hunters it faces, in each land mass or lake. They compare that
+  with what's usual for the species world-wide.
+- **Their own odds of catching an animal:** half from their speed against
+  its top speed (walking on land, rowing on water), half from how their
+  chases of its kind have gone.
+
+**What they consider.** Whenever they're free, the game works out a
+handful of concrete options from that knowledge, each in plain words:
+- **eat**: graze plants in a place with plenty for its grazers, or spear an
+  animal of a spare species (never a roc), from where its kind is most
+  crowded. They eat anything but spores.
+- **protect**: cull a hunter of a species in trouble, in the land mass or
+  lake where it hunts it. The more hunters per head of prey there, and the
+  more of the species lives there, the more pressing.
+- **relocate**: carry an animal out of a place that can't feed its kind
+  (or, for a species in trouble, where hunters outnumber it) to a place
+  that can, with no more hunters.
+- **reunite**: carry a lone animal (alone in its land mass or lake) to
+  others of its kind, or bring it a mate if it's somewhere good.
+- **colonise**: start a new group of a crowded or struggling species in an
+  empty land mass or lake with plenty of food and few hunters, so one
+  disaster can't end it.
+- **thin out** grazers that are stripping their plants where grass or
+  algae is struggling, or a species that has outgrown its food.
+- **sow**: collect seeds and carry them to bare, damp land with little
+  grass, especially where sheep go hungry.
 - **wander** and keep watch.
 
-They judge for themselves which populations are rare. They remember the
-most of each species (and of grass and algae) they've seen, slowly
-forgetting old peaks, and its usual number. A population is rare once it
-falls below a share of that peak (*Worries below*, 40% by default) or to a
-handful. It's plentiful, and fair game to eat, at twice that share. It's too
-many when it's well over its usual number and its food per head has
-fallen below half of usual. The Gardener card shows how they see each one.
+Options further away score less, and chases score by their odds of
+catching the animal. Mid-task they look up now and then and change plans
+if something much more pressing has come up. Animals that get away, and
+places they couldn't reach, are left alone for a while.
 
 Rocs are sacred. The gardener never hunts, culls or carries one, though
 they'll cull cats to protect them.
@@ -355,8 +389,10 @@ take the best. On the Gardener card you can switch to a **tiny language
 model** instead: SmolLM2-135M-Instruct, an open model of about 100 MB,
 run in your browser by transformers.js (`src/brain.worker.ts`, on the GPU
 with WebGPU, else the CPU). It's downloaded from Hugging Face the first
-time and cached by the browser. It reads their fat, the populations (with
-which are rare, by their own judgement) and the numbered options, and answers with a number.
+time and cached by the browser. It reads their fat, who eats what, each
+population with their own rating and its trend, the main land masses and
+lakes with what's in each, and the numbered options, and answers with a
+number.
 While it thinks they carry on, and if it doesn't answer usefully within
 30 seconds the rules decide. The card lists recent decisions and who made
 them.
@@ -365,8 +401,9 @@ Getting around: they walk fast, row a boat over water, and carry the boat
 over land, slowly, when a route needs it. Each trip is planned as the
 fastest route over a coarse map in two layers, with and without the boat
 (`src/sim/navigate.ts`). A route can be "walk to the boat, carry it to the
-lake, row across, leave it on the far shore and walk on". Caught in a
-flood without the boat, they swim for the shore.
+lake, row across, leave it on the far shore and walk on". They can swim,
+slowly and at a cost, when there's no better way. A boat left where the
+water rises washes up on the nearest shore.
 
 Their spear reaches a dozen squares and hits three times in four. A cull
 leaves a body to rot. A kill to eat is walked to and eaten. Rocs are never speared.

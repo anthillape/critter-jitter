@@ -40,6 +40,8 @@ const statsRocs = $<HTMLTableElement>("statsRocs");
 const rocTraits = $<HTMLTableElement>("rocTraits");
 const statsGardener = $<HTMLTableElement>("statsGardener");
 const gardenerLog = $<HTMLOListElement>("gardenerLog");
+const gardenerView = $<HTMLUListElement>("gardenerView");
+const gardenerPlaces = $<HTMLUListElement>("gardenerPlaces");
 const brainSel = $<HTMLSelectElement>("brain");
 const brainStatus = $<HTMLParagraphElement>("brainStatus");
 const playBtn = $<HTMLButtonElement>("play");
@@ -1168,9 +1170,12 @@ function gardenerCard(): void {
       ["Doing", g.alive ? g.doing || "–" : "–"],
       ["Right now", g.status],
       ["Boat", g.hasBoat ? "with them" : `left at (${g.boatX | 0}, ${g.boatY | 0})`],
-      ["How they see it", (["grass", "algae", "fish", "shark", "sheep", "cat", "roc"] as const)
-        .map((n) => `${n === "roc" ? "rocs (sacred)" : n === "grass" || n === "algae" || n === "fish" || n === "sheep" ? n : n + "s"}: ${g.judge(n)}`).join("<br>")],
     ];
+  const items = (el: HTMLElement, lines: string[]) =>
+    el.replaceChildren(...lines.map((t) => Object.assign(document.createElement("li"), { textContent: t })));
+  items(gardenerView, !g ? [] : (["grass", "algae", "fish", "shark", "sheep", "cat", "roc"] as const)
+    .map((n) => `${n === "roc" ? "Rocs (sacred)" : n === "shark" || n === "cat" ? `${n[0].toUpperCase()}${n.slice(1)}s` : `${n[0].toUpperCase()}${n.slice(1)}`}: ${g.outlookText(n)}`));
+  items(gardenerPlaces, g ? g.regionLines().map((l) => l[0].toUpperCase() + l.slice(1)) : []);
   statsGardener.innerHTML = rows.map(([k, v]) => `<tr><td class="muted">${k}</td><td>${v}</td></tr>`).join("");
   const log = g ? g.log.slice(-12).reverse() : [];
   const key = log.map((l) => l.tick + l.text).join("|");

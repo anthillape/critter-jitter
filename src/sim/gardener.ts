@@ -1,7 +1,8 @@
 import { GRID_H, GRID_W } from "./config";
-import { CritterSystem, type Critter } from "./critters";
+import { CritterSystem, T_MAX_SPEED, type Critter } from "./critters";
 import { NAV_CELL, Navigator, type Waypoint } from "./navigate";
 import type { SeedPack, World } from "./world";
+import { DIET, foodIn, predatorsOf, SPECIES_NAMES, suits, survey, type Region, type SpeciesName, type Survey } from "./survey";
 
 /**
  * The gardener: a person who roams the world trying to keep every species
@@ -46,34 +47,43 @@ export interface GardenerPrompt {
 /** Asks an outside brain to pick an option (1-based answer), or null if it can't. */
 export type Chooser = (p: GardenerPrompt) => Promise<number | null>;
 
-interface Species {
-  name: string;
-  plural: string;
-  sys: CritterSystem;
-  water: boolean;
-  /** Never hunted, culled or carried (rocs are sacred). */
-  sacred: boolean;
-}
-
 /** How the gardener rates a population, from what they've seen of it. */
 export type Judgement = "gone" | "rare" | "ok" | "plentiful" | "too many";
+
+/** How a population is doing, by the gardener's reckoning. */
+export interface Outlook {
+  n: number;
+  judgement: Judgement;
+  /** Change per 1,000 ticks as a share of its recent average (-0.3 = falling 30%). */
+  trend: number;
+  /** Ticks until it's gone at its current rate, if it's falling (else Infinity). */
+  goneIn: number;
+  /** How badly it needs help: 0 not at all, up to about 5 when it's nearly gone and falling fast. */
+  urgency: number;
+  /** Doing well enough to spare some, to eat or cull (never rocs). */
+  spare: boolean;
+}
 
 /**
  * What the gardener remembers of a population (a species, grass or algae):
  * the most they've seen (slowly forgotten), the usual number (a long
- * running average), and the usual food per head.
+ * running average), recent counts (for its trend), and its usual food per
+ * head world-wide (species only).
  */
 interface Memory {
   peak: number;
   usual: number;
   food: number;
-  n: number;
-  foodNow: number;
+  history: number[];
 }
 
-const OBSERVE_EVERY = 100; // ticks between looking over the populations
+const OBSERVE_EVERY = 100; // ticks between looking over the world
 const PEAK_FADE = 0.995; // per look: the remembered peak fades by half in about 14,000 ticks
 const USUAL_RATE = 0.02; // per look: the usual number follows the count over about 5,000 ticks
+const HISTORY_LOOKS = 40; // counts remembered per population
+const TREND_LOOKS = 20; // the trend is taken over the last 2,000 ticks
+
+const PLURAL: Record<SpeciesName, string> = { fish: "fish", shark: "sharks", sheep: "sheep", cat: "cats", roc: "rocs" };
 
 const BLOCK = 20; // squares per side of the blocks the gardener judges the map by
 
@@ -112,6 +122,8 @@ export class Gardener {
   private current = 0;
   /** Animals that got away from them (by species and id), with when they'll try again. */
   private escaped = new Map<string, number>();
+  /** How their chases of each species have gone (caught or got away), to judge their odds. */
+  private chases = new Map<string, { got: number; lost: number }>();
   /** Places (route cells) they recently found no way to reach, with when they'll try again. */
   private unreachable = new Map<number, number>();
   private pending = false;
@@ -120,6 +132,8 @@ export class Gardener {
   chooser: Chooser | null = null;
   /** What they remember of each population (fish, shark, sheep, cat, roc, grass, algae). */
   readonly memory = new Map<string, Memory>();
+  /** Their latest survey of the land masses and lakes. */
+  view!: Survey;
   /** Recent decisions, newest last. */
   log: Array<{ tick: number; text: string; by: string }> = [];
 
@@ -194,6 +208,7 @@ export class Gardener {
       if (chasing && this.taskAge > 0.4 * p.gardenerGiveUp) {
         this.log.push({ tick: this.w.tick, text: `The ${t.sys.species.name} got away; gave up the chase.`, by: "" });
         this.escaped.set(`${t.sys.species.name}#${t.target.id}`, this.w.tick + 3000);
+        this.chased(t.sys, false);
         this.finish();
       } else if (this.taskAge > p.gardenerGiveUp) {
         this.log.push({ tick: this.w.tick, text: "Took too long; gave up.", by: "" });
@@ -276,6 +291,7 @@ export class Gardener {
           this.status = `catching a ${t.sys.species.name}`;
           if (Math.hypot(c.x - this.x, c.y - this.y) < 1.5 && !c.flying) {
             t.sys.lift(c);
+            this.chased(t.sys, true);
             this.carried = { sys: t.sys, c };
           } else this.travel(c.x, c.y, 1);
           return;
@@ -321,6 +337,7 @@ export class Gardener {
     this.spear = { x0: this.x, y0: this.y, x1: c.x, y1: c.y, t: 12, hit };
     this.spearRest = 60;
     if (!hit) return;
+    this.chased(t.sys, true);
     if (t.kind === "cull") {
       t.sys.cull(c);
       this.finish();
@@ -328,6 +345,27 @@ export class Gardener {
       const got = t.sys.take(c);
       this.carcass = { x: c.x, y: c.y, fat: got.fat, nutrients: got.nutrients };
     }
+  }
+
+  /** Remembers how a chase went (older chases count for less). */
+  private chased(sys: CritterSystem, caught: boolean): void {
+    const r = this.chases.get(sys.species.name) ?? { got: 0, lost: 0 };
+    r.got = r.got * 0.9 + (caught ? 1 : 0);
+    r.lost = r.lost * 0.9 + (caught ? 0 : 1);
+    this.chases.set(sys.species.name, r);
+  }
+
+  /**
+   * Their odds of catching (or getting a spear into) an animal: half from
+   * how their own speed there (walking on land, rowing on water) compares
+   * with its top speed, half from how their chases of its kind have gone.
+   */
+  odds(sys: CritterSystem, c: Critter): number {
+    const p = this.w.p;
+    const mine = sys.species.habitat === "water" ? p.gardenerRowSpeed : p.gardenerWalkSpeed;
+    const speed = Math.max(0.1, Math.min(1, mine / (1.5 * c.traits[T_MAX_SPEED])));
+    const r = this.chases.get(sys.species.name) ?? { got: 0, lost: 0 };
+    return 0.5 * speed + 0.5 * ((r.got + 1) / (r.got + r.lost + 2));
   }
 
   private eat(e: number, n: number): void {
@@ -521,7 +559,14 @@ export class Gardener {
    */
   decide(min = -Infinity): void {
     const midTask = min > -Infinity;
-    const opts = this.options().filter((o) => o.utility > min);
+    const cur = this.task;
+    const same = (t: Task) => {
+      if (!cur || t.kind !== cur.kind) return false;
+      if ("target" in t && "target" in cur) return t.target === cur.target;
+      const a = this.aimOf(t), b = this.aim();
+      return !!a && !!b && Math.hypot(a.x - b.x, a.y - b.y) < 25;
+    };
+    const opts = this.options().filter((o) => o.utility > min && !(midTask && same(o.task)));
     this.decideIn = this.w.p.gardenerDecideInterval;
     if (!opts.length) return;
     if (midTask) for (const o of opts) o.text = `Change of plan: ${o.text[0].toLowerCase()}${o.text.slice(1)}`;
@@ -566,31 +611,25 @@ export class Gardener {
     if (this.log.length > 30) this.log.shift();
   }
 
-  private species(): Species[] {
+  /** Each species' critter system. */
+  private sys(): Record<SpeciesName, CritterSystem> {
     const w = this.w;
-    return [
-      { name: "fish", plural: "fish", sys: w.fish, water: true, sacred: false },
-      { name: "shark", plural: "sharks", sys: w.sharks, water: true, sacred: false },
-      { name: "sheep", plural: "sheep", sys: w.sheep, water: false, sacred: false },
-      { name: "cat", plural: "cats", sys: w.cats, water: false, sacred: false },
-      { name: "roc", plural: "rocs", sys: w.rocs, water: false, sacred: true },
-    ];
+    return { fish: w.fish, shark: w.sharks, sheep: w.sheep, cat: w.cats, roc: w.rocs };
   }
 
   /**
-   * Looks over every population and updates what they remember of it: the
-   * most they've seen, the usual number, and the usual food per head.
+   * Every OBSERVE_EVERY ticks: counts every population, remembers it (the
+   * most they've seen, the usual number, recent counts for the trend, the
+   * usual food per head), and surveys the land masses and lakes.
    */
   private observe(): void {
     const w = this.w;
+    this.view = survey(w, this.nav);
     let grass = 0, algae = 0;
-    for (let i = 0; i < w.kind.length; i++) {
-      if (w.kind[i] === 2) grass++;
-      else if (w.kind[i] === 3) algae++;
-    }
+    for (const r of this.view.regions) (grass += r.grass), (algae += r.algae);
     const n = (s: CritterSystem) => s.critters.length;
     const counts: Array<[string, number, number]> = [
-      // name, count, food in sight per head
+      // name, count, food per head world-wide
       ["grass", grass, 0],
       ["algae", algae, 0],
       ["fish", n(w.fish), algae / Math.max(1, n(w.fish))],
@@ -602,239 +641,369 @@ export class Gardener {
     for (const [name, count, food] of counts) {
       const m = this.memory.get(name);
       if (!m) {
-        this.memory.set(name, { peak: count, usual: count, food, n: count, foodNow: food });
+        this.memory.set(name, { peak: count, usual: count, food, history: [count] });
         continue;
       }
       m.peak = Math.max(count, m.peak * PEAK_FADE);
       m.usual += (count - m.usual) * USUAL_RATE;
-      m.food += (food - m.food) * USUAL_RATE;
-      m.n = count;
-      m.foodNow = food;
+      if (count > 0) m.food += (food - m.food) * USUAL_RATE;
+      m.history.push(count);
+      if (m.history.length > HISTORY_LOOKS) m.history.shift();
     }
   }
 
   /**
-   * Their own view of a population: rare when it has fallen well below the
-   * most they remember (or there are only a handful left), plentiful when
-   * it's near that, too many when it's well above its usual number and its
-   * food per head has fallen to under half of usual.
+   * How a population is doing, by their own reckoning: its trend (a
+   * straight line through the last TREND_LOOKS counts), when it would be
+   * gone at that rate, how rare it is against the most they remember, and
+   * from that how urgently it needs help and whether it can spare some.
    */
-  judge(name: string): Judgement {
+  outlook(name: string): Outlook {
     const m = this.memory.get(name);
-    if (!m) return "ok";
+    if (!m) return { n: 0, judgement: "ok", trend: 0, goneIn: Infinity, urgency: 0, spare: false };
+    const h = m.history.slice(-TREND_LOOKS);
+    const n = h[h.length - 1];
+    let slope = 0, mean = n;
+    if (h.length >= 4) {
+      const k = h.length;
+      const mx = (k - 1) / 2;
+      mean = h.reduce((a, b) => a + b, 0) / k;
+      let num = 0, den = 0;
+      for (let i = 0; i < k; i++) (num += (i - mx) * (h[i] - mean)), (den += (i - mx) ** 2);
+      slope = num / den; // per look
+    }
+    const trend = (slope * (1000 / OBSERVE_EVERY)) / Math.max(1, mean);
+    const goneIn = slope < 0 && n > 0 ? (n / -slope) * OBSERVE_EVERY : Infinity;
     const share = this.w.p.gardenerRareShare;
-    if (m.n === 0) return "gone";
-    const plants = name === "grass" || name === "algae";
-    if (m.n < share * m.peak || (!plants && m.n <= 3)) return "rare";
-    if (!plants && m.n > 2 * m.usual && m.foodNow < 0.5 * m.food) return "too many";
-    if (m.n >= Math.min(1, 2 * share) * m.peak) return "plentiful";
-    return "ok";
+    const plant = name === "grass" || name === "algae";
+    const foodNow = this.view ? this.foodPerHead(name) : m.food;
+    let judgement: Judgement = "ok";
+    if (n === 0) judgement = "gone";
+    else if (n < share * m.peak || (!plant && n <= 3)) judgement = "rare";
+    else if (!plant && foodNow < 0.5 * m.food && (n > 2 * m.usual || trend > 0.5)) judgement = "too many";
+    else if (n >= Math.min(1, 2 * share) * m.peak) judgement = "plentiful";
+    const rarity = m.peak > 0 ? Math.max(0, Math.min(1, 1 - n / Math.max(4, share * m.peak))) : 0;
+    const urgency = n === 0 ? 0
+      : 2 * rarity + (trend < 0 ? Math.min(2, -trend * 3) : 0) + (goneIn < 4000 ? 1.5 : goneIn < 10000 ? 0.7 : 0);
+    const spare = name !== "roc" && (judgement === "plentiful" || judgement === "too many") && trend > -0.15 && goneIn > 15000;
+    return { n, judgement, trend, goneIn, urgency, spare };
   }
 
-  /** How rare (0 = only just, 1 = nearly gone), by their own reckoning. */
-  private rarity(name: string): number {
-    const m = this.memory.get(name);
-    if (!m || m.peak <= 0) return 0;
-    return Math.max(0, Math.min(1, 1 - m.n / Math.max(4, this.w.p.gardenerRareShare * m.peak)));
+  /** Food per head world-wide right now (species only). */
+  private foodPerHead(name: string): number {
+    const v = this.view;
+    let food = 0, n = 0;
+    for (const r of v.regions) {
+      if (!(name in r.animals)) return 0;
+      n += r.animals[name as SpeciesName];
+      food += foodIn(r, name as SpeciesName);
+    }
+    return food / Math.max(1, n);
+  }
+
+  /** A population's state in words, e.g. "23, rare, falling 30% per 1,000 ticks (gone in ~3,000)". */
+  outlookText(name: string): string {
+    const o = this.outlook(name);
+    if (o.n === 0) return "gone";
+    const pct = Math.round(Math.abs(o.trend) * 100);
+    const way = pct < 5 ? "steady" : o.trend < 0 ? `falling ${pct}% per 1,000 ticks` : `rising ${pct}% per 1,000 ticks`;
+    const gone = o.goneIn < 20000 ? ` (gone in ~${(Math.round(o.goneIn / 500) * 500).toLocaleString()} ticks)` : "";
+    return `${o.n.toLocaleString()}, ${o.judgement}, ${way}${gone}`;
+  }
+
+  /** The major land masses and lakes and what's in each, one line each. */
+  regionLines(): string[] {
+    if (!this.view) return [];
+    return this.view.major.map((r) => {
+      const life = SPECIES_NAMES.filter((s) => r.animals[s] > 0).map((s) => `${r.animals[s]} ${PLURAL[s]}`);
+      const plants = r.water ? `${r.algae.toLocaleString()} algae` : `${r.grass.toLocaleString()} grass, ${r.seeds.toLocaleString()} seeds`;
+      return `${r.name}, ${r.size.toLocaleString()} squares: ${[plants, ...life].join(", ")}`;
+    });
   }
 
   /**
-   * The options open to it now, each with a plain description, a score for
-   * the built-in rules, and the task that carries it out. Uses what it can
-   * see: every population, where each lives (by 20x20 blocks), and its own
-   * fat and position.
+   * The options open to them now, each with a plain description, a score
+   * for the built-in rules, and the task that carries it out. Worked out
+   * from each population's total and trend, who eats what, and how plants
+   * and animals are spread over the separate land masses and lakes.
    */
   options(): GardenerOption[] {
     const w = this.w;
     const p = w.p;
+    this.view = survey(w, this.nav);
+    const v = this.view;
     const out: GardenerOption[] = [];
-    const sp = this.species();
-    const count = (s: Species) => s.sys.critters.length;
-    const bw = Math.ceil(GRID_W / BLOCK);
-    const bh = Math.ceil(GRID_H / BLOCK);
-    const blocks = bw * bh;
-    const blockOf = (x: number, y: number) => Math.min(bh - 1, Math.floor(y / BLOCK)) * bw + Math.min(bw - 1, Math.floor(x / BLOCK));
-    const centre = (b: number) => ({ x: (b % bw) * BLOCK + BLOCK / 2, y: Math.floor(b / bw) * BLOCK + BLOCK / 2 });
+    const sys = this.sys();
+    const look = {} as Record<string, Outlook>;
+    for (const k of [...SPECIES_NAMES, "grass", "algae"]) look[k] = this.outlook(k);
     const distTo = (x: number, y: number) => Math.hypot(x - this.x, y - this.y);
-    // Plants per block.
-    const grass = new Float32Array(blocks), seeds = new Float32Array(blocks), algae = new Float32Array(blocks);
-    const land = new Float32Array(blocks), wet = new Float32Array(blocks);
-    let grassAll = 0, algaeAll = 0;
-    for (let i = 0; i < w.kind.length; i++) {
-      const b = blockOf(i % GRID_W, (i / GRID_W) | 0);
-      const k = w.kind[i];
-      if (k === 2) (grass[b]++, grassAll++);
-      else if (k === 1) seeds[b]++;
-      else if (k === 3) (algae[b]++, algaeAll++);
-      if (!w.water.isWater(i)) {
-        land[b]++;
-        wet[b] += w.water.saturation(i);
-      }
-    }
-    // Animals per block.
-    const per = new Map<CritterSystem, Float32Array>();
-    for (const s of sp) {
-      const a = new Float32Array(blocks);
-      for (const c of s.sys.critters) a[blockOf(c.x, c.y)]++;
-      per.set(s.sys, a);
-    }
-    const byName = (n: string) => sp.find((s) => s.name === n)!;
-    const nearestOf = (s: Species, x: number, y: number, ok: (c: Critter) => boolean = () => true) => {
+    const usualFood = (s: SpeciesName) => Math.max(1e-6, this.memory.get(s)!.food);
+    /** Food per head in r (with `extra` more of s there), relative to what's usual world-wide. */
+    const relFood = (r: Region, s: SpeciesName, extra = 0) => foodIn(r, s) / Math.max(1, r.animals[s] + extra) / usualFood(s);
+    /** Hunters of s in r. */
+    const threats = (r: Region, s: SpeciesName) => predatorsOf(s).reduce((a, q) => a + r.animals[q], 0);
+    const free = (s: SpeciesName, c: Critter) => !c.flying && (this.escaped.get(`${sys[s].species.name}#${c.id}`) ?? 0) <= w.tick;
+    /** The catchable s in r nearest (x, y). */
+    const pick = (s: SpeciesName, r: Region | null, x: number, y: number) => {
       let best: Critter | null = null;
       let bd = Infinity;
-      for (const c of s.sys.critters) {
-        if (!ok(c) || (this.escaped.get(`${s.sys.species.name}#${c.id}`) ?? 0) > w.tick) continue;
+      for (const c of sys[s].critters) {
+        if (!free(s, c) || (r && v.at(c.x, c.y) !== r)) continue;
         const d = (c.x - x) ** 2 + (c.y - y) ** 2;
         if (d < bd) (bd = d), (best = c);
       }
       return best;
     };
-    const grounded = (c: Critter) => !c.flying;
+    /** Where the s in r gather (their mean position). */
+    const groupOf = (s: SpeciesName, r: Region) => {
+      let sx = 0, sy = 0, k = 0;
+      for (const c of sys[s].critters) if (v.at(c.x, c.y) === r) (sx += c.x), (sy += c.y), k++;
+      return k ? { x: sx / k, y: sy / k } : r.foodSpot;
+    };
+    const how = (s: string) => `${PLURAL[s as SpeciesName] ?? s}: ${this.outlookText(s)}`;
+    const home = (s: SpeciesName) => v.regions.filter((r) => r.animals[s] > 0 && suits(r, s));
 
-    // 1. Eat.
+    // 1. Eat: plants where they're plentiful for their grazers, or a spare animal from where its kind is crowded.
     const share = this.fat / p.gardenerMaxFat;
     if (share < 0.7) {
       const need = share < 0.25 ? 8 : (0.7 - share) * 6;
-      let bestB = -1, bestV = 0;
-      for (let b = 0; b < blocks; b++) {
-        const v = (grass[b] + seeds[b]) / (1 + distTo(centre(b).x, centre(b).y) / 40);
-        if (v > bestV) (bestV = v), (bestB = b);
+      let best: Region | null = null, bv = 0;
+      for (const r of v.regions) {
+        const s: SpeciesName = r.water ? "fish" : "sheep";
+        const plant = r.water ? "algae" : "grass";
+        if (r.water && !this.hasBoat && distTo(this.boatX, this.boatY) > 60) continue;
+        const food = r.water ? r.algae : r.grass + r.seeds;
+        if (food < 10) continue;
+        const val = (food / (1 + r.animals[s] * 20)) * (look[plant].urgency > 0.5 ? 0.3 : 1) / (1 + distTo(r.foodSpot.x, r.foodSpot.y) / 40);
+        if (val > bv) (bv = val), (best = r);
       }
-      if (bestB >= 0) {
-        const c = centre(bestB);
-        out.push({ text: `Eat grass and seeds near (${c.x}, ${c.y}): ${grass[bestB] + seeds[bestB]} plants there`, utility: need, task: { kind: "eatPlants", x: c.x, y: c.y } });
+      if (best) {
+        const food = best.water ? `${best.algae} algae` : `${best.grass + best.seeds} grass and seeds`;
+        out.push({ text: `Eat plants in ${best.name}: ${food}, plenty for its grazers`, utility: need, task: { kind: "eatPlants", x: best.foodSpot.x, y: best.foodSpot.y } });
       }
-      for (const s of sp) {
-        if (s.sacred || this.judge(s.name) !== "plentiful" && this.judge(s.name) !== "too many") continue; // never rocs, never what isn't plentiful
-        const c = nearestOf(s, this.x, this.y, grounded);
-        if (!c || distTo(c.x, c.y) > 100) continue;
-        out.push({ text: `Hunt a ${s.name} near (${c.x | 0}, ${c.y | 0}) to eat (${s.plural} are plentiful: ${count(s)})`, utility: need * 0.9, task: { kind: "hunt", sys: s.sys, target: c } });
-      }
-    }
-
-    // 2. Protect rare prey by culling what eats them (or, for rare plants, what grazes them).
-    const eatenBy: Record<string, string[]> = { fish: ["shark", "roc"], sheep: ["cat", "roc"], roc: ["cat"] };
-    for (const s of sp) {
-      const n = count(s);
-      if (this.judge(s.name) !== "rare") continue;
-      for (const q of eatenBy[s.name] ?? []) {
-        const pred = byName(q);
-        if (pred.sacred) continue; // rocs are never touched, whatever they eat
-        const pj = this.judge(pred.name);
-        if (pj === "rare" || pj === "gone") continue;
-        // The predator nearest to the rare species' biggest group.
-        const dens = per.get(s.sys)!;
-        let b = 0;
-        for (let k = 1; k < blocks; k++) if (dens[k] > dens[b]) b = k;
-        const c = nearestOf(pred, centre(b).x, centre(b).y, grounded);
+      for (const s of SPECIES_NAMES) {
+        if (!look[s].spare) continue; // never rocs, never what can't be spared
+        let br: Region | null = null, bv2 = 0;
+        for (const r of home(s)) {
+          const g = groupOf(s, r);
+          const val = (1 / Math.max(0.05, relFood(r, s))) / (1 + distTo(g.x, g.y) / 60);
+          if (val > bv2) (bv2 = val), (br = r);
+        }
+        if (!br) continue;
+        const c = pick(s, br, this.x, this.y);
         if (!c) continue;
-        out.push({ text: `Cull a ${pred.name}: ${s.plural} are rare (${n}) and ${pred.plural} (${count(pred)}) eat them`, utility: 2 + 3 * this.rarity(s.name), task: { kind: "cull", sys: pred.sys, target: c } });
+        out.push({ text: `Hunt a ${s} in ${br.name} to eat (${how(s)}; ${br.animals[s]} there)`, utility: need * 0.9, task: { kind: "hunt", sys: sys[s], target: c } });
       }
     }
-    const fishOk = ["plentiful", "too many"].includes(this.judge("fish"));
-    const sheepOk = ["plentiful", "too many"].includes(this.judge("sheep"));
-    if (this.judge("algae") === "rare" && fishOk) {
-      const c = nearestOf(byName("fish"), this.x, this.y);
-      if (c) out.push({ text: `Cull a fish: algae is rare (${algaeAll}) and fish (${count(byName("fish"))}) graze it`, utility: 1.5 + 2 * this.rarity("algae"), task: { kind: "cull", sys: byName("fish").sys, target: c } });
-    }
-    if (this.judge("grass") === "rare" && sheepOk) {
-      const c = nearestOf(byName("sheep"), this.x, this.y);
-      if (c) out.push({ text: `Cull a sheep: grass is rare (${grassAll}) and sheep (${count(byName("sheep"))}) graze it`, utility: 1.5 + 2 * this.rarity("grass"), task: { kind: "cull", sys: byName("sheep").sys, target: c } });
+
+    // 2. Protect a species in trouble by culling its hunters where it lives.
+    for (const s of [...SPECIES_NAMES]) {
+      const os = look[s];
+      if (os.urgency < 0.5) continue;
+      for (const r of v.regions) {
+        const k = r.animals[s];
+        if (k === 0) continue;
+        for (const q of predatorsOf(s)) {
+          if (q === "roc") continue; // rocs are sacred, whatever they eat
+          const nq = r.animals[q];
+          const oq = look[q];
+          if (nq === 0 || oq.judgement === "rare" || oq.judgement === "gone" || oq.urgency >= os.urgency) continue;
+          // Hunters per head of prey here, against what the hunters usually have world-wide.
+          const pressure = (nq / k) * usualFood(q);
+          const g = groupOf(s, r);
+          const c = pick(q, r, g.x, g.y);
+          if (!c) continue;
+          out.push({
+            text: `Cull a ${q} in ${r.name}: ${how(s)}; the ${nq} ${PLURAL[q]} there hunt its ${k} ${PLURAL[s]}`,
+            utility: 1 + os.urgency * (0.4 + k / os.n) * (0.5 + Math.min(2, pressure) / 2),
+            task: { kind: "cull", sys: sys[q], target: c },
+          });
+        }
+      }
     }
 
-    // 3. Curb a species that has outgrown its food.
-    for (const s of sp) {
-      const n = count(s);
-      if (s.sacred || this.judge(s.name) !== "too many") continue;
-      const usual = this.memory.get(s.name)!.usual;
-      const c = nearestOf(s, this.x, this.y, grounded);
-      if (c) out.push({ text: `Cull a ${s.name}: there are ${n}, far more than usual (${Math.round(usual)}), and too little food for them`, utility: 1 + Math.min(2, n / usual / 2 - 1), task: { kind: "cull", sys: s.sys, target: c } });
+    // 3. Move animals out of a land mass or lake that can't feed them (or, for one in trouble, that's too dangerous) to one that can.
+    for (const s of SPECIES_NAMES) {
+      if (s === "roc") continue;
+      const os = look[s];
+      if (os.n === 0) continue;
+      for (const r of home(s)) {
+        const k = r.animals[s];
+        const hungry = relFood(r, s) < 0.35;
+        const unsafe = os.urgency > 1 && threats(r, s) > k;
+        if (!hungry && !unsafe) continue;
+        let best: Region | null = null, bv = 0;
+        for (const r2 of v.major) {
+          if (r2 === r || !suits(r2, s)) continue;
+          const f = relFood(r2, s, 1);
+          const t = threats(r2, s);
+          if (f < 1 || t > threats(r, s)) continue;
+          // Hunters only go where their prey can spare it.
+          if (DIET[s].prey && !DIET[s].prey!.some((q) => look[q].spare && r2.animals[q] > 0)) continue;
+          const val = Math.min(4, f) / (1 + t);
+          if (val > bv) (bv = val), (best = r2);
+        }
+        if (!best) continue;
+        const c = pick(s, r, groupOf(s, r).x, groupOf(s, r).y);
+        if (!c) continue;
+        const why = hungry ? `its ${k} ${PLURAL[s]} are short of food` : `its ${k} ${PLURAL[s]} are outnumbered by hunters`;
+        const there = `${foodIn(best, s).toLocaleString()} ${DIET[s].plant ?? "prey"}, ${threats(best, s)} hunters`;
+        out.push({
+          text: `Move a ${s} from ${r.name}, where ${why}, to ${best.name} (${there})`,
+          utility: 0.8 + os.urgency * 0.6 + 1.5 * (k / os.n),
+          task: { kind: "move", sys: sys[s], target: c, tx: best.foodSpot.x, ty: best.foodSpot.y },
+        });
+      }
     }
 
-    // 4. Bring lonely animals together so they can breed.
-    for (const s of sp) {
-      const n = count(s);
-      if (s.sacred || n < 2 || n > 6) continue;
-      let pair: [Critter, Critter] | null = null;
-      let pd = Infinity;
-      for (const a of s.sys.critters) {
-        for (const b of s.sys.critters) {
-          if (a === b || a.flying) continue;
+    // 4. Bring a lone animal and others of its kind together, so they can breed.
+    for (const s of SPECIES_NAMES) {
+      if (s === "roc") continue;
+      const os = look[s];
+      if (os.n < 2 || os.n > 40) continue;
+      const homes = home(s);
+      const biggest = homes.reduce<Region | null>((a, r) => (!a || r.animals[s] > a.animals[s] ? r : a), null);
+      for (const r of homes) {
+        if (r.animals[s] !== 1 || r === biggest || !biggest) continue;
+        const goodHere = relFood(r, s, 1) >= 1 && threats(r, s) <= threats(biggest, s);
+        if (goodHere) {
+          // Bring it a mate.
+          const g = groupOf(s, biggest);
+          const c = pick(s, biggest, g.x, g.y);
+          if (c) out.push({ text: `Carry a ${s} from ${biggest.name} to the lone ${s} in ${r.name}, which has food and few hunters (${how(s)})`, utility: 1 + os.urgency + (os.n <= 10 ? 1.5 : 0), task: { kind: "move", sys: sys[s], target: c, tx: groupOf(s, r).x, ty: groupOf(s, r).y } });
+        } else {
+          const c = pick(s, r, this.x, this.y);
+          const g = groupOf(s, biggest);
+          if (c) out.push({ text: `Carry the lone ${s} in ${r.name} to the ${biggest.animals[s]} in ${biggest.name} (${how(s)})`, utility: 1 + os.urgency + (os.n <= 10 ? 1.5 : 0), task: { kind: "move", sys: sys[s], target: c, tx: g.x, ty: g.y } });
+        }
+      }
+      // A handful left, spread far apart in one place: bring two together.
+      if (os.n <= 6) {
+        let pair: [Critter, Critter] | null = null, pd = Infinity;
+        for (const a of sys[s].critters) for (const b of sys[s].critters) {
+          if (a === b || !free(s, a)) continue;
           const d = Math.hypot(a.x - b.x, a.y - b.y);
           if (d < pd) (pd = d), (pair = [a, b]);
         }
-      }
-      if (!pair || pd < 25) continue;
-      const [a, b] = pair;
-      out.push({ text: `Carry a lonely ${s.name} to another (only ${n} ${s.plural} left, ${pd | 0} squares apart)`, utility: 4.5, task: { kind: "move", sys: s.sys, target: a, tx: b.x, ty: b.y } });
-    }
-
-    // 5. Move a rare animal somewhere with food and no hunters.
-    for (const s of sp) {
-      const n = count(s);
-      if (s.sacred || this.judge(s.name) !== "rare") continue;
-      const hunters = (eatenBy[s.name] ?? []).map((q) => per.get(byName(q).sys)!);
-      let bestB = -1, bestV = 0;
-      for (let b = 0; b < blocks; b++) {
-        if (hunters.some((h) => h[b] > 0)) continue;
-        const habitat = s.water ? BLOCK * BLOCK - land[b] : land[b];
-        if (habitat < BLOCK * BLOCK * 0.3) continue;
-        const food = s.name === "fish" ? algae[b] : s.name === "sheep" ? grass[b] : s.name === "shark" ? per.get(byName("fish").sys)![b] * 20 : per.get(byName("sheep").sys)![b] * 20;
-        if (food > bestV) (bestV = food), (bestB = b);
-      }
-      if (bestB < 0) continue;
-      const dest = centre(bestB);
-      const c = nearestOf(s, this.x, this.y, grounded);
-      if (!c || Math.hypot(c.x - dest.x, c.y - dest.y) < BLOCK) continue;
-      out.push({ text: `Move a ${s.name} to safer ground with food at (${dest.x}, ${dest.y}) (${s.plural}: ${n}, rare)`, utility: 1.5 + 2 * this.rarity(s.name), task: { kind: "move", sys: s.sys, target: c, tx: dest.x, ty: dest.y } });
-    }
-
-    // 6. Carry seeds from a seedy spot to bare, damp ground.
-    {
-      let from = -1, to = -1, fv = 4, tv = 0;
-      // Within a morning's walk: both ends no more than 80 squares away.
-      for (let b = 0; b < blocks; b++) {
-        if (distTo(centre(b).x, centre(b).y) > 80) continue;
-        if (seeds[b] > fv) (fv = seeds[b]), (from = b);
-        if (land[b] > BLOCK * BLOCK * 0.6 && grass[b] < 5) {
-          const v = wet[b] / land[b];
-          if (v > tv) (tv = v), (to = b);
+        if (pair && pd >= 25 && v.at(pair[0].x, pair[0].y) === v.at(pair[1].x, pair[1].y)) {
+          out.push({ text: `Carry a ${s} to the nearest other one, ${pd | 0} squares away (${how(s)})`, utility: 3 + os.urgency, task: { kind: "move", sys: sys[s], target: pair[0], tx: pair[1].x, ty: pair[1].y } });
         }
       }
-      if (from >= 0 && to >= 0 && from !== to) {
-        const f = centre(from), t = centre(to);
-        out.push({ text: `Carry seeds from (${f.x}, ${f.y}) to bare damp ground at (${t.x}, ${t.y}) (grass: ${grassAll})`, utility: 0.8 + (this.judge("grass") === "rare" ? 3 * this.rarity("grass") : 0), task: { kind: "sow", fx: f.x, fy: f.y, tx: t.x, ty: t.y } });
+    }
+
+    // 5. Spread a species to good, empty land or water, so one disaster can't end it.
+    for (const s of SPECIES_NAMES) {
+      if (s === "roc") continue;
+      const os = look[s];
+      if (os.n < 6) continue;
+      const homes = home(s);
+      const from = homes.reduce<Region | null>((a, r) => (!a || r.animals[s] > a.animals[s] ? r : a), null);
+      if (!from || from.animals[s] < 4) continue;
+      const crowded = relFood(from, s) < 0.5;
+      if (os.urgency < 0.3 && !crowded) continue;
+      for (const r2 of v.major) {
+        if (!suits(r2, s) || r2.animals[s] > 1 || r2 === from) continue;
+        if (relFood(r2, s, 2) < 1.5 || threats(r2, s) > 1) continue;
+        if (DIET[s].prey && !DIET[s].prey!.some((q) => look[q].spare && r2.animals[q] >= 10)) continue;
+        const g = groupOf(s, from);
+        const c = pick(s, from, g.x, g.y);
+        if (!c) continue;
+        out.push({
+          text: `Start a new group: carry a ${s} from ${from.name} (${from.animals[s]} there${crowded ? ", crowded" : ""}) to ${r2.name}, which has ${foodIn(r2, s).toLocaleString()} ${DIET[s].plant ?? "prey"} and ${r2.animals[s] ? "one" : "no"} ${PLURAL[s]}`,
+          utility: 0.6 + os.urgency * 0.7 + (crowded ? 0.8 : 0),
+          task: { kind: "move", sys: sys[s], target: c, tx: r2.foodSpot.x, ty: r2.foodSpot.y },
+        });
       }
     }
 
-    // 7. Wander and watch.
+    // 6. Thin out grazers that are stripping their plants, or any species that has outgrown its food.
+    for (const s of ["fish", "sheep"] as const) {
+      const plant = DIET[s].plant!;
+      if (!look[s].spare) continue;
+      for (const r of home(s)) {
+        const k = r.animals[s];
+        const rf = relFood(r, s);
+        if (k < 4 || rf > 0.4 || look[plant].urgency < 0.3) continue;
+        const c = pick(s, r, groupOf(s, r).x, groupOf(s, r).y);
+        if (c) out.push({ text: `Cull a ${s} in ${r.name}: its ${k} ${PLURAL[s]} are stripping the ${plant} there (${foodIn(r, s)} left; ${plant}: ${this.outlookText(plant)})`, utility: 0.8 + look[plant].urgency + (0.4 - rf) * 2, task: { kind: "cull", sys: sys[s], target: c } });
+      }
+    }
+    for (const s of SPECIES_NAMES) {
+      if (!look[s].spare || look[s].judgement !== "too many") continue;
+      let worst: Region | null = null, wv = Infinity;
+      for (const r of home(s)) if (relFood(r, s) < wv && r.animals[s] >= 3) (wv = relFood(r, s)), (worst = r);
+      if (!worst) continue;
+      const c = pick(s, worst, this.x, this.y);
+      if (c) out.push({ text: `Cull a ${s} in ${worst.name}: ${how(s)}, more than their food can support`, utility: 1 + Math.min(1.5, look[s].trend), task: { kind: "cull", sys: sys[s], target: c } });
+    }
+
+    // 7. Carry seeds to bare, damp land that has little grass, especially where sheep go hungry.
     {
-      // Somewhere on land (water only if it's easy to get to the boat).
+      let from: Region | null = null, fv = 0;
+      for (const r of v.regions) {
+        if (r.water || r.seeds < 10) continue;
+        const d = distTo(r.seedSpot.x, r.seedSpot.y);
+        if (d > 100) continue;
+        const val = r.seeds / (1 + d / 30);
+        if (val > fv) (fv = val), (from = r);
+      }
+      if (from) {
+        for (const r of v.major) {
+          if (r.water || r.bare < 30) continue;
+          const cover = (r.grass + r.seeds) / r.size;
+          if (cover > 0.15) continue;
+          const d = Math.hypot(r.bareSpot.x - from.seedSpot.x, r.bareSpot.y - from.seedSpot.y);
+          if (d > 150) continue;
+          const hungrySheep = r.animals.sheep > 0 && relFood(r, "sheep") < 0.5;
+          out.push({
+            text: `Carry seeds from ${from.name} to bare damp ground in ${r.name} (${Math.round(cover * 100)}% grass cover${hungrySheep ? `, ${r.animals.sheep} hungry sheep` : ""}; grass: ${this.outlookText("grass")})`,
+            utility: 0.5 + look.grass.urgency + (hungrySheep ? 1 : 0) + (r.animals.sheep === 0 && look.sheep.urgency > 0.5 ? 0.3 : 0),
+            task: { kind: "sow", fx: from.seedSpot.x, fy: from.seedSpot.y, tx: r.bareSpot.x, ty: r.bareSpot.y },
+          });
+        }
+      }
+    }
+
+    // 8. Wander and keep watch.
+    {
       let x = 0, y = 0;
       for (let k = 0; k < 20; k++) {
         x = Math.floor(w.rng() * GRID_W);
         y = Math.floor(w.rng() * GRID_H);
         if (!w.water.isWater(y * GRID_W + x)) break;
       }
-      out.push({ text: `Wander to (${x}, ${y}) and keep watch`, utility: 0.3, task: { kind: "goto", x, y } });
+      out.push({ text: `Wander over to ${v.at(x, y).name} and keep watch`, utility: 0.3, task: { kind: "goto", x, y } });
     }
 
-    // Leave out anything they've lately found no way to reach.
+    // Further away is less attractive; leave out anything they've lately found no way to reach.
     for (const [cell, until] of this.unreachable) if (until <= w.tick) this.unreachable.delete(cell);
     const reachable = (x: number, y: number) => !this.unreachable.has(this.nav.cellOf(x, y));
-    const ok = out.filter(({ task: t }) => {
+    const ok = out.filter((o) => {
+      const t = o.task;
+      let x0: number, y0: number, fine: boolean;
       switch (t.kind) {
         case "goto":
         case "eatPlants":
-          return reachable(t.x, t.y);
+          (x0 = t.x), (y0 = t.y), (fine = reachable(t.x, t.y));
+          break;
         case "hunt":
         case "cull":
-          return reachable(t.target.x, t.target.y);
+          (x0 = t.target.x), (y0 = t.target.y), (fine = reachable(x0, y0));
+          break;
         case "move":
-          return reachable(t.target.x, t.target.y) && reachable(t.tx, t.ty);
+          (x0 = t.target.x), (y0 = t.target.y), (fine = reachable(x0, y0) && reachable(t.tx, t.ty));
+          break;
         case "sow":
-          return reachable(t.fx, t.fy) && reachable(t.tx, t.ty);
+          (x0 = t.fx), (y0 = t.fy), (fine = reachable(t.fx, t.fy) && reachable(t.tx, t.ty));
+          break;
       }
+      if (t.kind !== "eatPlants" && t.kind !== "goto") o.utility /= 1 + distTo(x0, y0) / 400;
+      if ("target" in t) {
+        const odds = this.odds(t.sys, t.target);
+        o.utility *= odds;
+        o.text += ` [my odds of catching it: ${Math.round(odds * 100)}%]`;
+      }
+      return fine;
     });
     ok.sort((a, b) => b.utility - a.utility);
     return ok.slice(0, 6);
@@ -843,20 +1012,14 @@ export class Gardener {
   /** The situation and options as text, for a language model. */
   prompt(opts: GardenerOption[]): GardenerPrompt {
     const p = this.w.p;
-    const sp = this.species();
-    const label = (name: string) => this.judge(name).toUpperCase();
-    let grass = 0, algae = 0;
-    for (const k of this.w.kind) {
-      if (k === 2) grass++;
-      else if (k === 3) algae++;
-    }
-    const pops = [`grass ${grass} (${label("grass")})`, `algae ${algae} (${label("algae")})`]
-      .concat(sp.map((s) => `${s.plural} ${s.sys.critters.length} (${label(s.name)}${s.sacred ? ", sacred: never harm them" : ""})`)).join(", ");
+    const pops = ["grass", "algae", ...SPECIES_NAMES]
+      .map((s) => `- ${PLURAL[s as SpeciesName] ?? s}: ${this.outlookText(s)}${s === "roc" ? " (sacred: never harm them)" : ""}`).join("\n");
+    const places = this.regionLines().slice(0, 6).map((l) => `- ${l}`).join("\n");
     const fatPct = Math.round((100 * this.fat) / p.gardenerMaxFat);
-    const me = `My fat: ${fatPct}% (${fatPct < 25 ? "starving - must eat" : fatPct < 50 ? "hungry" : "fine"}). Walking is cheap and fast; rowing is slower; carrying the boat over land is slow.`;
+    const me = `My fat: ${fatPct}% (${fatPct < 25 ? "starving - must eat" : fatPct < 50 ? "hungry" : "fine"}). I'm in ${this.view.at(this.x, this.y).name}. Walking is fast; rowing is slower; carrying the boat over land is slow.`;
     return {
-      system: "You are a gardener looking after a small world of grass, algae, fish, sharks, sheep, cats and rocs. Your goal: keep every species alive (none may die out) and stay alive yourself by eating. Rocs are sacred: never harm them. Pick the best next action. Reply with only its number.",
-      user: `${me}\nPopulations: ${pops}.\nOptions:\n${opts.map((o, k) => `${k + 1}. ${o.text}`).join("\n")}\nBest option number:`,
+      system: "You are a gardener looking after a small world. Fish eat algae; sheep eat grass; sharks eat fish and swimming sheep; cats eat sheep and landed rocs; rocs eat fish and sheep. Your goal: keep every species alive (none may die out) and stay alive yourself by eating. Rocs are sacred: never harm them. Pick the best next action. Reply with only its number.",
+      user: `${me}\nPopulations:\n${pops}\nPlaces:\n${places}\nOptions:\n${opts.map((o, k) => `${k + 1}. ${o.text}`).join("\n")}\nBest option number:`,
       count: opts.length,
     };
   }
@@ -878,9 +1041,12 @@ export class Gardener {
 
   /** Where the current task is heading (for drawing), or null. */
   aim(): { x: number; y: number } | null {
-    const t = this.task;
-    if (!t) return null;
     if (this.carcass) return this.carcass;
+    return this.aimOf(this.task);
+  }
+
+  private aimOf(t: Task | null): { x: number; y: number } | null {
+    if (!t) return null;
     switch (t.kind) {
       case "goto":
       case "eatPlants":
