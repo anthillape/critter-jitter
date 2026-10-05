@@ -115,6 +115,8 @@ function critterSettings(sp: SpeciesDef, group: string, noun: string, food: stri
     e("Stomach", "Stomach size", `How much food (energy plus nutrients) a ${noun} can hold at once, per unit of its body mass. A ${noun} only eats what fits, and doesn't look for food while nearly full.`, { min: 0.1, max: 20, log: true }),
     e("DigestCost", "Cost of digesting", `The share of its food a ${noun} uses up digesting it is this × its genetic digestion speed, so digesting twice as fast costs twice the share, and four times as much per tick.`, { min: 0, max: 200 }),
     e("GestationRate", "Gestation speed", `Nutrients a pregnant ${noun} passes to its unborn young each tick, per unit of its body mass (with fat in proportion). Young that need more nutrients take longer; no more breeding until they're born.` + PER_SEC, { min: 0.000005, max: 0.01, log: true }),
+    e("BirthEfficiency", "Energy reaching the young", `Share of the energy (fat) a parent ${noun} passes on while breeding that actually reaches its young; the rest is spent on the pregnancy. Nutrients all reach them.`, { min: 0.05, max: 1 }),
+    e("YoungRadius", "Won't breed near young", `A ${noun} won't breed while an immature one of its kind (not yet grown or not yet of breeding age) is within this many squares (0 = no such restraint).`, { min: 0, max: 60 }),
     e("LookAhead", `Looks ahead for ${edge}`, `How many squares ahead a ${noun} checks for ${edge}, so it turns away before reaching the shore (0 = it just bumps into it).`, { min: 0, max: 20, int: true }),
   ];
 }

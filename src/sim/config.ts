@@ -140,6 +140,8 @@ export const PARAMS = {
   fishStomach: 2, // stomach capacity (energy plus nutrients) per unit of body mass
   fishDigestCost: 25, // share of food used up digesting it = this x digestion speed (so the cost per tick goes with speed squared)
   fishGestationRate: 0.001, // nutrients passed to unborn young per tick per unit of the carrier's mass
+  fishBirthEfficiency: 1,
+  fishYoungRadius: 0,
 
   // --- Sharks (eat fish) ---
   sharkMoveCost: 0.04, // sharks are efficient swimmers
@@ -182,6 +184,8 @@ export const PARAMS = {
   sharkStomach: 2,
   sharkDigestCost: 25,
   sharkGestationRate: 0.00004,
+  sharkBirthEfficiency: 1,
+  sharkYoungRadius: 0,
 
   // --- Sheep (graze grass on land) ---
   sheepMoveCost: 1,
@@ -209,8 +213,10 @@ export const PARAMS = {
   sheepGrowthCost: 1,
   sheepStomach: 3,
   sheepDigestCost: 25,
-  sheepGestationRate: 0.001,
-  sheepBite: 0.008, // nutrients (with a matching share of energy) taken from grass per tick of grazing
+  sheepGestationRate: 0.0004, // slow: a long pregnancy
+  sheepBirthEfficiency: 0.4, // share of the energy (fat) a parent passes on that actually reaches its young; the rest is spent
+  sheepYoungRadius: 15, // it won't breed while an immature one of its kind is within this many squares
+  sheepBite: 0.016, // nutrients (with a matching share of energy) taken from grass per tick of grazing
   sheepGrazeFloor: 0.08, // grass grazed below this share of full size is eaten up entirely
   sheepSwimEffort: 0.0005, // energy per tick per unit of mass spent swimming (for the worst swimmer; the best pay a quarter)
   sheepSwimWalkCost: 1, // extra walking cost at full swimming ability (1 = twice the cost)
@@ -246,6 +252,8 @@ export const PARAMS = {
   catStomach: 2.5,
   catDigestCost: 25,
   catGestationRate: 0.0001,
+  catBirthEfficiency: 1,
+  catYoungRadius: 0,
   catPounceSpeed: 0.25, // squares per tick while pouncing
   catPounceRest: 180, // ticks after a pounce before it can pounce again
   catSwimEffort: 0.0005,
@@ -286,6 +294,8 @@ export const PARAMS = {
   rocStomach: 2,
   rocDigestCost: 25,
   rocGestationRate: 0.00005,
+  rocBirthEfficiency: 1,
+  rocYoungRadius: 0,
   rocMeanderRate: 0.03,
   rocSenseRange: 200, // it can see a long way from the air, over anything
   rocSenseInterval: 600,

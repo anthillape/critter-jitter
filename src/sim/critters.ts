@@ -145,7 +145,7 @@ export const SHEEP: SpeciesDef = {
     roamSpeed: { def: 0.012, tip: "Walking speed while meandering (including looking for grass), in squares per tick. Kept between the minimum and top speeds." },
     hue: { def: 0, spread: 180, tip: "Hue of its (always pastel) fleece, in degrees. Founders take it from their genes; lambs inherit the midpoint of their parents' hues, slightly mutated." },
     breedAge: { def: 2000 },
-    breedFat: { def: 5 },
+    breedFat: { def: 8 },
     hungerFat: { def: 4, tip: "When fat falls below this, it grazes any grass it walks over, and now and then heads for the grassiest direction it can see." },
     lifespan: { def: 12000 },
     litterSize: { def: 1.3 },
@@ -450,7 +450,7 @@ const PARAM_NAMES = [
   // Sensing: least prey seen before it bothers heading that way.
   "SenseMin",
   // Eating and breeding.
-  "Stomach", "DigestCost", "GestationRate",
+  "Stomach", "DigestCost", "GestationRate", "BirthEfficiency", "YoungRadius",
   // Flying (rocs).
   "TooFat", "FlightCheck", "DiveBoost", "LandedUpkeep", "HuntUntil", "EdgeMargin", "CruiseHeight", "ClimbRate", "CatchChance", "MissRest",
   "BirthSize", "GrowthRate", "GrowthCost",
@@ -676,7 +676,23 @@ export class CritterSystem {
 
   private isReady(c: Critter): boolean {
     const t = c.traits;
-    return c.alive && !c.womb && c.cooldown === 0 && c.grown >= 0.9 && c.age >= t[T_BREED_AGE] && c.fat >= t[T_BREED_FAT] && c.fat >= this.hunger(c);
+    return c.alive && !c.womb && c.cooldown === 0 && c.grown >= 0.9 && c.age >= t[T_BREED_AGE] && c.fat >= t[T_BREED_FAT] && c.fat >= this.hunger(c) && !this.youngNear(c);
+  }
+
+  /** Immature members of this species (not yet grown or not yet of breeding age), worked out once a tick. */
+  private young: Critter[] = [];
+  private youngTick = -1;
+
+  /** Whether an immature one of its kind is within YoungRadius (it won't breed while one is). */
+  private youngNear(c: Critter): boolean {
+    const r = this.sp("YoungRadius");
+    if (r <= 0) return false;
+    if (this.youngTick !== this.tick) {
+      this.youngTick = this.tick;
+      this.young = this.critters.filter((o) => o.alive && (o.grown < 0.9 || o.age < o.traits[T_BREED_AGE]));
+    }
+    for (const o of this.young) if (o !== c && Math.abs(o.x - c.x) < r && Math.abs(o.y - c.y) < r && Math.hypot(o.x - c.x, o.y - c.y) < r) return true;
+    return false;
   }
 
   private buildBuckets(): void {
@@ -1565,7 +1581,7 @@ export class CritterSystem {
     w.needN -= dn;
     w.needFat -= df;
     w.gotN += dn;
-    w.gotFat += df;
+    w.gotFat += df * this.sp("BirthEfficiency"); // only part of the energy passed across reaches the young
     if (w.needN > 1e-9 || w.needFat > 1e-9) return;
     // Birth: the young share what was passed to them.
     const k = w.young.length;
@@ -1613,7 +1629,7 @@ export class CritterSystem {
       w.needN += nC;
       other.fat -= fO;
       other.nutrients -= nO;
-      w.gotFat += fO;
+      w.gotFat += fO * this.sp("BirthEfficiency"); // only part of the energy handed over reaches the young
       w.gotN += nO;
       w.young.push({ genes: this.childGenes(a, b), hue: this.childHue(a, b) });
     }
