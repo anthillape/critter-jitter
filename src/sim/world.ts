@@ -103,6 +103,8 @@ export class World {
   readonly spores: SporeSystem;
   /** The person looking after the world (null if there isn't one). */
   gardeners: Gardener[] = [];
+  /** Gardeners ever placed (numbers them, so a number is never reused). */
+  private gardenersMade = 0;
   readonly p: Params;
   readonly rng: Rng;
   tick = 0;
@@ -225,20 +227,44 @@ export class World {
       const x = Math.floor(this.rng() * GRID_W);
       const y = Math.floor(this.rng() * GRID_H);
       if (this.water.isWater(y * GRID_W + x)) continue;
-      let want = 2;
-      for (let r = 0; r <= 12 && want > 0; r++) {
-        for (let sy = Math.max(0, y - r); sy <= Math.min(GRID_H - 1, y + r); sy++) {
-          for (let sx = Math.max(0, x - r); sx <= Math.min(GRID_W - 1, x + r); sx++) {
-            const i = sy * GRID_W + sx;
-            const take = Math.min(want, this.nutrients[i] * 0.5);
-            this.nutrients[i] -= take;
-            want -= take;
-          }
-        }
-      }
-      this.gardeners.push(new Gardener(this, x + 0.5, y + 0.5, 2 - want, `Gardener ${this.gardeners.length + 1}`));
+      this.addGardener(x, y);
       return;
     }
+  }
+
+  /**
+   * Puts a gardener (with their boat) on the land square at (x, y), or the
+   * nearest land within 12 squares if it's water. Their body's nutrients
+   * come from the ground around them, so nutrients stay conserved. Returns
+   * the new gardener, or null if there's no land nearby.
+   */
+  addGardener(px: number, py: number): Gardener | null {
+    let x = -1, y = -1;
+    for (let r = 0; r <= 12 && x < 0; r++) {
+      for (let sy = Math.floor(py) - r; sy <= Math.floor(py) + r && x < 0; sy++) {
+        for (let sx = Math.floor(px) - r; sx <= Math.floor(px) + r; sx++) {
+          if (sx < 0 || sy < 0 || sx >= GRID_W || sy >= GRID_H || this.water.isWater(sy * GRID_W + sx)) continue;
+          x = sx;
+          y = sy;
+          break;
+        }
+      }
+    }
+    if (x < 0) return null;
+    let want = 2;
+    for (let r = 0; r <= 12 && want > 0; r++) {
+      for (let sy = Math.max(0, y - r); sy <= Math.min(GRID_H - 1, y + r); sy++) {
+        for (let sx = Math.max(0, x - r); sx <= Math.min(GRID_W - 1, x + r); sx++) {
+          const i = sy * GRID_W + sx;
+          const take = Math.min(want, this.nutrients[i] * 0.5);
+          this.nutrients[i] -= take;
+          want -= take;
+        }
+      }
+    }
+    const g = new Gardener(this, x + 0.5, y + 0.5, 2 - want, ++this.gardenersMade);
+    this.gardeners.push(g);
+    return g;
   }
 
   /**
@@ -338,6 +364,10 @@ export class World {
     // Animals and spores by position (centred on the square, matching the brush).
     for (const sys of [this.fish, this.sharks, this.sheep, this.cats, this.rocs]) sys.removeWithin(x + 0.5, y + 0.5, r);
     this.spores.removeWithin(x + 0.5, y + 0.5, r);
+    // Gardeners too (everything they carry goes back to the ground with them).
+    const gone = this.gardeners.filter((g) => Math.hypot(g.x - x - 0.5, g.y - y - 0.5) <= r);
+    for (const g of gone) g.remove();
+    if (gone.length) this.gardeners = this.gardeners.filter((g) => !gone.includes(g));
   }
 
   step(): void {

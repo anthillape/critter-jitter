@@ -161,7 +161,8 @@
             <table id="startSummary"></table>
             <div class="controls start-actions">
               <button id="startBtn" class="primary">Start</button>
-              <button id="resetStart" title="Put every starting condition back to its default">Reset starting conditions</button>
+              <button id="starterPop" title="Start with a ready-made population instead of an empty world: 400 grass seeds, 150 algae, 80 fish, 12 sharks, 40 sheep, 20 cats, 10 rocs and a gardener">Starter population</button>
+              <button id="resetStart" title="Put every starting condition back to its default (an empty world)">Reset starting conditions</button>
             </div>
           </section>
 
@@ -197,7 +198,8 @@
               <button class="tool" data-tool="cats" aria-pressed="false" title="Hold to release cats (with random genomes) at random points under the cursor. They land only on land and gather their body nutrients from the ground around them (C)">Cats</button>
               <button class="tool" data-tool="rocs" aria-pressed="false" title="Hold to release rocs (with random genomes) at random points under the cursor. They land only on land and gather their body nutrients from the ground around them (B)">Rocs</button>
               <button class="tool" data-tool="algae" aria-pressed="false" title="Hold to spray algae at random under the cursor. It lands only in empty water, and takes its nutrients from the water (A)">Algae</button>
-              <button class="tool" data-tool="destroy" aria-pressed="false" title="Hold to remove all life under the cursor: grass, seeds, algae, animals and their bodies. Their nutrients go back to the ground or water (X)">Destructor</button>
+              <button class="tool" data-tool="gardener" aria-pressed="false" title="Click to put a gardener (with their boat) on the land you click, or the nearest land. They take their body's nutrients from the ground around them. The Destructor removes them again (P)">Gardener</button>
+              <button class="tool" data-tool="destroy" aria-pressed="false" title="Hold to remove all life under the cursor: grass, seeds, algae, animals and their bodies, and gardeners. Their nutrients go back to the ground or water (X)">Destructor</button>
             </div>
             <div class="brush" id="brush">
               <label class="setting" id="rateLabel" title="How much water per second the brush adds or removes at its centre (Rain / Dryer), or how many seeds, algae or animals it sprays per second">
@@ -233,6 +235,7 @@
               <tr><td>1 – 6</td><td>Switch view</td></tr>
               <tr><td>S / R / D / X</td><td>Select / Rain / Dryer / Destructor cursor</td></tr>
               <tr><td>G / A / F / K / H / C / B</td><td>Seeds / Algae / Fish / Sharks / Sheep / Cats / Rocs spray cursor</td></tr>
+              <tr><td>P</td><td>Gardener: click to place one</td></tr>
               <tr><td>M</td><td>Sound on / off</td></tr>
               <tr><td>Esc</td><td>Clear selection</td></tr>
             </table>

@@ -1,6 +1,6 @@
 // Runs the simulation without a browser and prints population / nutrient
 // stats, for tuning parameters: `npm run sim -- [seed] [ticks] [every]`
-import { applyWorldSize, CELL_COUNT, GRID_H, GRID_W, PARAMS, WORLD_SIZE } from "../src/sim/config";
+import { applyWorldSize, CELL_COUNT, GRID_H, GRID_W, PARAMS, STARTER_POPULATION, WORLD_SIZE } from "../src/sim/config";
 import { World, type GroupStats } from "../src/sim/world";
 import { GENE_NAMES } from "../src/sim/genes";
 
@@ -12,6 +12,8 @@ const every = Number(process.argv[4] ?? 1000);
 if (process.argv[5]) WORLD_SIZE.width = Number(process.argv[5]);
 if (process.argv[6]) WORLD_SIZE.height = Number(process.argv[6]);
 applyWorldSize();
+// New worlds start empty; headless runs start with the starter population.
+Object.assign(PARAMS, STARTER_POPULATION);
 // Optional overrides, e.g. SIM_PARAMS='{"initialFish":0}'
 if (process.env.SIM_PARAMS) Object.assign(PARAMS, JSON.parse(process.env.SIM_PARAMS));
 const t0 = performance.now();

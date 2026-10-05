@@ -324,6 +324,25 @@ export const PARAMS = {
   hueMutation: 6, // animals: a child's hue is its parents' midpoint, nudged by up to this many degrees
 
   // --- Initial population ---
+  // A new world starts empty (just land, water and nutrients): place life with
+  // the tools, or set these (or use STARTER_POPULATION) to start with some.
+  initialSeeds: 0,
+  initialAlgae: 0,
+  initialFish: 0,
+  initialSharks: 0,
+  initialSheep: 0,
+  initialCats: 0,
+  initialRocs: 0,
+  initialGardeners: 0, // how many gardeners start in the world
+  startingSurfaceWater: 1.3, // standing water at the start, as an average depth over the whole world
+  initialSoilWetness: 0.4, // how full the soil starts (0..1); full under the starting lakes
+  initialWaterPrefSpread: 0.85, // starting seeds' water preference is spread over this range around the default
+};
+
+export type Params = typeof PARAMS;
+
+/** A ready-made starting population (the Start tab's "Starter population" button, and headless runs). */
+export const STARTER_POPULATION: Partial<Params> = {
   initialSeeds: 400,
   initialAlgae: 150,
   initialFish: 80,
@@ -331,10 +350,5 @@ export const PARAMS = {
   initialSheep: 40,
   initialCats: 20,
   initialRocs: 10,
-  initialGardeners: 1, // how many gardeners start in the world
-  startingSurfaceWater: 1.3, // standing water at the start, as an average depth over the whole world
-  initialSoilWetness: 0.4, // how full the soil starts (0..1); full under the starting lakes
-  initialWaterPrefSpread: 0.85, // starting seeds' water preference is spread over this range around the default
+  initialGardeners: 1,
 };
-
-export type Params = typeof PARAMS;

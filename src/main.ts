@@ -1,4 +1,4 @@
-import { applyWorldSize, CELL_PX, GRID_H, GRID_W, PARAMS, TICKS_PER_SECOND } from "./sim/config";
+import { applyWorldSize, CELL_PX, GRID_H, GRID_W, PARAMS, STARTER_POPULATION, TICKS_PER_SECOND } from "./sim/config";
 import { ALGAE_UNUSED_GENES, GENE_COUNT, GENE_NAMES } from "./sim/genes";
 import { ALGAE, GRASS, SEED, World, type GroupStats, type RegionStats } from "./sim/world";
 import { Renderer, type View } from "./render";
@@ -133,8 +133,8 @@ let history: Sample[] = [];
 /** Set whenever a tick rains; cleared each time a sample is taken. */
 let rainedSinceSample = false;
 
-type Tool = "select" | "rain" | "dryer" | "seeds" | "algae" | "fish" | "sharks" | "sheep" | "cats" | "rocs" | "destroy";
-const TOOL_KEYS: Record<string, Tool> = { s: "select", r: "rain", d: "dryer", g: "seeds", a: "algae", f: "fish", k: "sharks", h: "sheep", c: "cats", b: "rocs", x: "destroy" };
+type Tool = "select" | "rain" | "dryer" | "seeds" | "algae" | "fish" | "sharks" | "sheep" | "cats" | "rocs" | "gardener" | "destroy";
+const TOOL_KEYS: Record<string, Tool> = { s: "select", r: "rain", d: "dryer", g: "seeds", a: "algae", f: "fish", k: "sharks", h: "sheep", c: "cats", b: "rocs", p: "gardener", x: "destroy" };
 const SPRAY_TOOLS: ReadonlySet<Tool> = new Set(["seeds", "algae", "fish", "sharks", "sheep", "cats", "rocs"]);
 const BRUSH_COLOURS: Record<Exclude<Tool, "select">, string> = {
   rain: "rgba(120,180,255,0.9)",
@@ -146,6 +146,7 @@ const BRUSH_COLOURS: Record<Exclude<Tool, "select">, string> = {
   sheep: "rgba(245,240,230,0.9)",
   cats: "rgba(200,150,110,0.9)",
   rocs: "rgba(210,170,100,0.9)",
+  gardener: "rgba(224,72,58,0.95)",
   destroy: "rgba(255,80,70,0.95)",
 };
 /** Fractional sprays owed but not yet placed (so low rates still spray). */
@@ -172,7 +173,7 @@ function sprayPerSecond(): number {
 
 /** Applies the current brush for `ticks` ticks' worth of time. */
 function applyBrush(ticks: number): void {
-  if (!painting || !mouse || tool === "select") return;
+  if (!painting || !mouse || tool === "select" || tool === "gardener") return;
   if (tool === "destroy") {
     world.destroyLife(mouse.x, mouse.y, brushSize());
     return;
@@ -211,16 +212,17 @@ function setTool(t: Tool): void {
   brushEl.classList.toggle("disabled", t === "select");
   rateInput.disabled = sizeInput.disabled = t === "select";
   if (t === "destroy") rateInput.disabled = true; // it clears everything under it at once
+  if (t === "gardener") rateInput.disabled = sizeInput.disabled = true; // one per click
   sprayOwed = 0;
   refreshBrushLabels();
   draw();
 }
 
 function refreshBrushLabels(): void {
-  rateVal.textContent = tool === "destroy" ? "–" : SPRAY_TOOLS.has(tool)
+  rateVal.textContent = tool === "destroy" || tool === "gardener" ? "–" : SPRAY_TOOLS.has(tool)
     ? `${Math.round(sprayPerSecond())} per s`
     : `${(brushRate() * TICKS_PER_SECOND).toFixed(3)}/s`;
-  sizeVal.textContent = `${brushSize()} sq`;
+  sizeVal.textContent = tool === "gardener" ? "–" : `${brushSize()} sq`;
 }
 /**
  * Settings panel: one slider per simulation variable, grouped into
@@ -405,6 +407,12 @@ function refreshStartSummary(): void {
     ["&nbsp;&nbsp;in clouds", share(s.waterCloud)],
     ["Total nutrients", Math.round(s.nutrientsTotal).toLocaleString()],
     ["Grass seeds / algae", `${s.seeds.toLocaleString()} / ${s.algae.toLocaleString()}`],
+    ["Animals", (() => {
+      const a = ([["fish", s.fish.alive], ["sharks", s.sharks.alive], ["sheep", s.sheep.alive], ["cats", s.cats.alive], ["rocs", s.rocs.alive]] as const)
+        .filter(([, n]) => n > 0).map(([k, n]) => `${n} ${k}`);
+      return a.length ? a.join(", ") : "none";
+    })()],
+    ["Gardeners", String(world.gardeners.length || "none")],
   ].map(([k, v]) => `<tr><td class="muted">${k}</td><td>${v}</td></tr>`).join("");
 }
 
@@ -482,7 +490,7 @@ function draw(): void {
     ctx.lineWidth = painting ? 2 : 1;
     ctx.setLineDash(painting ? [] : [5, 4]);
     ctx.beginPath();
-    ctx.arc((mouse.x + 0.5) * CELL_PX, (mouse.y + 0.5) * CELL_PX, brushSize() * CELL_PX, 0, Math.PI * 2);
+    ctx.arc((mouse.x + 0.5) * CELL_PX, (mouse.y + 0.5) * CELL_PX, (tool === "gardener" ? 2 : brushSize()) * CELL_PX, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.lineWidth = 1;
@@ -600,7 +608,7 @@ function drawBoat(x: number, y: number, heading: number, alpha: number): void {
 
 /** Cloak colours, one per gardener (the first is red), so they can be told apart. */
 const CLOAKS = ["#e0483a", "#3a7be0", "#e8c53a", "#a05ee0", "#3ac2a6", "#e0853a", "#e03aa5", "#8fd63a"];
-const cloakOf = (g: Gardener) => CLOAKS[Math.max(0, world.gardeners.indexOf(g)) % CLOAKS.length];
+const cloakOf = (g: Gardener) => CLOAKS[(g.number - 1) % CLOAKS.length];
 
 function drawGardeners(): void {
   for (const g of world.gardeners) drawGardener(g);
@@ -1198,7 +1206,7 @@ function gardenerCard(): void {
       const dot = document.createElement("span");
       dot.className = "cloak";
       dot.style.background = cloakOf(g);
-      b.append(dot, String(k + 1));
+      b.append(dot, String(g.number));
       b.addEventListener("click", () => {
         gardenerShown = k;
         thoughtsShown = "";
@@ -1570,6 +1578,21 @@ function eventCell(e: MouseEvent): { x: number; y: number } {
   return { x: Math.max(0, Math.min(GRID_W - 1, x)), y: Math.max(0, Math.min(GRID_H - 1, y)) };
 }
 
+/** Gardener tool: puts a gardener (with their boat) on the land clicked, or the nearest land. */
+function placeGardener(e: MouseEvent): void {
+  const { x, y } = eventCell(e);
+  const g = world.addGardener(x, y);
+  if (!g) {
+    inspectEl.textContent = "No land near there for a gardener to stand on.";
+    return;
+  }
+  attachBrain();
+  gardenerShown = world.gardeners.indexOf(g);
+  thoughtsShown = "";
+  gardenerCard();
+  draw();
+}
+
 function setSelection(sel: typeof selection): void {
   selection = sel;
   refreshSelection();
@@ -1580,6 +1603,7 @@ canvas.addEventListener("mousedown", (e) => {
   if (e.button !== 0) return;
   e.preventDefault();
   if (tool === "select") dragStart = eventCell(e);
+  else if (tool === "gardener") placeGardener(e);
   else painting = true;
 });
 window.addEventListener("mousemove", (e) => {
@@ -1671,6 +1695,11 @@ const refreshStartSettings = buildSettings("startSettings", (s) => !!s.newWorld,
 $<HTMLButtonElement>("resetSettings").addEventListener("click", () => {
   for (const s of SETTINGS) if (!s.newWorld && s.defaultValue !== undefined) s.set(s.defaultValue);
   refreshSettings();
+});
+$<HTMLButtonElement>("starterPop").addEventListener("click", () => {
+  Object.assign(PARAMS, STARTER_POPULATION);
+  refreshStartSettings();
+  startConditionsChanged();
 });
 $<HTMLButtonElement>("resetStart").addEventListener("click", () => {
   for (const s of SETTINGS) if (s.newWorld && s.defaultValue !== undefined) s.set(s.defaultValue);

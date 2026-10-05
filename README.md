@@ -32,6 +32,15 @@ you change them. Nothing runs until you press **Start**. Later, **Restart**
 on the World tab rebuilds the same world, and *Set up a new world…* returns
 to a paused preview on the Start tab.
 
+A new world starts **empty**: just land, water and nutrients. Seed it as you
+like with the spray tools (seeds, algae, fish, sharks, sheep, cats, rocs)
+and place gardeners with the *Gardener* tool, while paused or running. To
+start with life already in place, set the starting numbers on the Start
+tab, or press **Starter population** for a ready-made mix: 400 grass seeds,
+150 algae, 80 fish, 12 sharks, 40 sheep, 20 cats, 10 rocs and a gardener.
+**Reset starting conditions** goes back to an empty world. Headless runs
+(`npm run sim`) use the starter population.
+
 ## Time
 
 The simulation runs on a real-time clock at 60 ticks per second of game time
@@ -494,17 +503,20 @@ speed.
 - **Cursor**: *Select* (drag a rectangle for area stats), *Rain* (hold to
   rain under the cursor, adding new water to the world), *Dryer* (hold to
   remove standing water, then soil water, under the cursor), and the sprays
-  *Seeds*, *Algae*, *Fish*, *Sharks*, *Sheep* and *Cats*, which drop things at random
+  *Seeds*, *Algae*, *Fish*, *Sharks*, *Sheep*, *Cats* and *Rocs*, which drop things at random
   points inside the brush circle. Seeds only take on empty land and algae
   only in empty water, each taking its nutrients from the square it lands on.
   Animals get random genomes. Fish and sharks land only in water, and sheep
   and cats only on land, and they gather their body nutrients from the squares
   around them. Anything that can't be
   supplied is skipped, so nutrients stay conserved. Sprayed seeds and algae
-  get the starting genes. The *Destructor* (hold) removes all life under
-  the cursor at once: grass, seeds, algae, animals and their bodies, not
-  counted as deaths, with their nutrients returned to the square. Keys
-  S / R / D / X / G / A / F / K / H / C switch between the tools.
+  get the starting genes. *Gardener* (click) puts a gardener, with their
+  boat, on the land you click (or the nearest land), their body's
+  nutrients taken from the ground around them. The *Destructor* (hold)
+  removes all life under the cursor at once: grass, seeds, algae, animals
+  and their bodies, and gardeners, not counted as deaths, with their
+  nutrients returned to the square. Keys S / R / D / X / G / A / F / K /
+  H / C / B / P switch between the tools.
   *Rate* and *Size* set the brush strength (water per second at the
   centre, or particles sprayed per second) and its radius. Rain and Dryer
   fade toward the edge of the circle. The tools work while paused too.

@@ -174,7 +174,10 @@ export class Gardener {
   /** Recent thoughts (decisions and what happened), newest last. */
   thoughts: Thought[] = [];
 
-  constructor(private w: World, x: number, y: number, nutrients: number, readonly name = "Gardener") {
+  readonly name: string;
+
+  constructor(private w: World, x: number, y: number, nutrients: number, readonly number = 1) {
+    this.name = `Gardener ${number}`;
     this.x = x;
     this.y = y;
     this.boatX = x;
@@ -456,6 +459,16 @@ export class Gardener {
       }
     }
     sys.release(c, best?.x ?? this.x, best?.y ?? this.y);
+  }
+
+  /** Taken out of the world (the Destructor): what they carry, and their body's nutrients, go back to the ground. */
+  remove(): void {
+    if (!this.alive) return;
+    this.dropEverything();
+    this.w.nutrients[this.square()] += this.nutrients;
+    this.nutrients = 0;
+    this.alive = false;
+    this.task = null;
   }
 
   private die(): void {
@@ -766,7 +779,7 @@ export class Gardener {
   /** A population's state in words, e.g. "23, rare, falling 30% per 1,000 ticks (gone in ~3,000)". */
   outlookText(name: string): string {
     const o = this.outlook(name);
-    if (o.n === 0) return "gone";
+    if (o.n === 0) return (this.memory.get(name)?.peak ?? 0) > 0 ? "gone" : "none yet";
     const pct = Math.round(Math.abs(o.trend) * 100);
     const way = pct < 5 ? "steady" : o.trend < 0 ? `falling ${pct}% per 1,000 ticks` : `rising ${pct}% per 1,000 ticks`;
     const gone = o.goneIn < 20000 ? ` (gone in ~${(Math.round(o.goneIn / 500) * 500).toLocaleString()} ticks)` : "";
