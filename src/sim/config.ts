@@ -142,6 +142,7 @@ export const PARAMS = {
   fishGestationRate: 0.001, // nutrients passed to unborn young per tick per unit of the carrier's mass
   fishBirthEfficiency: 1,
   fishYoungRadius: 0,
+  fishWaryCost: 0.01, // staying alert: upkeep rises by this share per square of wariness
 
   // --- Sharks (eat fish) ---
   sharkMoveCost: 0.04, // sharks are efficient swimmers
@@ -186,6 +187,7 @@ export const PARAMS = {
   sharkGestationRate: 0.00004,
   sharkBirthEfficiency: 1,
   sharkYoungRadius: 0,
+  sharkWaryCost: 0,
 
   // --- Sheep (graze grass on land) ---
   sheepMoveCost: 1,
@@ -216,6 +218,7 @@ export const PARAMS = {
   sheepGestationRate: 0.0004, // slow: a long pregnancy
   sheepBirthEfficiency: 0.4, // share of the energy (fat) a parent passes on that actually reaches its young; the rest is spent
   sheepYoungRadius: 15, // it won't breed while an immature one of its kind is within this many squares
+  sheepWaryCost: 0.01,
   sheepBite: 0.016, // nutrients (with a matching share of energy) taken from grass per tick of grazing
   sheepGrazeFloor: 0.08, // grass grazed below this share of full size is eaten up entirely
   sheepSwimEffort: 0.0005, // energy per tick per unit of mass spent swimming (for the worst swimmer; the best pay a quarter)
@@ -254,6 +257,7 @@ export const PARAMS = {
   catGestationRate: 0.0001,
   catBirthEfficiency: 1,
   catYoungRadius: 0,
+  catWaryCost: 0,
   catPounceSpeed: 0.25, // squares per tick while pouncing
   catPounceRest: 180, // ticks after a pounce before it can pounce again
   catSwimEffort: 0.0005,
@@ -296,6 +300,7 @@ export const PARAMS = {
   rocGestationRate: 0.00005,
   rocBirthEfficiency: 1,
   rocYoungRadius: 0,
+  rocWaryCost: 0.01,
   rocMeanderRate: 0.03,
   rocSenseRange: 200, // it can see a long way from the air, over anything
   rocSenseInterval: 600,

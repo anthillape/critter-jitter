@@ -147,6 +147,24 @@ founders.
   → *Fish traits*). A child gets 11 random genes from each parent, each
   mutated by the parents' mutation size (default 0.45, so populations adapt
   within a few generations), plus one brand-new random gene, making 23 again.
+  Inherited genes are never clamped: they pass on exactly as the parent had
+  them, plus mutation. Only the expressed traits are kept within each
+  trait's range, so the extreme genes of Random-genes founders carry on in
+  their young.
+- **Wariness (prey).** Fish, sheep and rocs have a genetic *Wariness*: how
+  far (squares) they notice a hunter that could catch them where they are.
+  - **Who counts:** sharks or diving rocs for fish; cats, diving rocs, or
+    sharks while a sheep swims, for sheep; cats for a landed roc.
+  - **What they do:** every few ticks they look around, and on spotting one
+    they drop what they're doing and run straight away from it at their
+    top speed, for a little while after they last saw it. A landed roc
+    takes off instead, if it isn't too fat to fly.
+  - **The cost:** staying alert raises their living cost (*Cost of staying
+    alert*, default 1% per square of wariness), and running burns fat and
+    feeding time.
+
+  So predation now selects: warier, faster prey escape more often, but pay
+  for it.
 
 ### Sharks
 

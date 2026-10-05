@@ -117,6 +117,7 @@ function critterSettings(sp: SpeciesDef, group: string, noun: string, food: stri
     e("GestationRate", "Gestation speed", `Nutrients a pregnant ${noun} passes to its unborn young each tick, per unit of its body mass (with fat in proportion). Young that need more nutrients take longer; no more breeding until they're born.` + PER_SEC, { min: 0.000005, max: 0.01, log: true }),
     e("BirthEfficiency", "Energy reaching the young", `Share of the energy (fat) a parent ${noun} passes on while breeding that actually reaches its young; the rest is spent on the pregnancy. Nutrients all reach them.`, { min: 0.05, max: 1 }),
     e("YoungRadius", "Won't breed near young", `A ${noun} won't breed while an immature one of its kind (not yet grown or not yet of breeding age) is within this many squares (0 = no such restraint).`, { min: 0, max: 60 }),
+    e("WaryCost", "Cost of staying alert", `For prey: how much a ${noun}'s living cost rises per square of its wariness (the distance at which it notices hunters). 0.01 = 1% more per square. No effect on species nobody hunts.`, { min: 0, max: 0.1 }),
     e("LookAhead", `Looks ahead for ${edge}`, `How many squares ahead a ${noun} checks for ${edge}, so it turns away before reaching the shore (0 = it just bumps into it).`, { min: 0, max: 20, int: true }),
   ];
 }

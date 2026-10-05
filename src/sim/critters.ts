@@ -109,9 +109,18 @@ export interface SpeciesDef {
   traits: TraitDef[];
 }
 
+/** Prey's wariness: how far off it notices a hunter that could catch it (and runs). */
+function wariness(def: number, hunters: string): TraitDef {
+  return {
+    key: "wariness", label: "Wariness",
+    tip: `How far (squares) it notices ${hunters} that could catch it, and runs away at top speed. Warier animals escape more often, but staying alert costs fat (see Cost of staying alert) and running costs fat and feeding time.`,
+    def, min: 0, max: 40, mode: "add", spread: 4,
+  };
+}
+
 export const FISH: SpeciesDef = {
   key: "fish", name: "fish", plural: "fish", prefix: "fish", diet: "algae", habitat: "water", stranded: "stranded on land",
-  traits: traitList({}, true),
+  traits: traitList({}, true, [wariness(6, "sharks and diving rocs")]),
 };
 
 export const SHARK: SpeciesDef = {
@@ -154,6 +163,7 @@ export const SHEEP: SpeciesDef = {
     { key: "wanderArc", label: "Meander arc", tip: "Width of the arc (degrees) its path wanders within, around its general direction.", def: 50, min: 20, max: 90, mode: "add", spread: 25 },
     { key: "grassSight", label: "Grass sight", tip: "How far (squares) a hungry sheep looks to find the grassiest direction.", def: 18, min: 10, max: 30, mode: "add", spread: 8 },
     { key: "swimAbility", label: "Swimming ability", tip: "0..1. Better swimmers spend less energy swimming but more walking.", def: 0.3, min: 0, max: 1, mode: "add", spread: 0.3 },
+    wariness(8, "cats, diving rocs and (while it swims) sharks"),
   ]),
 };
 
@@ -198,6 +208,7 @@ export const ROC: SpeciesDef = {
     { key: "wanderArc", label: "Meander arc", tip: "Width of the arc (degrees) its path wanders within when walking.", def: 50, min: 20, max: 90, mode: "add", spread: 25 },
     { key: "flyPref", label: "Flying preference", tip: "0..1: how much it prefers flying to walking. At each check it takes off with this chance, or lands (over land) with the opposite chance.", def: 0.6, min: 0, max: 1, mode: "add", spread: 0.3 },
     { key: "airSpeed", label: "Flying speed", tip: "Cruising speed in the air, in squares per tick (diving at prey goes faster).", def: 0.12, min: 0.01, max: 0.6, mode: "mul", spread: 0.5 },
+    wariness(10, "cats (while it's on the ground; it takes off if it can)"),
   ]),
 };
 
@@ -213,9 +224,9 @@ export interface Gene {
   deltas: Float32Array;
 }
 
-export const enum Mode { Wander, Hungry, Mating, Stranded, Grazing }
+export const enum Mode { Wander, Hungry, Mating, Stranded, Grazing, Fleeing }
 /** Mode descriptions (Stranded is described per species, see SpeciesDef.stranded). */
-export const MODE_NAMES = ["roaming", "hunting for food", "looking for a mate", "stranded", "grazing"];
+export const MODE_NAMES = ["roaming", "hunting for food", "looking for a mate", "stranded", "grazing", "running from a hunter"];
 
 export interface Critter {
   id: number;
@@ -262,6 +273,9 @@ export interface Critter {
   /** Long-range sensing (sharks): the direction it's heading for the most prey it saw, and ticks left doing so. */
   senseDir: number;
   senseLeft: number;
+  /** Prey running from a hunter: the way it's running, and ticks left running. */
+  fleeDir: number;
+  fleeLeft: number;
   /** Stomach: food eaten but not yet digested (energy and nutrients). */
   gutFat: number;
   gutN: number;
@@ -451,6 +465,8 @@ const PARAM_NAMES = [
   "SenseMin",
   // Eating and breeding.
   "Stomach", "DigestCost", "GestationRate", "BirthEfficiency", "YoungRadius",
+  // Prey: the cost of staying alert (per square of wariness).
+  "WaryCost",
   // Flying (rocs).
   "TooFat", "FlightCheck", "DiveBoost", "LandedUpkeep", "HuntUntil", "EdgeMargin", "CruiseHeight", "ClimbRate", "CatchChance", "MissRest",
   "BirthSize", "GrowthRate", "GrowthCost",
@@ -489,6 +505,36 @@ export class CritterSystem {
     private preySystems: CritterSystem[] = [],
   ) {
     this.keys = Object.fromEntries(PARAM_NAMES.map((n) => [n, `${species.prefix}${n}` as keyof Params])) as Record<ParamName, keyof Params>;
+    this.wary = species.traits.findIndex((d) => d.key === "wariness");
+    for (const p of preySystems) p.hunters.push(this);
+  }
+
+  /** Index of the wariness trait (-1 for species that aren't prey). */
+  private readonly wary: number;
+  /** The species that hunt this one. */
+  readonly hunters: CritterSystem[] = [];
+
+  /**
+   * Prey looking out for hunters: the nearest one within its wariness that
+   * could catch it where it is now (hunters that fly count only while in
+   * the air), or null.
+   */
+  private spotHunter(c: Critter): Critter | null {
+    const r = c.traits[this.wary];
+    if (r <= 0) return null;
+    let best: Critter | null = null;
+    let bd = r * r;
+    for (const sys of this.hunters) {
+      for (const k of sys.critters) {
+        if (!k.alive || (sys.species.flies && !k.flying)) continue;
+        const dx = k.x - c.x;
+        const dy = k.y - c.y;
+        if (Math.abs(dx) > r || Math.abs(dy) > r) continue;
+        const d = dx * dx + dy * dy;
+        if (d < bd && sys.catchable(c)) (bd = d), (best = k);
+      }
+    }
+    return best;
   }
 
   /** This species' setting `name` (e.g. "MoveCost"), read live. */
@@ -562,7 +608,7 @@ export class CritterSystem {
       hue: traits[T_HUE],
       id: this.nextId++, x, y, heading: this.host.rng() * Math.PI * 2, speed: 0,
       fat, nutrients, age: 0, cooldown: 0, parents, genes, traits,
-      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, boostTried: false, stroke: 0, tailAmp: 0, pounceLeft: 0, pounceDir: 0, pounceRest: 0, desired: 0, general: 0, wander: 0, avoid: 0, shore: false, senseDir: 0, senseLeft: 0, awayX: 0, awayY: 0, gutFat: 0, gutN: 0, womb: null, flying: false, alt: 0, landing: false, species: this.species, grown: 1,
+      mode: Mode.Wander, targetX: 0, targetY: 0, hasTarget: false, mate: null, prey: null, boostLeft: 0, boostTried: false, stroke: 0, tailAmp: 0, pounceLeft: 0, pounceDir: 0, pounceRest: 0, desired: 0, general: 0, wander: 0, avoid: 0, shore: false, senseDir: 0, senseLeft: 0, fleeDir: 0, fleeLeft: 0, awayX: 0, awayY: 0, gutFat: 0, gutN: 0, womb: null, flying: false, alt: 0, landing: false, species: this.species, grown: 1,
       phase: this.host.rng() * Math.PI * 2, alive: true, colour: colourOf(traits, this.species),
     };
     c.desired = c.general = c.heading;
@@ -724,7 +770,8 @@ export class CritterSystem {
    * flyer can take anything below it; others only in their own habitat
    * (sheep by sharks only while swimming, rocs by cats only once landed).
    */
-  private catchable(p: Critter): boolean {
+  /** Whether this (hunting) species could catch p where it is now. */
+  catchable(p: Critter): boolean {
     if (!p.alive || p.flying) return false;
     if (this.species.flies) return true;
     return this.home(squareOf(p));
@@ -843,6 +890,24 @@ export class CritterSystem {
     // A grazer keeps at a plant until it's gone or it can't store any more.
     if (c.mode === Mode.Grazing && !(h.kind[here] === GRASS_KIND && c.fat < t[T_MAX_FAT])) c.mode = Mode.Wander;
 
+    // Prey keep an eye out for hunters (every few ticks), and run from any they see.
+    if (c.fleeLeft > 0) c.fleeLeft--;
+    if (this.wary >= 0 && atHome && !flying && (this.tick + c.id) % 5 === 0) {
+      const k = this.spotHunter(c);
+      if (k) {
+        c.fleeDir = Math.atan2(c.y - k.y, c.x - k.x);
+        if (c.fleeLeft === 0) this.dropTarget(c);
+        c.fleeLeft = 40;
+        // A landed flyer takes off if it can.
+        if (this.species.flies && !this.tooFat(c)) {
+          c.flying = true;
+          c.landing = false;
+          c.wander = 0;
+          c.fleeLeft = 0;
+        }
+      }
+    }
+
     // Choose what to do.
     if (!atHome) {
       if (c.mode !== Mode.Stranded) {
@@ -850,6 +915,8 @@ export class CritterSystem {
         c.shore = false;
       }
       c.mode = Mode.Stranded;
+    } else if (c.fleeLeft > 0 && !c.flying) {
+      c.mode = Mode.Fleeing;
     } else if (c.mode === Mode.Grazing) {
       // Still grazing.
     } else if (grazer && c.fat < this.hunger(c) && h.kind[here] === GRASS_KIND && this.room(c) > 0.05 * this.stomach(c)) {
@@ -909,6 +976,10 @@ export class CritterSystem {
       const p = c.prey;
       if (p && p.alive && (p.x - c.x) ** 2 + (p.y - c.y) ** 2 < catchReach(p) ** 2) this.arrive(c);
       if (c.pounceLeft === 0) c.pounceRest = this.sp("PounceRest");
+    } else if (moving && c.mode === Mode.Fleeing) {
+      // Running from a hunter: straight away from it at top speed.
+      c.desired = c.fleeDir;
+      speed = t[T_MAX_SPEED];
     } else if (moving && land && !atHome) {
       // Swimming: head for the nearest shore at half walking speed.
       if (!c.shore || (this.tick + c.id) % 30 === 0) this.findShore(c);
@@ -1048,6 +1119,7 @@ export class CritterSystem {
     // per unit of mass, and boosting multiplies the living cost while it lasts.
     const mass = bodyMass(c) + c.fat * this.sp("FatMass");
     let upkeep = this.sp("Metabolism") * mass * (boosting ? this.host.p.sharkBoostMetabolism : 1);
+    if (this.wary >= 0) upkeep *= 1 + this.sp("WaryCost") * t[this.wary]; // staying alert costs fat
     if (this.species.flies && !flying) upkeep *= this.sp("LandedUpkeep"); // resting on the ground is cheaper
     let move = this.sp("MoveCost") * 0.5 * mass * speed * speed;
     if (land && !this.species.flies) {
@@ -1666,7 +1738,9 @@ export class CritterSystem {
         const g = pool.splice(Math.floor(h.rng() * pool.length), 1)[0];
         const deltas = new Float32Array(g.deltas.length);
         for (let j = 0; j < deltas.length; j++) {
-          deltas[j] = Math.max(-2 * strength, Math.min(2 * strength, g.deltas[j] + (h.rng() * 2 - 1) * mutation));
+          // No clamp: genes pass on as they are (traits are still kept within
+          // their ranges when expressed), so wild founders' genes carry on.
+          deltas[j] = g.deltas[j] + (h.rng() * 2 - 1) * mutation;
         }
         out.push({ traits: g.traits, deltas });
       }
