@@ -510,7 +510,17 @@ speed.
   and cats only on land, and they gather their body nutrients from the squares
   around them. Anything that can't be
   supplied is skipped, so nutrients stay conserved. Sprayed seeds and algae
-  get the starting genes. *Gardener* (click) puts a gardener, with their
+  get the starting genes, and sprayed animals random genes close to their
+  species' defaults. Tick **Random genes** (under the brush sliders) to
+  make every sprayed seed, algae cell or animal a wild experiment instead:
+  - **Plants:** every gene is drawn from anywhere within its limits.
+  - **Animals:** every trait is drawn from anywhere in its range (fat
+    store, speeds, lifespan, body size, litter size, colour and the rest).
+    Traits that scale are drawn evenly on a log scale, so tiny and huge are
+    equally likely. The animal's genes are set up to give those traits, so
+    its children inherit them in the usual way.
+
+  Most won't last long; the ones that do show what works. *Gardener* (click) puts a gardener, with their
   boat, on the land you click (or the nearest land), their body's
   nutrients taken from the ground around them. The *Destructor* (hold)
   removes all life under the cursor at once: grass, seeds, algae, animals

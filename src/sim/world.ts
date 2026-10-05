@@ -1,7 +1,7 @@
 import { CELL_COUNT, GRID_H, GRID_W, PARAMS, type Params } from "./config";
 import {
   ALGAE_DEFAULTS, G_BREED, G_GERM, G_GROWTH, G_LIFESPAN, G_RANGE, G_WATER_PREF, G_WATER_TOL,
-  GENE_COUNT, GRASS_DEFAULTS, inheritGenes, mutateInto, setGenes,
+  ALGAE_UNUSED_GENES, GENE_COUNT, GRASS_DEFAULTS, inheritGenes, mutateInto, setGenes, wildGenes,
 } from "./genes";
 import { SporeSystem } from "./spores";
 import { Hydrology } from "./hydrology";
@@ -310,13 +310,20 @@ export class World {
    * so nutrients stay conserved. Returns false if the square is water,
    * occupied, or too poor in nutrients.
    */
-  addSeed(i: number, rng: Rng = this.rng): boolean {
+  addSeed(i: number, rng: Rng = this.rng, wild = false): boolean {
     if (this.water.isWater(i) || this.kind[i] !== EMPTY || this.nutrients[i] < this.p.seedN) return false;
     this.nutrients[i] -= this.p.seedN;
     this.kind[i] = SEED;
     this.floraN[i] = this.p.seedN;
     this.floraE[i] = this.p.seedE;
     this.bornTick[i] = this.tick;
+    if (wild) {
+      // Every gene anywhere in its range (the Random genes switch on the seed spray).
+      const g = wildGenes(rng, GRASS_DEFAULTS);
+      setGenes(this.genes, i, g);
+      this.age[i] = 1 + Math.floor(rng() * g[G_GERM]);
+      return true;
+    }
     this.age[i] = 1 + Math.floor(rng() * GRASS_DEFAULTS[G_GERM]);
     setGenes(this.genes, i, GRASS_DEFAULTS);
     // Start with a spread of water preferences so every moisture niche has
@@ -330,7 +337,7 @@ export class World {
    * Places a new algae cell with the starting genes, taking its nutrients
    * from the water. Returns false on land, occupied or nutrient-poor squares.
    */
-  addAlgae(i: number): boolean {
+  addAlgae(i: number, wild = false): boolean {
     if (!this.water.isWater(i) || this.kind[i] !== EMPTY || this.nutrients[i] < this.p.algaeChildN) return false;
     this.nutrients[i] -= this.p.algaeChildN;
     this.kind[i] = ALGAE;
@@ -338,7 +345,7 @@ export class World {
     this.floraE[i] = this.p.algaeChildE;
     this.bornTick[i] = this.tick;
     this.age[i] = 0;
-    setGenes(this.genes, i, ALGAE_DEFAULTS);
+    setGenes(this.genes, i, wild ? wildGenes(this.rng, ALGAE_DEFAULTS, ALGAE_UNUSED_GENES) : ALGAE_DEFAULTS);
     return true;
   }
 

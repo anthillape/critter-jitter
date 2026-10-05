@@ -50,6 +50,21 @@ export function mutateInto(from: Float32Array, s: number, to: Float32Array, d: n
   }
 }
 
+/**
+ * A plant genome with every gene drawn from anywhere in its limits: evenly
+ * for water preference and tolerance, evenly on a log scale for the rest
+ * (their ranges span orders of magnitude). Genes listed in `keep` keep
+ * their value from `base` (e.g. algae's unused ones).
+ */
+export function wildGenes(rng: Rng, base: readonly number[], keep: ReadonlySet<number> = new Set()): number[] {
+  return base.map((b, g) => {
+    if (keep.has(g)) return b;
+    const [lo, hi] = GENE_LIMITS[g];
+    if (g === G_WATER_PREF || g === G_WATER_TOL) return lo + rng() * (hi - lo);
+    return lo * Math.exp(rng() * Math.log(hi / lo));
+  });
+}
+
 export function setGenes(genes: Float32Array, dst: number, values: readonly number[]): void {
   genes.set(values, dst * GENE_COUNT);
 }

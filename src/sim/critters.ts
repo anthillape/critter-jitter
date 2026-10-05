@@ -380,6 +380,39 @@ export function randomGene(rng: Rng, strength: number, traitCount: number): Gene
   return { traits, deltas };
 }
 
+/**
+ * A trait value drawn from anywhere in its allowed range: evenly on a log
+ * scale for traits that scale (whose range spans orders of magnitude;
+ * from a thousandth of the top if the range starts at zero), evenly for
+ * the rest.
+ */
+function wildTrait(d: TraitDef, rng: Rng): number {
+  if (d.mode === "add") return d.min + rng() * (d.max - d.min);
+  const lo = Math.max(d.min, d.max / 1000);
+  return lo * Math.exp(rng() * Math.log(d.max / lo));
+}
+
+/**
+ * Reshapes a set of genes so each trait they express lands on a value
+ * drawn from anywhere in its range (see wildTrait): the gap between what
+ * the genes give now and the drawn value is shared out over every gene
+ * that touches the trait. The genes stay ordinary genes, so children
+ * inherit them as usual.
+ */
+export function makeWild(genes: Gene[], defs: TraitDef[], rng: Rng): void {
+  const sum = new Float32Array(defs.length);
+  const carriers = new Array<number>(defs.length).fill(0);
+  for (const g of genes) for (let k = 0; k < g.traits.length; k++) (sum[g.traits[k]] += g.deltas[k]), carriers[g.traits[k]]++;
+  for (let t = 0; t < defs.length; t++) {
+    if (!carriers[t]) continue; // (almost never: no gene touches it, so it keeps its default)
+    const d = defs[t];
+    const v = wildTrait(d, rng);
+    const want = d.mode === "mul" ? Math.log(v / d.def) / d.spread : (v - d.def) / d.spread;
+    const share = (want - sum[t]) / carriers[t];
+    for (const g of genes) for (let k = 0; k < g.traits.length; k++) if (g.traits[k] === t) g.deltas[k] += share;
+  }
+}
+
 /** Works out traits: the species defaults plus the summed effect of all genes. */
 export function expressTraits(genes: Gene[], defs: TraitDef[]): Float32Array {
   const n = defs.length;
@@ -473,7 +506,8 @@ export class CritterSystem {
    * body nutrients are gathered from the squares around it (up to 4 away),
    * so nutrients stay conserved; it isn't created if there aren't enough.
    */
-  spawnRandom(x: number, y: number): boolean {
+  /** `wild`: its traits are drawn from anywhere in their ranges (see makeWild), not near the defaults. */
+  spawnRandom(x: number, y: number, wild = false): boolean {
     const h = this.host;
     const i = Math.floor(y) * GRID_W + Math.floor(x);
     const n = this.sp("StartNutrients");
@@ -481,6 +515,7 @@ export class CritterSystem {
     if (!this.gatherNutrients(Math.floor(x), Math.floor(y), n)) return false;
     const genes: Gene[] = [];
     for (let g = 0; g < GENE_COUNT_CRITTER; g++) genes.push(randomGene(h.rng, this.sp("GeneStrength"), this.species.traits.length));
+    if (wild) makeWild(genes, this.species.traits, h.rng);
     const c = this.add(x, y, genes, [0, 0], n, 0);
     c.fat = Math.min(this.sp("StartFat"), this.fatCap(c));
     // Founder flyers start in the air as often as they'd choose to be.

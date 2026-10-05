@@ -232,3 +232,4 @@ button.primary:hover { background: #46702a; }
 .thoughts li.chosen { font-weight: 600; }
 .thoughts .tag { font-size: 10px; border: 1px solid var(--muted); border-radius: 4px; padding: 0 3px; margin-left: 4px; color: var(--muted); font-weight: normal; }
 .thoughts .answer { margin: 4px 0 0; padding: 3px 6px; border-left: 2px solid var(--accent); color: var(--text); }
+.brush .wild { display: block; font-size: 12px; margin-top: 4px; }

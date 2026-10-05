@@ -63,6 +63,7 @@ const rateVal = $<HTMLSpanElement>("rateVal");
 const sizeVal = $<HTMLSpanElement>("sizeVal");
 const brushEl = $<HTMLDivElement>("brush");
 const manualRainBox = $<HTMLInputElement>("manualRain");
+const wildGenesBox = $<HTMLInputElement>("wildGenes");
 
 const rainToggle = $<HTMLButtonElement>("rainToggle");
 const toolButtons = Array.from(document.querySelectorAll<HTMLButtonElement>(".tool"));
@@ -194,13 +195,14 @@ function applyBrush(ticks: number): void {
     const y = Math.round(mouse.y + Math.sin(angle) * dist);
     if (x < 0 || y < 0 || x >= GRID_W || y >= GRID_H) continue;
     const i = y * GRID_W + x;
-    if (tool === "seeds") world.addSeed(i);
-    else if (tool === "algae") world.addAlgae(i);
-    else if (tool === "fish") world.fish.spawnRandom(x + Math.random(), y + Math.random());
-    else if (tool === "sharks") world.sharks.spawnRandom(x + Math.random(), y + Math.random());
-    else if (tool === "sheep") world.sheep.spawnRandom(x + Math.random(), y + Math.random());
-    else if (tool === "cats") world.cats.spawnRandom(x + Math.random(), y + Math.random());
-    else world.rocs.spawnRandom(x + Math.random(), y + Math.random());
+    const wild = wildGenesBox.checked;
+    if (tool === "seeds") world.addSeed(i, world.rng, wild);
+    else if (tool === "algae") world.addAlgae(i, wild);
+    else if (tool === "fish") world.fish.spawnRandom(x + Math.random(), y + Math.random(), wild);
+    else if (tool === "sharks") world.sharks.spawnRandom(x + Math.random(), y + Math.random(), wild);
+    else if (tool === "sheep") world.sheep.spawnRandom(x + Math.random(), y + Math.random(), wild);
+    else if (tool === "cats") world.cats.spawnRandom(x + Math.random(), y + Math.random(), wild);
+    else world.rocs.spawnRandom(x + Math.random(), y + Math.random(), wild);
   }
 }
 
