@@ -7,7 +7,7 @@ import { bodyMass, sheepSide, CritterSystem, Mode, MODE_NAMES, T_LITTER, type Co
 import type { CritterCounts } from "./sim/world";
 import { Sound, SOUNDS, type SoundName } from "./sound";
 import { setupCards } from "./cards";
-import type { Chooser } from "./sim/gardener";
+import type { Chooser, Gardener } from "./sim/gardener";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -40,6 +40,7 @@ const statsRocs = $<HTMLTableElement>("statsRocs");
 const rocTraits = $<HTMLTableElement>("rocTraits");
 const statsGardener = $<HTMLTableElement>("statsGardener");
 const gardenerLog = $<HTMLOListElement>("gardenerLog");
+const gardenerPick = $<HTMLSelectElement>("gardenerPick");
 const gardenerView = $<HTMLUListElement>("gardenerView");
 const gardenerPlaces = $<HTMLUListElement>("gardenerPlaces");
 const brainSel = $<HTMLSelectElement>("brain");
@@ -367,8 +368,14 @@ const modelChooser: Chooser = (p) =>
 
 /** Hands the gardener the model as their brain (once it's ready and chosen), else the rules. */
 function attachBrain(): void {
-  if (world.gardener) world.gardener.chooser = brainSel.value === "model" && brainReady ? modelChooser : null;
+  for (const g of world.gardeners) g.chooser = brainSel.value === "model" && brainReady ? modelChooser : null;
 }
+
+gardenerPick.addEventListener("change", () => {
+  gardenerShown = Number(gardenerPick.value);
+  gardenerLogShown = "";
+  gardenerCard();
+});
 
 brainSel.addEventListener("change", () => {
   if (brainSel.value === "model") startBrain();
@@ -448,7 +455,7 @@ function draw(): void {
   drawCats();
   drawFish();
   drawSharks();
-  drawGardener();
+  drawGardeners();
   drawRocs(); // on top: they fly over everything
   if (hover >= 0) {
     ctx.strokeStyle = "rgba(255,255,255,0.8)";
@@ -587,15 +594,21 @@ function drawBoat(x: number, y: number, heading: number, alpha: number): void {
   ctx.restore();
 }
 
+/** Cloak colours, one per gardener (the first is red), so they can be told apart. */
+const CLOAKS = ["#e0483a", "#3a7be0", "#e8c53a", "#a05ee0", "#3ac2a6", "#e0853a", "#e03aa5", "#8fd63a"];
+const cloakOf = (g: Gardener) => CLOAKS[Math.max(0, world.gardeners.indexOf(g)) % CLOAKS.length];
+
+function drawGardeners(): void {
+  for (const g of world.gardeners) drawGardener(g);
+}
+
 /**
- * The gardener: a person in a red cloak seen from above, with their boat
+ * A gardener: a person in a coloured cloak seen from above, with their boat
  * (under them while rowing, over their head while carrying it, or left on
  * the shore), anything they carry, a spear in flight, and a faint dashed
  * line to where they're heading.
  */
-function drawGardener(): void {
-  const g = world.gardener;
-  if (!g) return;
+function drawGardener(g: Gardener): void {
   const px = g.x * CELL_PX;
   const py = g.y * CELL_PX;
   if (!g.hasBoat) drawBoat(g.boatX * CELL_PX, g.boatY * CELL_PX, g.boatHeading, 1);
@@ -630,7 +643,7 @@ function drawGardener(): void {
   ctx.save();
   ctx.translate(px, py);
   ctx.rotate(g.heading);
-  ctx.fillStyle = "#e0483a";
+  ctx.fillStyle = cloakOf(g);
   ctx.strokeStyle = "#fff";
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -1149,7 +1162,7 @@ function critterCard(
     ["Deaths: starved / old age", `${n.starved} / ${n.oldAge}`],
   ];
   if (eatenLabel) rows.push([eatenLabel, String(n.eaten)]);
-  if (world.gardener) rows.push(["Culled or taken by the gardener", String(n.culled)]);
+  if (world.gardeners.length) rows.push([`Culled or taken by ${world.gardeners.length > 1 ? "gardeners" : "the gardener"}`, String(n.culled)]);
   rows.push(["Bodies rotting", n.corpses.toLocaleString()]);
   statsEl.innerHTML = rows.map(([k, v]) => `<tr><td class="muted">${k}</td><td>${v}</td></tr>`).join("");
   const defs = sys.species.traits;
@@ -1160,12 +1173,24 @@ function critterCard(
 }
 
 let gardenerLogShown = "";
+let gardenerShown = 0;
 function gardenerCard(): void {
-  const g = world.gardener;
+  const gs = world.gardeners;
+  // The picker: one entry per gardener (only shown when there's more than one).
+  gardenerPick.hidden = gs.length < 2;
+  const labels = gs.map((g) => `${g.name}${g.alive ? "" : " (dead)"}`);
+  if ([...gardenerPick.options].map((o) => o.text).join("|") !== labels.join("|")) {
+    gardenerPick.replaceChildren(...labels.map((t, k) => Object.assign(document.createElement("option"), { value: String(k), text: t })));
+  }
+  gardenerShown = Math.min(gardenerShown, Math.max(0, gs.length - 1));
+  gardenerPick.value = String(gardenerShown);
+  const g = gs[gardenerShown];
+  const alive = gs.filter((q) => q.alive).length;
   const rows: Array<[string, string]> = !g
-    ? [["Gardener", "none (see Initial gardener on the Settings tab)"]]
+    ? [["Gardener", "none (see Gardeners on the Settings tab)"]]
     : [
-      ["Gardener", g.alive ? `alive, ${g.mode()}` : "dead"],
+      ...(gs.length > 1 ? [["Gardeners", `${alive} alive of ${gs.length}`] as [string, string]] : []),
+      [g.name, `<span class="cloak" style="background:${cloakOf(g)}"></span>${g.alive ? `alive, ${g.mode()}` : "dead"}`],
       ["Fat", `${Math.max(0, g.fat).toFixed(1)} of ${PARAMS.gardenerMaxFat}`],
       ["Doing", g.alive ? g.doing || "–" : "–"],
       ["Right now", g.status],
@@ -1432,9 +1457,9 @@ function showInspect(): void {
       : `age ${world.age[i]} · size ${((world.floraN[i] / maxN) * 100).toFixed(0)}% · energy ${world.floraE[i].toFixed(2)}`;
     line2 += ` · genes ` + GENE_NAMES.map((n, j) => `${n} ${g[j].toPrecision(3)}`).join(", ");
   }
-  const g = world.gardener;
-  if (g && Math.hypot(g.x - x - 0.5, g.y - y - 0.5) < 4) {
-    line2 += (line2 ? "\n" : "") + `gardener (${g.alive ? g.mode() : "dead"}): ${g.status} · fat ${Math.max(0, g.fat).toFixed(1)} · nutrients ${g.nutrients.toFixed(3)}` + (g.doing && g.alive ? `\n  doing: ${g.doing}` : "");
+  const g = world.gardeners.find((q) => Math.hypot(q.x - x - 0.5, q.y - y - 0.5) < 4);
+  if (g) {
+    line2 += (line2 ? "\n" : "") + `${g.name} (${g.alive ? g.mode() : "dead"}): ${g.status} · fat ${Math.max(0, g.fat).toFixed(1)} · nutrients ${g.nutrients.toFixed(3)}` + (g.doing && g.alive ? `\n  doing: ${g.doing}` : "");
   }
   // The nearest critter under the cursor (sharks first, they're bigger).
   for (const sys of [world.rocs, world.sharks, world.cats, world.sheep, world.fish]) {

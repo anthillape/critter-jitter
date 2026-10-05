@@ -832,10 +832,10 @@ export const SETTINGS: Setting[] = [
     tip: "Nutrients each starting roc gathers from the ground to build its body.",
     min: 0.05, max: 3, log: true, newWorld: true,
   }),
-  param("initialGardener", {
-    group: "Life", label: "Gardener",
-    tip: "1 = a gardener (a person who tries to keep every species alive) starts on a random land square with their boat; 0 = no gardener.",
-    min: 0, max: 1, int: true, newWorld: true,
+  param("initialGardeners", {
+    group: "Life", label: "Gardeners",
+    tip: "How many gardeners (people who try to keep every species alive) start in the world, each on a random land square with their own boat. 0 = none. They share what they see, but each decides for themselves; they avoid going after the same animal and spread out over different jobs.",
+    min: 0, max: 20, int: true, newWorld: true,
   }),
   param("gardenerStartFat", {
     group: "Life", label: "Starting gardener fat",

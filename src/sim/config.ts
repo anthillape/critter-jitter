@@ -331,7 +331,7 @@ export const PARAMS = {
   initialSheep: 40,
   initialCats: 20,
   initialRocs: 10,
-  initialGardener: 1, // 1 = there's a gardener, 0 = none
+  initialGardeners: 1, // how many gardeners start in the world
   startingSurfaceWater: 1.3, // standing water at the start, as an average depth over the whole world
   initialSoilWetness: 0.4, // how full the soil starts (0..1); full under the starting lakes
   initialWaterPrefSpread: 0.85, // starting seeds' water preference is spread over this range around the default

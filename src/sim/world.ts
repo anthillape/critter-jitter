@@ -102,7 +102,7 @@ export class World {
   /** Algae spores drifting in the water (how algae breed). */
   readonly spores: SporeSystem;
   /** The person looking after the world (null if there isn't one). */
-  gardener: Gardener | null = null;
+  gardeners: Gardener[] = [];
   readonly p: Params;
   readonly rng: Rng;
   tick = 0;
@@ -213,11 +213,11 @@ export class World {
     for (let tries = 0; placed < this.p.initialRocs && tries < 1e6; tries++) {
       if (this.rocs.spawnRandom(rng() * GRID_W, rng() * GRID_H)) placed++;
     }
-    if (this.p.initialGardener >= 1) this.spawnGardener();
+    for (let k = 0; k < this.p.initialGardeners; k++) this.spawnGardener();
   }
 
   /**
-   * Puts the gardener on a random land square. Their body's nutrients come
+   * Puts a gardener on a random land square. Their body's nutrients come
    * from the ground around them, so nutrients stay conserved.
    */
   spawnGardener(): void {
@@ -236,7 +236,7 @@ export class World {
           }
         }
       }
-      this.gardener = new Gardener(this, x + 0.5, y + 0.5, 2 - want);
+      this.gardeners.push(new Gardener(this, x + 0.5, y + 0.5, 2 - want, `Gardener ${this.gardeners.length + 1}`));
       return;
     }
   }
@@ -358,7 +358,7 @@ export class World {
     this.sheep.step();
     this.cats.step();
     this.rocs.step();
-    this.gardener?.step();
+    for (const g of this.gardeners) g.step();
     this.fish.removeDead(); // fish eaten by sharks and rocs this tick
     this.sheep.removeDead(); // sheep eaten by cats and rocs this tick
     this.rocs.removeDead(); // rocs eaten by cats this tick // fish eaten by sharks this tick
@@ -628,7 +628,7 @@ export class World {
     flora += this.spores.nutrientTotal(); // spores are algae on the move
     algaeN += this.spores.nutrientTotal();
     algaeE += this.spores.energyTotal();
-    const animals = sw.nutrientTotal() + sh.nutrientTotal() + this.sheep.nutrientTotal() + this.cats.nutrientTotal() + this.rocs.nutrientTotal() + (this.gardener ? this.gardener.nutrientTotal() : 0);
+    const animals = sw.nutrientTotal() + sh.nutrientTotal() + this.sheep.nutrientTotal() + this.cats.nutrientTotal() + this.rocs.nutrientTotal() + this.gardeners.reduce((a, g) => a + g.nutrientTotal(), 0);
     const s: Stats = {
       tick: this.tick,
       seeds, grass, algae, spores: this.spores.spores.length,

@@ -36,10 +36,14 @@ export class Navigator {
   private dist = new Float64Array(this.cw * this.ch * 2);
   private prev = new Int32Array(this.cw * this.ch * 2);
 
+  private readTick = -1;
+
   constructor(private isWater: (i: number) => boolean) {}
 
-  /** Re-reads which cells are water (water levels change with rain). */
-  refresh(): void {
+  /** Re-reads which cells are water (water levels change with rain); at most once per `tick`. */
+  refresh(tick = -1): void {
+    if (tick >= 0 && tick === this.readTick) return;
+    this.readTick = tick;
     for (let cy = 0; cy < this.ch; cy++) {
       for (let cx = 0; cx < this.cw; cx++) {
         let wet = 0;

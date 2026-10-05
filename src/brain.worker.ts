@@ -48,8 +48,14 @@ async function load(): Promise<void> {
   throw last;
 }
 
-self.onmessage = async (ev: MessageEvent) => {
-  const m = ev.data as { type: string; id?: number; system?: string; user?: string };
+// Questions are answered one at a time (several gardeners may ask at once).
+let queue: Promise<void> = Promise.resolve();
+
+self.onmessage = (ev: MessageEvent) => {
+  queue = queue.then(() => handle(ev.data));
+};
+
+async function handle(m: { type: string; id?: number; system?: string; user?: string }): Promise<void> {
   try {
     if (m.type === "load" || m.type === "ask") {
       loading ??= load();
@@ -70,4 +76,4 @@ self.onmessage = async (ev: MessageEvent) => {
     loading = null;
     post({ type: "error", id: m.id, message: e instanceof Error ? e.message : String(e) });
   }
-};
+}

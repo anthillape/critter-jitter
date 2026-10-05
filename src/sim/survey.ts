@@ -61,12 +61,25 @@ export interface Survey {
   major: Region[];
   /** The region an (x, y) point is in. */
   at(x: number, y: number): Region;
+  /** The region an animal was in when the survey was taken. */
+  of(c: { x: number; y: number }): Region;
 }
 
 const MAJOR_CELLS = 15; // coarse cells (about 135 squares) for a region to count as a land mass or a lake
 
+const cache = new WeakMap<World, { tick: number; s: Survey }>();
+
+/** The survey for this tick, shared by every gardener (worked out at most once per tick). */
 export function survey(w: World, nav: Navigator): Survey {
-  nav.refresh();
+  const c = cache.get(w);
+  if (c && c.tick === w.tick) return c.s;
+  const s = takeSurvey(w, nav);
+  cache.set(w, { tick: w.tick, s });
+  return s;
+}
+
+function takeSurvey(w: World, nav: Navigator): Survey {
+  nav.refresh(w.tick);
   const { cw, ch } = nav;
   const cells = cw * ch;
   const label = new Int32Array(cells).fill(-1);
@@ -152,10 +165,14 @@ export function survey(w: World, nav: Navigator): Survey {
       ? `${r.water ? "a pond" : "an islet"} (${where})`
       : r.water ? `lake ${++lakes} (${where})` : `land ${String.fromCharCode(65 + (lands++ % 26))} (${where})`;
   }
+  // Which region each animal is in (looked up a lot when weighing options).
+  const where = new Map<object, Region>();
+  for (const s of SPECIES_NAMES) for (const c of sys[s].critters) where.set(c, regions[label[nav.cellOf(c.x, c.y)]]);
   return {
     regions,
     major,
     at: (x, y) => regions[label[nav.cellOf(x, y)]],
+    of: (c) => where.get(c) ?? regions[label[nav.cellOf(c.x, c.y)]],
   };
 }
 

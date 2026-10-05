@@ -83,6 +83,17 @@ const USUAL_RATE = 0.02; // per look: the usual number follows the count over ab
 const HISTORY_LOOKS = 40; // counts remembered per population
 const TREND_LOOKS = 20; // the trend is taken over the last 2,000 ticks
 
+/** One route planner per world, shared by its gardeners (its water map is read at most once a tick). */
+const navs = new WeakMap<World, Navigator>();
+function sharedNavigator(w: World): Navigator {
+  let n = navs.get(w);
+  if (!n) {
+    n = new Navigator((i) => w.water.isWater(i));
+    navs.set(w, n);
+  }
+  return n;
+}
+
 const PLURAL: Record<SpeciesName, string> = { fish: "fish", shark: "sharks", sheep: "sheep", cat: "cats", roc: "rocs" };
 
 const BLOCK = 20; // squares per side of the blocks the gardener judges the map by
@@ -137,15 +148,15 @@ export class Gardener {
   /** Recent decisions, newest last. */
   log: Array<{ tick: number; text: string; by: string }> = [];
 
-  constructor(private w: World, x: number, y: number, nutrients: number) {
+  constructor(private w: World, x: number, y: number, nutrients: number, readonly name = "Gardener") {
     this.x = x;
     this.y = y;
     this.boatX = x;
     this.boatY = y;
     this.fat = w.p.gardenerStartFat;
     this.nutrients = nutrients;
-    this.nav = new Navigator((i) => w.water.isWater(i));
-    this.nav.refresh();
+    this.nav = sharedNavigator(w);
+    this.nav.refresh(w.tick);
     this.observe();
   }
 
@@ -443,7 +454,7 @@ export class Gardener {
     const p = this.w.p;
     const moved = Math.hypot(gx - this.routeGoal.x, gy - this.routeGoal.y) > 3;
     if (!this.route.length || moved || --this.replanIn <= 0) {
-      this.nav.refresh();
+      this.nav.refresh(this.w.tick);
       const route = this.nav.plan(this.x, this.y, this.hasBoat, this.boatX, this.boatY, gx, gy, this.speeds());
       if (!route) {
         this.log.push({ tick: this.w.tick, text: "Couldn't find a way there; gave up.", by: "" });
@@ -732,6 +743,7 @@ export class Gardener {
     const p = w.p;
     this.view = survey(w, this.nav);
     const v = this.view;
+    const others = w.gardeners.filter((g) => g !== this && g.alive);
     const out: GardenerOption[] = [];
     const sys = this.sys();
     const look = {} as Record<string, Outlook>;
@@ -742,23 +754,33 @@ export class Gardener {
     const relFood = (r: Region, s: SpeciesName, extra = 0) => foodIn(r, s) / Math.max(1, r.animals[s] + extra) / usualFood(s);
     /** Hunters of s in r. */
     const threats = (r: Region, s: SpeciesName) => predatorsOf(s).reduce((a, q) => a + r.animals[q], 0);
-    const free = (s: SpeciesName, c: Critter) => !c.flying && (this.escaped.get(`${sys[s].species.name}#${c.id}`) ?? 0) <= w.tick;
+    // Not flying, not one that got away lately, not one another gardener is after.
+    const free = (s: SpeciesName, c: Critter) =>
+      !c.flying && (this.escaped.get(`${sys[s].species.name}#${c.id}`) ?? 0) <= w.tick && !others.some((g) => g.quarry() === c);
     /** The catchable s in r nearest (x, y). */
     const pick = (s: SpeciesName, r: Region | null, x: number, y: number) => {
       let best: Critter | null = null;
       let bd = Infinity;
       for (const c of sys[s].critters) {
-        if (!free(s, c) || (r && v.at(c.x, c.y) !== r)) continue;
+        if (!free(s, c) || (r && v.of(c) !== r)) continue;
         const d = (c.x - x) ** 2 + (c.y - y) ** 2;
         if (d < bd) (bd = d), (best = c);
       }
       return best;
     };
     /** Where the s in r gather (their mean position). */
+    const groups = new Map<string, { x: number; y: number; k: number }>();
+    for (const s of SPECIES_NAMES) {
+      for (const c of sys[s].critters) {
+        const key = `${s}@${v.of(c).id}`;
+        const g = groups.get(key) ?? { x: 0, y: 0, k: 0 };
+        (g.x += c.x), (g.y += c.y), g.k++;
+        groups.set(key, g);
+      }
+    }
     const groupOf = (s: SpeciesName, r: Region) => {
-      let sx = 0, sy = 0, k = 0;
-      for (const c of sys[s].critters) if (v.at(c.x, c.y) === r) (sx += c.x), (sy += c.y), k++;
-      return k ? { x: sx / k, y: sy / k } : r.foodSpot;
+      const g = groups.get(`${s}@${r.id}`);
+      return g ? { x: g.x / g.k, y: g.y / g.k } : r.foodSpot;
     };
     const how = (s: string) => `${PLURAL[s as SpeciesName] ?? s}: ${this.outlookText(s)}`;
     const home = (s: SpeciesName) => v.regions.filter((r) => r.animals[s] > 0 && suits(r, s));
@@ -997,7 +1019,11 @@ export class Gardener {
           (x0 = t.fx), (y0 = t.fy), (fine = reachable(t.fx, t.fy) && reachable(t.tx, t.ty));
           break;
       }
-      if (t.kind !== "eatPlants" && t.kind !== "goto") o.utility /= 1 + distTo(x0, y0) / 400;
+      if (t.kind !== "eatPlants" && t.kind !== "goto") {
+        o.utility /= 1 + distTo(x0, y0) / 400;
+        // Leave a job another gardener is already on to them: spread out.
+        if (others.some((g) => { const a = g.aim(); return a && Math.hypot(a.x - x0, a.y - y0) < 30; })) o.utility *= 0.5;
+      }
       if ("target" in t) {
         const odds = this.odds(t.sys, t.target);
         o.utility *= odds;
@@ -1037,6 +1063,12 @@ export class Gardener {
     let e = Math.max(0, this.fat) + (this.carcass ? this.carcass.fat : 0);
     for (const s of this.seeds) e += s.e;
     return e;
+  }
+
+  /** The animal they're after or carrying, if any. */
+  quarry(): Critter | null {
+    if (this.carried) return this.carried.c;
+    return this.task && "target" in this.task ? this.task.target : null;
   }
 
   /** Where the current task is heading (for drawing), or null. */

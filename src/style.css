@@ -211,3 +211,5 @@ button.primary:hover { background: #46702a; }
 #statsGardener td:last-child { text-align: left; }
 #gardenerView, #gardenerPlaces { max-height: none; }
 #statsGardener td:first-child { padding-right: 10px; white-space: nowrap; }
+#gardenerPick { display: block; width: 100%; margin: 4px 0 8px; }
+.cloak { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: baseline; }

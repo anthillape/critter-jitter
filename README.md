@@ -415,9 +415,18 @@ eat. A task that drags on too long is given up.
 
 Their body's nutrients come from the ground where they start, and
 everything they eat, carry, shed or leave behind is accounted for, so
-nutrients stay conserved. Set *Gardener* to 0 on the Settings tab (Life)
-for a world without them. Their abilities are under Settings →
+nutrients stay conserved. Their abilities are under Settings →
 *Gardener*.
+
+**More than one.** *Gardeners* on the Settings tab (Life) sets how many
+start, from 0 (none) to 20, each with their own boat and cloak colour.
+They share one survey and one map of land and water each tick, so extra
+gardeners are cheap: on a slow machine, 10 gardeners added about 12% to
+the time a tick takes. Each decides for themselves, but they don't go
+after an animal another is already after, and a job near where another
+is heading scores half, so they spread out. The Gardener card has a
+picker to follow any of them. With the language model, they put their
+questions to it one at a time.
 
 ## Water cycle
 
