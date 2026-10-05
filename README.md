@@ -423,6 +423,21 @@ lake, row across, leave it on the far shore and walk on". They can swim,
 slowly and at a cost, when there's no better way. A boat left where the
 water rises washes up on the nearest shore.
 
+**The net.** For fish they use a net. They get within a spear's throw of
+a school, rowing or standing on the shore, and cast. The net lands that
+far ahead of them and catches every fish under it (radius *Net size*,
+3 squares by default). With the catch they either:
+- carry it in the net to another lake and let the fish go there, spread
+  out a little in the water, so a whole school moves at once; or
+- if they're hungry and fish are plentiful, eat it.
+
+Whenever their plans call for moving fish (out of a hungry lake, to a lone
+fish, or to start a new group), they net the thickest school in that lake
+rather than chase fish one by one. A cast that catches nothing is gathered
+in (*Net gathering time*) and tried again. Each cast is noted in their
+Thoughts ("Cast the net: caught 6 fish."). The clock for a task starts
+again once the catch is in, with time for the trip.
+
 Their spear reaches a dozen squares and hits three times in four. A cull
 leaves a body to rot. A kill to eat is walked to and eaten. Rocs are never speared.
 

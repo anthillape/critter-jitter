@@ -670,14 +670,31 @@ function drawGardener(g: Gardener): void {
   ctx.fill();
   ctx.restore();
   if (g.hasBoat && !rowing) drawBoat(px, py, g.heading, 0.75); // carried overhead
-  if (g.carried) {
-    ctx.fillStyle = g.carried.c.colour;
+  if (g.carried.length === 1) {
+    // One animal, carried in the arms.
+    ctx.fillStyle = g.carried[0].c.colour;
     ctx.strokeStyle = "#fff";
     ctx.beginPath();
     ctx.arc(px + 3, py - 3, 1.8, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+  } else if (g.carried.length > 1) {
+    // A net bag over the shoulder, with the catch showing through.
+    const bx = px + 4, by = py - 4, br = 3.2;
+    ctx.fillStyle = "rgba(230,220,190,0.25)";
+    ctx.strokeStyle = "rgba(240,232,205,0.9)";
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.arc(bx, by, br, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    for (let k = 0; k < Math.min(6, g.carried.length); k++) {
+      const a = k * 2.4;
+      ctx.fillStyle = g.carried[k].c.colour;
+      ctx.fillRect(bx + Math.cos(a) * 1.6 - 0.6, by + Math.sin(a) * 1.6 - 0.6, 1.2, 1.2);
+    }
   }
+  if (g.net) drawNet(g, px, py);
   if (g.seeds.length) {
     ctx.fillStyle = "#efe6b8";
     for (let k = 0; k < Math.min(5, g.seeds.length); k++) ctx.fillRect(px - 4 + k * 1.5, py + 3, 1, 1);
@@ -695,6 +712,42 @@ function drawGardener(g: Gardener): void {
     ctx.lineTo(sx, sy);
     ctx.stroke();
   }
+}
+
+/**
+ * A cast net: it flies out from the gardener for the first few ticks, then
+ * lies as a meshed circle where it landed, fading as it's gathered in.
+ */
+function drawNet(g: Gardener, px: number, py: number): void {
+  const n = g.net!;
+  const flying = Math.max(0, (n.t - 22) / 8); // 1 just thrown .. 0 landed
+  const cx = (n.x + (g.x - n.x) * flying) * CELL_PX;
+  const cy = (n.y + (g.y - n.y) * flying) * CELL_PX;
+  const r = n.r * CELL_PX * (1 - 0.6 * flying);
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, n.t / 12);
+  ctx.strokeStyle = "rgba(240,232,205,0.9)";
+  ctx.lineWidth = 0.7;
+  // The line back to the gardener.
+  ctx.beginPath();
+  ctx.moveTo(px, py);
+  ctx.lineTo(cx, cy);
+  ctx.stroke();
+  // Rim and mesh.
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.clip();
+  ctx.beginPath();
+  for (let d = -r; d <= r; d += 2.5) {
+    ctx.moveTo(cx + d - r, cy - r);
+    ctx.lineTo(cx + d + r, cy + r);
+    ctx.moveTo(cx + d + r, cy - r);
+    ctx.lineTo(cx + d - r, cy + r);
+  }
+  ctx.globalAlpha *= 0.6;
+  ctx.stroke();
+  ctx.restore();
 }
 
 /**

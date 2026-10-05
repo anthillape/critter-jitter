@@ -638,6 +638,18 @@ export class CritterSystem {
     this.critters = this.critters.filter((o) => o !== c);
   }
 
+  /** The gardener eats a critter they lifted (caught in the net): returns all its energy and nutrients. */
+  consume(c: Critter): { fat: number; nutrients: number } {
+    const fat = Math.max(0, c.fat) + c.gutFat + (c.womb ? c.womb.gotFat : 0);
+    const nutrients = c.nutrients + c.gutN + (c.womb ? c.womb.gotN : 0);
+    c.alive = false;
+    c.fat = c.gutFat = c.nutrients = c.gutN = 0;
+    c.womb = null;
+    this.culled++;
+    this.deaths++;
+    return { fat, nutrients };
+  }
+
   /** Puts a lifted critter back into the world at (x, y). */
   release(c: Critter, x: number, y: number): void {
     c.alive = true;

@@ -28,7 +28,9 @@ export type Task =
   | { kind: "hunt"; sys: CritterSystem; target: Critter }
   | { kind: "cull"; sys: CritterSystem; target: Critter }
   | { kind: "move"; sys: CritterSystem; target: Critter; tx: number; ty: number }
-  | { kind: "sow"; fx: number; fy: number; tx: number; ty: number };
+  | { kind: "sow"; fx: number; fy: number; tx: number; ty: number }
+  /** Cast the net over the school of fish near (cx, cy), then carry the catch to (tx, ty) and let it go, or eat it. */
+  | { kind: "net"; sys: CritterSystem; cx: number; cy: number; tx: number; ty: number; eat: boolean };
 
 export interface GardenerOption {
   text: string;
@@ -143,7 +145,11 @@ export class Gardener {
   status = "looking around";
   /** The current task's description (the chosen option's text). */
   doing = "";
-  carried: { sys: CritterSystem; c: Critter } | null = null;
+  /** Animals they're carrying (one caught by hand, or a net's catch). */
+  carried: Array<{ sys: CritterSystem; c: Critter }> = [];
+  /** A net in flight or just landed (for drawing): its centre and radius, how many it caught, ticks left. */
+  net: { x: number; y: number; r: number; caught: number; t: number } | null = null;
+  private netRest = 0;
   seeds: SeedPack[] = [];
   carcass: { x: number; y: number; fat: number; nutrients: number } | null = null;
   /** A spear in flight (for drawing), and ticks before the next throw. */
@@ -199,6 +205,8 @@ export class Gardener {
     if (this.age % OBSERVE_EVERY === 0) this.observe();
     if (this.spear && --this.spear.t <= 0) this.spear = null;
     if (this.spearRest > 0) this.spearRest--;
+    if (this.net && --this.net.t <= 0) this.net = null;
+    if (this.netRest > 0) this.netRest--;
     if (this.hasBoat) {
       this.boatX = this.x;
       this.boatY = this.y;
@@ -244,7 +252,7 @@ export class Gardener {
     if (this.task) {
       this.taskAge++;
       const t = this.task;
-      const chasing = "target" in t && !this.carried && !this.carcass;
+      const chasing = "target" in t && !this.carried.length && !this.carcass;
       if (chasing && this.taskAge > 0.4 * p.gardenerGiveUp) {
         this.note(`The ${t.sys.species.name} got away; gave up the chase.`);
         this.escaped.set(`${t.sys.species.name}#${t.target.id}`, this.w.tick + 3000);
@@ -262,7 +270,7 @@ export class Gardener {
     this.decideIn--;
     if (!this.pending && this.decideIn <= 0) {
       if (!this.task || this.task.kind === "goto") this.decide();
-      else if (!this.carried && !this.carcass) this.decide(this.current * 1.5 + 0.5);
+      else if (!this.carried.length && !this.carcass) this.decide(this.current * 1.5 + 0.5);
       else this.decideIn = p.gardenerDecideInterval;
     }
 
@@ -325,19 +333,65 @@ export class Gardener {
         return;
       }
       case "move": {
-        if (!this.carried) {
+        if (!this.carried.length) {
           const c = t.target;
           if (!c.alive) return this.finish();
           this.status = `catching a ${t.sys.species.name}`;
           if (Math.hypot(c.x - this.x, c.y - this.y) < 1.5 && !c.flying) {
             t.sys.lift(c);
             this.chased(t.sys, true);
-            this.carried = { sys: t.sys, c };
+            this.carried = [{ sys: t.sys, c }];
+            this.allowForCarry(t.tx, t.ty);
           } else this.travel(c.x, c.y, 1);
           return;
         }
         this.status = `carrying a ${t.sys.species.name}`;
         if (this.travel(t.tx, t.ty, 1.5)) {
+          this.releaseCarried();
+          this.finish();
+        }
+        return;
+      }
+      case "net": {
+        if (!this.carried.length) {
+          // Follow the school, and stand a spear's throw from it to cast.
+          const school = this.schoolNear(t.sys, t.cx, t.cy, 12);
+          if (!school) {
+            this.note(`The ${t.sys.species.name} scattered; gave up on the net.`);
+            return this.finish();
+          }
+          t.cx = school.x;
+          t.cy = school.y;
+          const range = p.gardenerSpearRange;
+          const d = Math.hypot(t.cx - this.x, t.cy - this.y);
+          // The net lands a spear's throw away, so the school must be about that far (within the net's reach).
+          if (Math.abs(d - range) > Math.max(1.5, p.gardenerNetRadius * 0.8)) {
+            this.status = "getting in range to cast the net";
+            const ux = d > 1e-6 ? (this.x - t.cx) / d : 1;
+            const uy = d > 1e-6 ? (this.y - t.cy) / d : 0;
+            this.travel(t.cx + ux * range, t.cy + uy * range, 1.5);
+            return;
+          }
+          this.heading = Math.atan2(t.cy - this.y, t.cx - this.x);
+          if (this.netRest > 0) {
+            this.status = "gathering in the net";
+            return;
+          }
+          this.status = "casting the net";
+          this.castNet(t.sys);
+          return;
+        }
+        if (t.eat) {
+          this.status = `eating the ${t.sys.species.name} in the net`;
+          for (const { sys, c } of this.carried) {
+            const got = sys.consume(c);
+            this.eat(got.fat, got.nutrients);
+          }
+          this.carried = [];
+          return this.finish();
+        }
+        this.status = `carrying ${this.carried.length} ${t.sys.species.name} in the net`;
+        if (this.travel(t.tx, t.ty, 2)) {
           this.releaseCarried();
           this.finish();
         }
@@ -408,6 +462,50 @@ export class Gardener {
     return 0.5 * speed + 0.5 * ((r.got + 1) / (r.got + r.lost + 2));
   }
 
+  /**
+   * Casts the net: it lands a spear's throw ahead of them and catches every
+   * animal of `sys` (not in the air) within the net's radius.
+   */
+  private castNet(sys: CritterSystem): void {
+    const p = this.w.p;
+    const x = this.x + Math.cos(this.heading) * p.gardenerSpearRange;
+    const y = this.y + Math.sin(this.heading) * p.gardenerSpearRange;
+    const r = p.gardenerNetRadius;
+    const caught = sys.critters.filter((c) => !c.flying && Math.hypot(c.x - x, c.y - y) <= r);
+    for (const c of caught) {
+      sys.lift(c);
+      this.carried.push({ sys, c });
+    }
+    this.net = { x, y, r, caught: caught.length, t: 30 };
+    if (caught.length && this.task?.kind === "net") this.allowForCarry(this.task.tx, this.task.ty);
+    const name = caught.length === 1 ? sys.species.name : sys.species.plural;
+    this.note(caught.length ? `Cast the net: caught ${caught.length} ${name}.` : "Cast the net: caught nothing.");
+    this.netRest = p.gardenerNetRest;
+  }
+
+  /**
+   * Caught something to carry to (tx, ty): the clock starts again, with time
+   * for the trip (twice what it would take at their slower pace) if that's
+   * longer than their usual patience.
+   */
+  private allowForCarry(tx: number, ty: number): void {
+    const p = this.w.p;
+    const trip = (2 * Math.hypot(tx - this.x, ty - this.y)) / Math.min(p.gardenerWalkSpeed, p.gardenerRowSpeed);
+    this.taskAge = Math.min(0, p.gardenerGiveUp - trip);
+  }
+
+  /** Where the school of `sys` near (x, y) is: the middle of those within r of it, and how many; null if none. */
+  private schoolNear(sys: CritterSystem, x: number, y: number, r: number): { x: number; y: number; n: number } | null {
+    let sx = 0, sy = 0, n = 0;
+    for (const c of sys.critters) {
+      if (c.flying || Math.hypot(c.x - x, c.y - y) > r) continue;
+      sx += c.x;
+      sy += c.y;
+      n++;
+    }
+    return n ? { x: sx / n, y: sy / n, n } : null;
+  }
+
   private eat(e: number, n: number): void {
     const p = this.w.p;
     this.fat = Math.min(p.gardenerMaxFat, this.fat + e * p.gardenerEfficiency);
@@ -434,7 +532,7 @@ export class Gardener {
 
   /** Puts down whatever it carries: the animal goes free, seeds back into the ground, the catch is left. */
   private dropEverything(): void {
-    if (this.carried) this.releaseCarried();
+    if (this.carried.length) this.releaseCarried();
     for (const s of this.seeds) this.w.nutrients[this.square()] += s.n;
     this.seeds = [];
     if (this.carcass) {
@@ -443,22 +541,26 @@ export class Gardener {
     }
   }
 
-  /** Lets the carried animal go at the nearest square of its habitat. */
+  /** Lets the animals they carry go, each at a nearby square of its habitat (spread out a little). */
   private releaseCarried(): void {
-    const { sys, c } = this.carried!;
-    this.carried = null;
-    const water = sys.species.habitat === "water";
-    let best: { x: number; y: number } | null = null;
-    for (let r = 0; r <= 8 && !best; r++) {
-      for (let k = 0; k < 16 && !best; k++) {
-        const a = (k / 16) * Math.PI * 2;
-        const x = this.x + Math.cos(a) * r;
-        const y = this.y + Math.sin(a) * r;
-        if (x < 0 || y < 0 || x >= GRID_W || y >= GRID_H) continue;
-        if (this.w.water.isWater(Math.floor(y) * GRID_W + Math.floor(x)) === water) best = { x, y };
+    const rng = this.w.rng;
+    for (const { sys, c } of this.carried) {
+      const water = sys.species.habitat === "water";
+      let best: { x: number; y: number } | null = null;
+      const turn = rng() * Math.PI * 2;
+      // The nearest square of its habitat (looking up to 60 squares away, so fish aren't left on land).
+      for (let r = 0; r <= 60 && !best; r += r < 8 ? 1 : 3) {
+        for (let k = 0; k < 24 && !best; k++) {
+          const a = turn + (k / 24) * Math.PI * 2;
+          const x = this.x + Math.cos(a) * (r + rng());
+          const y = this.y + Math.sin(a) * (r + rng());
+          if (x < 0 || y < 0 || x >= GRID_W || y >= GRID_H) continue;
+          if (this.w.water.isWater(Math.floor(y) * GRID_W + Math.floor(x)) === water) best = { x, y };
+        }
       }
+      sys.release(c, best?.x ?? this.x, best?.y ?? this.y);
     }
-    sys.release(c, best?.x ?? this.x, best?.y ?? this.y);
+    this.carried = [];
   }
 
   /** Taken out of the world (the Destructor): what they carry, and their body's nutrients, go back to the ground. */
@@ -675,7 +777,7 @@ export class Gardener {
       this.decideIn = 0;
       return false;
     }
-    if (this.carried || this.carcass) return false; // picked something up while the model thought
+    if (this.carried.length || this.carcass) return false; // picked something up while the model thought
     if (this.seeds.length) this.scatterSeeds(); // changing plans: sow what they carry where they stand
     this.task = o.task;
     this.current = o.utility;
@@ -846,6 +948,21 @@ export class Gardener {
       const g = groups.get(`${s}@${r.id}`);
       return g ? { x: g.x / g.k, y: g.y / g.k } : r.foodSpot;
     };
+    /** The thickest school of fish in a lake: where a net cast would catch the most, and about how many. */
+    const schools = new Map<Region, { x: number; y: number; n: number } | null>();
+    const school = (r: Region) => {
+      if (schools.has(r)) return schools.get(r)!;
+      const fish = sys.fish.critters.filter((c) => v.of(c) === r).slice(0, 200);
+      const rad = p.gardenerNetRadius;
+      let best: { x: number; y: number; n: number } | null = null;
+      for (const a of fish) {
+        let n = 0, sx = 0, sy = 0;
+        for (const b of fish) if (Math.hypot(a.x - b.x, a.y - b.y) <= rad) (n++), (sx += b.x), (sy += b.y);
+        if (!best || n > best.n) best = { x: sx / n, y: sy / n, n };
+      }
+      schools.set(r, best);
+      return best;
+    };
     const how = (s: string) => `${PLURAL[s as SpeciesName] ?? s}: ${this.outlookText(s)}`;
     const home = (s: SpeciesName) => v.regions.filter((r) => r.animals[s] > 0 && suits(r, s));
 
@@ -866,6 +983,20 @@ export class Gardener {
       if (best) {
         const food = best.water ? `${best.algae} algae` : `${best.grass + best.seeds} grass and seeds`;
         out.push({ text: `Eat plants in ${best.name}: ${food}, plenty for its grazers`, utility: need, task: { kind: "eatPlants", x: best.foodSpot.x, y: best.foodSpot.y } });
+      }
+      // A net cast over a school of plentiful fish feeds them well.
+      if (look.fish.spare) {
+        let best: Region | null = null, bv = 0;
+        for (const r of home("fish")) {
+          const sc = school(r);
+          if (!sc || sc.n < 2) continue;
+          const val = sc.n / (1 + distTo(sc.x, sc.y) / 60);
+          if (val > bv) (bv = val), (best = r);
+        }
+        const sc = best && school(best);
+        if (best && sc) {
+          out.push({ text: `Cast the net for fish in ${best.name} to eat (about ${sc.n} in a cast; ${how("fish")})`, utility: need * 0.95, task: { kind: "net", sys: sys.fish, cx: sc.x, cy: sc.y, tx: sc.x, ty: sc.y, eat: true } });
+        }
       }
       for (const s of SPECIES_NAMES) {
         if (!look[s].spare) continue; // never rocs, never what can't be spared
@@ -1061,6 +1192,23 @@ export class Gardener {
       out.push({ text: `Wander over to ${v.at(x, y).name} and keep watch`, utility: 0.3, task: { kind: "goto", x, y } });
     }
 
+    // Fish are moved with the net: cast over the best school in the place they'd be taken from,
+    // and carry the whole catch.
+    for (const o of out) {
+      const t = o.task;
+      if (t.kind !== "move" || t.sys !== sys.fish) continue;
+      const sc = school(v.of(t.target)) ?? { x: t.target.x, y: t.target.y, n: 1 };
+      o.task = { kind: "net", sys: sys.fish, cx: sc.x, cy: sc.y, tx: t.tx, ty: t.ty, eat: false };
+      const some = sc.n > 1 ? `about ${sc.n} fish` : "a fish";
+      o.text = o.text
+        .replace(/^Move a fish/, `Net ${some}`)
+        .replace(/^Carry a fish to/, `Net ${some} and carry them to`)
+        .replace(/^Carry a fish/, `Net ${some}`)
+        .replace(/^Carry the lone fish/, "Net the lone fish")
+        .replace(/^Start a new group: carry a fish/, `Start a new group: net ${some}`);
+      o.utility *= 1 + 0.3 * Math.min(1, (sc.n - 1) / 5); // more in one go is better
+    }
+
     // Further away is less attractive; leave out anything they've lately found no way to reach.
     for (const [cell, until] of this.unreachable) if (until <= w.tick) this.unreachable.delete(cell);
     const reachable = (x: number, y: number) => !this.unreachable.has(this.nav.cellOf(x, y));
@@ -1081,6 +1229,9 @@ export class Gardener {
           break;
         case "sow":
           (x0 = t.fx), (y0 = t.fy), (fine = reachable(t.fx, t.fy) && reachable(t.tx, t.ty));
+          break;
+        case "net":
+          (x0 = t.cx), (y0 = t.cy), (fine = reachable(t.cx, t.cy) && (t.eat || reachable(t.tx, t.ty)));
           break;
       }
       if (t.kind !== "eatPlants" && t.kind !== "goto") {
@@ -1118,7 +1269,7 @@ export class Gardener {
   nutrientTotal(): number {
     let n = this.nutrients + (this.carcass ? this.carcass.nutrients : 0);
     for (const s of this.seeds) n += s.n;
-    if (this.carried) n += CritterSystem.nutrientsIn(this.carried.c);
+    for (const { c } of this.carried) n += CritterSystem.nutrientsIn(c);
     return n;
   }
 
@@ -1126,12 +1277,13 @@ export class Gardener {
   energyTotal(): number {
     let e = Math.max(0, this.fat) + (this.carcass ? this.carcass.fat : 0);
     for (const s of this.seeds) e += s.e;
+    for (const { c } of this.carried) e += Math.max(0, c.fat) + c.gutFat + (c.womb ? c.womb.gotFat : 0);
     return e;
   }
 
   /** The animal they're after or carrying, if any. */
   quarry(): Critter | null {
-    if (this.carried) return this.carried.c;
+    if (this.carried.length) return this.carried[0].c;
     return this.task && "target" in this.task ? this.task.target : null;
   }
 
@@ -1151,7 +1303,9 @@ export class Gardener {
       case "cull":
         return t.target;
       case "move":
-        return this.carried ? { x: t.tx, y: t.ty } : t.target;
+        return this.carried.length ? { x: t.tx, y: t.ty } : t.target;
+      case "net":
+        return this.carried.length && !t.eat ? { x: t.tx, y: t.ty } : { x: t.cx, y: t.cy };
       case "sow":
         return this.stage === 0 ? { x: t.fx, y: t.fy } : { x: t.tx, y: t.ty };
     }
