@@ -489,11 +489,17 @@ between three places:
   the more water they hold. Rain starts at random, more likely the fuller the
   clouds are: never below 12% of all water, and at 20% there's a 1-in-600
   chance per tick, rising with the square of how full they are. Rain falls
-  where the clouds are, at a roughly steady rate, shared out by cloud
+  where the clouds are, shared out by cloud
   thickness squared, so it's heaviest under the thickest (most opaque)
   cloud. How much falls varies each time: usually 15–40% of the cloud
   water, but about one rain in twelve empties the clouds completely. Rain
-  tapers off as the clouds thin out, and rain clouds fade to grey.
+  builds up gradually. It starts as a few drops and reaches its full rate
+  over *Rain build-up* ticks (900 by default). It tails off over the last
+  part of the water each event drops (*Rain tail-off*, 35%). If the clouds
+  thin out too much to keep it going, it fades out over half the build-up
+  time rather than stopping dead. Manual rain builds up and fades out the
+  same way. The grey of rain clouds and the sound of rain follow how hard
+  it's actually raining.
 
 The world starts with 17% of its water in the clouds. The starting standing
 water (1.3 deep averaged over the world by default) fills the lowest ground,

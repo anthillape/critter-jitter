@@ -66,6 +66,8 @@ export const PARAMS = {
   rainRate: 0.0001, // share of all water falling per tick while it rains (steady rate)
   rainMinShare: 0.15, // each rain event drops at least this share of the cloud water (up to all of it)
   rainMaxPerSquare: 0.004, // thin clouds can't drop more than this per square per tick
+  rainRampTicks: 900, // a rain event builds up from nothing to its full rate over this many ticks...
+  rainTaperShare: 0.35, // ...and tapers off over the last this share of the water it will drop
   cloudScale: 1 / 70, // size of cloud patterns (smaller = bigger clouds)
   cloudMorph: 1 / 6000, // how fast cloud shapes change (noise time axis per tick)
 

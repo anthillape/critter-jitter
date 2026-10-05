@@ -281,6 +281,16 @@ export const SETTINGS: Setting[] = [
     tip: "Most rain one square can get per tick under the thickest cloud. Keeps thin clouds from dumping everything in one spot." + PER_SEC,
     min: 0.0003, max: 0.05, log: true,
   }),
+  param("rainRampTicks", {
+    group: "Clouds & rain", label: "Rain build-up",
+    tip: "Ticks a rain event takes to build up from a few drops to its full rate. Longer feels more gradual.",
+    min: 1, max: 5000, int: true, log: true,
+  }),
+  param("rainTaperShare", {
+    group: "Clouds & rain", label: "Rain tail-off",
+    tip: "Share of each rain event's water that falls while it's tailing off: over this last part, the rain eases from full rate down to a drizzle.",
+    min: 0, max: 0.9, fmt: pct,
+  }),
   {
     id: "cloudSize", group: "Clouds & rain", label: "Cloud size",
     tip: "Rough size of cloud patterns, in squares.",

@@ -37,7 +37,8 @@ const DIST = [1, 1, 1, 1, Math.SQRT2, Math.SQRT2, Math.SQRT2, Math.SQRT2];
  *    is groundwater and flows slowly toward lower ground. When a column is
  *    full, extra water pushes up and comes out as surface water (a spring).
  *  - Rain starts at random, more likely the fuller the clouds are, and falls
- *    where the clouds are thickest.
+ *    where the clouds are thickest. Each event builds up gradually, holds,
+ *    and tails off (or fades out if the clouds run thin).
  *
  * The world's shape never changes, so each square's neighbours are worked
  * out once. Each tick is then a few flat passes over typed arrays.
@@ -50,12 +51,21 @@ export class Hydrology {
   cloud = 0;
   raining = false;
   /**
-   * 0..1, eases toward 1 while raining and back to 0 afterwards (over ~2 s
-   * at 1x), so the look of rain fades in and out rather than switching.
+   * How hard it's raining, 0..1 of the full rate (for the look and sound of
+   * rain): it follows the rain actually falling, which builds up, holds and
+   * tapers off over each rain event.
    */
   rainFade = 0;
   /** Cloud level at which the current rain event ends. */
   private rainTarget = 0;
+  /** Cloud water when the current rain event began (its size is this minus rainTarget). */
+  private rainFrom = 0;
+  /** Ticks since the current rain event began. */
+  private rainAge = 0;
+  /** Fading out: from strength rainEndFrom, rainEndAge ticks ago. */
+  private rainEnding = false;
+  private rainEndFrom = 0;
+  private rainEndAge = 0;
   private readonly rng: Rng;
   /** Size of the coarse cloud grid (the world size in CLOUD_CELL blocks, edge blocks may be partial). */
   readonly cloudW = Math.ceil(GRID_W / CLOUD_CELL);
@@ -195,7 +205,10 @@ export class Hydrology {
   step(tick: number): void {
     if (tick % CLOUD_UPDATE_EVERY === 0) this.updateClouds(tick);
     this.rain();
-    this.rainFade += ((this.raining ? 1 : 0) - this.rainFade) * 0.025;
+    // Follow the rain that's falling (lightly smoothed).
+    const full = this.p.rainRate * this.total;
+    const now = full > 0 ? Math.min(1, this.lastRain / full) : 0;
+    this.rainFade += (now - this.rainFade) * 0.05;
     this.evaporateAndSoak();
     this.soilColumns();
     // Groundwater moves slowly; every other tick is plenty.
@@ -402,16 +415,24 @@ export class Hydrology {
 
   /**
    * Rain falls in proportion to cloud density squared, so it is heaviest
-   * under the thickest cloud. The rate is steady (rainRate of all water per
-   * tick) but each event drops a random share of the cloud water: mostly
-   * showers, occasionally a deluge that empties the sky. Thin clouds can only
-   * drop so much per square, so rain tapers off as they vanish.
+   * under the thickest cloud. Each event drops a random share of the cloud
+   * water: mostly showers, occasionally a deluge that empties the sky. Its
+   * rate builds up gradually from nothing to rainRate of all water per tick
+   * (over rainRampTicks), and tapers off again over the last rainTaperShare
+   * of what the event will drop. Thin clouds can only drop so much per
+   * square, so rain also tapers as they vanish.
    */
   private rain(): void {
     const p = this.p;
     if (this.manual) {
-      // Player-controlled: rain while toggled on, until the clouds are empty.
-      this.raining = this.manualRain && this.cloud > 0;
+      // Player-controlled: rain builds up when switched on and fades out when
+      // switched off (or when the clouds run dry).
+      if (this.manualRain && this.cloud > 0 && (!this.raining || this.rainEnding)) {
+        this.raining = true;
+        this.rainEnding = false;
+        this.rainAge = Math.round(this.rainFade * p.rainRampTicks); // pick up from how hard it's raining now
+        this.rainFrom = this.cloud;
+      } else if (this.raining && !this.rainEnding && (!this.manualRain || this.cloud <= 0)) this.endRain();
       this.rainTarget = 0;
     } else if (!this.raining) {
       // The fuller the clouds, the more likely rain is to start this tick.
@@ -422,13 +443,36 @@ export class Hydrology {
         // Skewed: typically 15-40% of the clouds, about 1 in 12 empties them.
         const share = Math.min(1, p.rainMinShare + u * u);
         this.rainTarget = this.cloud * (1 - share);
+        this.rainFrom = this.cloud;
+        this.rainAge = 0;
+        this.rainEnding = false;
         this.raining = true;
       }
     }
     this.lastRain = 0;
     if (!this.raining) return;
 
-    const amount = Math.min(p.rainRate * this.total, this.cloud - this.rainTarget);
+    const full = p.rainRate * this.total;
+    const left = Math.max(0, this.cloud - this.rainTarget);
+    let strength: number;
+    if (this.rainEnding) {
+      // Fading out from wherever it was, over half the build-up time.
+      const fade = Math.max(1, p.rainRampTicks / 2);
+      strength = this.rainEndFrom * Math.max(0, 1 - this.rainEndAge / fade);
+      if (++this.rainEndAge >= fade || left <= 1e-9) {
+        this.raining = this.rainEnding = false;
+        return;
+      }
+    } else {
+      // Building up at the start, tapering off over the last part of the event.
+      this.rainAge++;
+      const rampUp = Math.min(1, this.rainAge / Math.max(1, p.rainRampTicks));
+      const size = Math.max(1e-9, this.rainFrom - this.rainTarget);
+      const taper = this.manual ? 1 : Math.min(1, left / Math.max(1e-9, p.rainTaperShare * size));
+      strength = rampUp * taper;
+    }
+    const want = full * strength;
+    const amount = Math.min(want, left);
     const perCell = this.cloudWeight > 0 ? amount / this.cloudWeight : 0;
     const cap = p.rainMaxPerSquare;
     let fallen = 0;
@@ -449,12 +493,21 @@ export class Hydrology {
     }
     this.cloud -= fallen;
     this.lastRain = fallen;
-    // Stop at the target, or once the clouds are too thin to rain properly.
-    // (Half the normal rate: otherwise evaporation can sustain an endless drizzle.)
-    if (!this.manual && (this.cloud <= this.rainTarget + 1e-9 || fallen < 0.5 * p.rainRate * this.total)) {
-      this.raining = false;
-    }
+    // Near the end of the event, or once the clouds are too thin to keep it
+    // up, it fades out (rather than stopping dead). The fade is time-limited,
+    // so evaporation can't sustain an endless drizzle.
+    if (!this.manual && !this.rainEnding && this.rainAge > 1 &&
+        (strength < 0.05 && this.rainAge >= p.rainRampTicks || fallen < 0.5 * amount)) this.endRain();
   }
+
+  /** Starts the rain fading out from how hard it's falling now. */
+  private endRain(): void {
+    const full = this.p.rainRate * this.total;
+    this.rainEnding = true;
+    this.rainEndAge = 0;
+    this.rainEndFrom = full > 0 ? Math.min(1, this.lastRain / full) : 0;
+  }
+
 
   /**
    * Rain tool: adds new water to the world, `amount` per square at the
