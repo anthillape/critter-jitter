@@ -39,8 +39,8 @@ const rocChartCtx = rocChart.getContext("2d")!;
 const statsRocs = $<HTMLTableElement>("statsRocs");
 const rocTraits = $<HTMLTableElement>("rocTraits");
 const statsGardener = $<HTMLTableElement>("statsGardener");
-const gardenerLog = $<HTMLOListElement>("gardenerLog");
-const gardenerPick = $<HTMLSelectElement>("gardenerPick");
+const gardenerThoughts = $<HTMLUListElement>("gardenerThoughts");
+const gardenerTabs = $<HTMLDivElement>("gardenerTabs");
 const gardenerView = $<HTMLUListElement>("gardenerView");
 const gardenerPlaces = $<HTMLUListElement>("gardenerPlaces");
 const brainSel = $<HTMLSelectElement>("brain");
@@ -349,19 +349,19 @@ function startBrain(): void {
   brainWorker.postMessage({ type: "load" });
 }
 
-/** Asks the model to pick an option; null if it doesn't answer with a number within 30 seconds. */
+/** Asks the model to pick an option: the first number in its reply (none if there's no number, or no reply within 30 seconds). */
 const modelChooser: Chooser = (p) =>
   new Promise((resolve) => {
-    if (!brainWorker || !brainReady) return resolve(null);
+    if (!brainWorker || !brainReady) return resolve({ pick: null, answer: "(the model isn't loaded)" });
     const id = ++brainAsks;
     const timer = window.setTimeout(() => {
       brainWaiting.delete(id);
-      resolve(null);
+      resolve({ pick: null, answer: "(no answer within 30 seconds)" });
     }, 30000);
     brainWaiting.set(id, (text) => {
       clearTimeout(timer);
       const m = text?.match(/\d+/);
-      resolve(m ? Number(m[0]) : null);
+      resolve({ pick: m ? Number(m[0]) : null, answer: text ?? "(the model failed)" });
     });
     brainWorker.postMessage({ type: "ask", id, system: p.system, user: p.user });
   });
@@ -371,11 +371,15 @@ function attachBrain(): void {
   for (const g of world.gardeners) g.chooser = brainSel.value === "model" && brainReady ? modelChooser : null;
 }
 
-gardenerPick.addEventListener("change", () => {
-  gardenerShown = Number(gardenerPick.value);
-  gardenerLogShown = "";
-  gardenerCard();
-});
+// The card's Thoughts / How they see it tabs.
+for (const [tab, panel] of [["gtab-thoughts", "gpanel-thoughts"], ["gtab-view", "gpanel-view"]]) {
+  $<HTMLButtonElement>(tab).addEventListener("click", () => {
+    for (const [t2, p2] of [["gtab-thoughts", "gpanel-thoughts"], ["gtab-view", "gpanel-view"]]) {
+      $<HTMLButtonElement>(t2).setAttribute("aria-selected", String(t2 === tab));
+      $<HTMLDivElement>(p2).hidden = p2 !== panel;
+    }
+  });
+}
 
 brainSel.addEventListener("change", () => {
   if (brainSel.value === "model") startBrain();
@@ -1172,18 +1176,37 @@ function critterCard(
   ).join("");
 }
 
-let gardenerLogShown = "";
 let gardenerShown = 0;
+let thoughtsShown = "";
+/** Thoughts (by tick and position) the viewer has opened or closed, so a refresh keeps them that way. */
+const thoughtOpen = new Map<string, boolean>();
+
 function gardenerCard(): void {
   const gs = world.gardeners;
-  // The picker: one entry per gardener (only shown when there's more than one).
-  gardenerPick.hidden = gs.length < 2;
-  const labels = gs.map((g) => `${g.name}${g.alive ? "" : " (dead)"}`);
-  if ([...gardenerPick.options].map((o) => o.text).join("|") !== labels.join("|")) {
-    gardenerPick.replaceChildren(...labels.map((t, k) => Object.assign(document.createElement("option"), { value: String(k), text: t })));
-  }
   gardenerShown = Math.min(gardenerShown, Math.max(0, gs.length - 1));
-  gardenerPick.value = String(gardenerShown);
+  // One little tab per gardener, in their cloak colour (only when there's more than one).
+  gardenerTabs.hidden = gs.length < 2;
+  const tabKey = gs.map((g, k) => `${g.alive}${k === gardenerShown}`).join("|");
+  if (gardenerTabs.dataset.key !== tabKey) {
+    gardenerTabs.dataset.key = tabKey;
+    gardenerTabs.replaceChildren(...gs.map((g, k) => {
+      const b = document.createElement("button");
+      b.setAttribute("role", "tab");
+      b.setAttribute("aria-selected", String(k === gardenerShown));
+      b.title = `${g.name}${g.alive ? "" : " (dead)"}`;
+      b.className = g.alive ? "" : "dead";
+      const dot = document.createElement("span");
+      dot.className = "cloak";
+      dot.style.background = cloakOf(g);
+      b.append(dot, String(k + 1));
+      b.addEventListener("click", () => {
+        gardenerShown = k;
+        thoughtsShown = "";
+        gardenerCard();
+      });
+      return b;
+    }));
+  }
   const g = gs[gardenerShown];
   const alive = gs.filter((q) => q.alive).length;
   const rows: Array<[string, string]> = !g
@@ -1196,27 +1219,67 @@ function gardenerCard(): void {
       ["Right now", g.status],
       ["Boat", g.hasBoat ? "with them" : `left at (${g.boatX | 0}, ${g.boatY | 0})`],
     ];
+  statsGardener.innerHTML = rows.map(([k, v]) => `<tr><td class="muted">${k}</td><td>${v}</td></tr>`).join("");
   const items = (el: HTMLElement, lines: string[]) =>
     el.replaceChildren(...lines.map((t) => Object.assign(document.createElement("li"), { textContent: t })));
   items(gardenerView, !g ? [] : (["grass", "algae", "fish", "shark", "sheep", "cat", "roc"] as const)
     .map((n) => `${n === "roc" ? "Rocs (sacred)" : n === "shark" || n === "cat" ? `${n[0].toUpperCase()}${n.slice(1)}s` : `${n[0].toUpperCase()}${n.slice(1)}`}: ${g.outlookText(n)}`));
   items(gardenerPlaces, g ? g.regionLines().map((l) => l[0].toUpperCase() + l.slice(1)) : []);
-  statsGardener.innerHTML = rows.map(([k, v]) => `<tr><td class="muted">${k}</td><td>${v}</td></tr>`).join("");
-  const log = g ? g.log.slice(-12).reverse() : [];
-  const key = log.map((l) => l.tick + l.text).join("|");
-  if (key === gardenerLogShown) return;
-  gardenerLogShown = key;
-  gardenerLog.replaceChildren(...log.map((l) => {
-    const li = document.createElement("li");
-    li.textContent = `${formatGameTime(l.tick)}: ${l.text}`;
-    if (l.by) {
-      const by = document.createElement("span");
-      by.className = "by";
-      by.textContent = ` (decided by ${l.by})`;
-      li.append(by);
+  renderThoughts(g);
+}
+
+/** The gardener's recent thoughts, newest first: each decision opens to show the options they weighed. */
+function renderThoughts(g: Gardener | undefined): void {
+  const list = g ? g.thoughts.slice(-15).reverse() : [];
+  const key = `${g?.name}|` + list.map((t) => `${t.tick}${t.chosen}${t.pending}${t.note ?? ""}`).join("|");
+  if (key === thoughtsShown) return;
+  thoughtsShown = key;
+  const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") => {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text) e.textContent = text;
+    return e;
+  };
+  const newest = list.findIndex((t) => t.options.length > 0); // the latest decision starts open
+  gardenerThoughts.replaceChildren(...list.map((t, k) => {
+    const li = el("li");
+    const when = el("span", "when", formatGameTime(t.tick));
+    if (!t.options.length) {
+      li.append(when, el("span", "noteline", t.note ?? ""));
+      return li;
     }
+    const id = `${g!.name}@${t.tick}#${t.options.length}`;
+    const det = el("details");
+    det.open = thoughtOpen.get(id) ?? k === newest;
+    det.addEventListener("toggle", () => thoughtOpen.set(id, det.open));
+    const sum = el("summary");
+    const head = t.pending ? "Thinking it over (asking the model)…"
+      : t.chosen >= 0 ? t.options[t.chosen].text
+      : t.note ?? "Nothing taken.";
+    sum.append(when, document.createTextNode(head));
+    if (!t.pending && t.by) sum.append(el("span", "by", ` — ${t.by}`));
+    det.append(sum);
+    if (t.midTask) det.append(el("div", "noteline", "A look round mid-task: only options more pressing than the current one."));
+    const ol = el("ol");
+    const top = Math.max(...t.options.map((o) => o.utility), 1e-6);
+    t.options.forEach((o, j) => {
+      const item = el("li", j === t.chosen ? "chosen" : "", o.text);
+      if (j === t.chosen) item.append(el("span", "tag", "chosen"));
+      if (j === t.best && t.best !== t.chosen) item.append(el("span", "tag", "rules' pick"));
+      const score = el("div", "score");
+      const bar = el("span", "bar");
+      bar.style.width = `${Math.max(2, (60 * o.utility) / top)}px`;
+      score.append(bar, document.createTextNode(`score ${o.utility.toFixed(2)}`));
+      item.append(score);
+      ol.append(item);
+    });
+    det.append(ol);
+    if (t.answer !== undefined) det.append(el("div", "answer", `The model answered: “${t.answer.trim()}”`));
+    if (t.note && t.chosen < 0 && !t.pending) det.append(el("div", "noteline", t.note));
+    li.append(det);
     return li;
   }));
+  if (!list.length) gardenerThoughts.append(el("li", "noteline", "No thoughts yet."));
 }
 
 function critterRows(sys: CritterSystem, label: string, x0: number, y0: number, x1: number, y1: number): Array<[string, string]> {
@@ -1584,7 +1647,7 @@ rainToggle.addEventListener("click", () => {
 });
 
 // Sidebar tabs.
-const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('nav.tabs [role="tab"]'));
 function selectTab(tab: HTMLButtonElement): void {
   for (const t of tabs) {
     const selected = t === tab;

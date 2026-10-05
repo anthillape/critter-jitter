@@ -394,8 +394,17 @@ population with their own rating and its trend, the main land masses and
 lakes with what's in each, and the numbered options, and answers with a
 number.
 While it thinks they carry on, and if it doesn't answer usefully within
-30 seconds the rules decide. The card lists recent decisions and who made
-them.
+30 seconds the rules decide.
+
+**Watching them think.** The Gardener card's *Thoughts* tab lists each
+gardener's recent decisions, newest first. Open one to see every option
+they weighed, with the rules' score as a bar, which they chose, who chose
+it (the rules, or the model), and the model's answer word for word. If the
+model picked something other than the rules' favourite, that one is
+tagged "rules' pick". Things that happened to them (a chase given up, a
+look round mid-task that found nothing more pressing) are listed in
+between. The *How they see it* tab shows their rating and trend for each
+population and what's in each land mass and lake.
 
 Getting around: they walk fast, row a boat over water, and carry the boat
 over land, slowly, when a route needs it. Each trip is planned as the
@@ -425,7 +434,7 @@ gardeners are cheap: on a slow machine, 10 gardeners added about 12% to
 the time a tick takes. Each decides for themselves, but they don't go
 after an animal another is already after, and a job near where another
 is heading scores half, so they spread out. The Gardener card has a
-picker to follow any of them. With the language model, they put their
+little tab per gardener (in their cloak colour) to follow any of them. With the language model, they put their
 questions to it one at a time.
 
 ## Water cycle

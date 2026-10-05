@@ -211,5 +211,24 @@ button.primary:hover { background: #46702a; }
 #statsGardener td:last-child { text-align: left; }
 #gardenerView, #gardenerPlaces { max-height: none; }
 #statsGardener td:first-child { padding-right: 10px; white-space: nowrap; }
-#gardenerPick { display: block; width: 100%; margin: 4px 0 8px; }
 .cloak { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: baseline; }
+
+/* Gardener card: a tab per gardener, and Thoughts / How they see it tabs. */
+.gtabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; }
+.gtabs button { padding: 3px 8px; font-size: 12px; border-radius: 6px; opacity: 0.75; }
+.gtabs button[aria-selected="true"] { opacity: 1; border-color: var(--accent); }
+.gtabs button.dead { text-decoration: line-through; opacity: 0.45; }
+.gsub { margin-top: 10px; }
+.thoughts { list-style: none; margin: 0; padding: 0; font-size: 12px; }
+.thoughts > li { border-top: 1px solid rgba(255,255,255,0.08); padding: 4px 0; }
+.thoughts summary { cursor: pointer; }
+.thoughts .when { color: var(--muted); margin-right: 4px; }
+.thoughts .by, .thoughts .noteline { color: var(--muted); }
+.thoughts .noteline { font-style: italic; }
+.thoughts ol { margin: 4px 0 2px; padding-left: 20px; }
+.thoughts ol li { margin: 3px 0; }
+.thoughts .score { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; }
+.thoughts .bar { height: 4px; border-radius: 2px; background: var(--accent); opacity: 0.6; }
+.thoughts li.chosen { font-weight: 600; }
+.thoughts .tag { font-size: 10px; border: 1px solid var(--muted); border-radius: 4px; padding: 0 3px; margin-left: 4px; color: var(--muted); font-weight: normal; }
+.thoughts .answer { margin: 4px 0 0; padding: 3px 6px; border-left: 2px solid var(--accent); color: var(--text); }

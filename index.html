@@ -71,7 +71,7 @@
           </section>
           <section class="card">
             <h2>Gardeners</h2>
-            <select id="gardenerPick" title="Which gardener to show" hidden></select>
+            <div id="gardenerTabs" class="gtabs" role="tablist" aria-label="Gardeners" hidden></div>
             <table id="statsGardener"></table>
             <div class="controls">
               <label title="Who makes the gardener's decisions. Either way the game works out the same short list of options; the built-in rules score them, or the language model reads them as text and picks one.">Brain
@@ -82,12 +82,19 @@
               </label>
             </div>
             <p class="hint" id="brainStatus"></p>
-            <h2>How they see it</h2>
-            <ul id="gardenerView" class="gardener-log"></ul>
-            <h2>Land and water</h2>
-            <ul id="gardenerPlaces" class="gardener-log"></ul>
-            <h2>Recent decisions</h2>
-            <ol id="gardenerLog" class="gardener-log"></ol>
+            <div class="gtabs gsub" role="tablist" aria-label="Gardener view">
+              <button role="tab" id="gtab-thoughts" aria-selected="true" aria-controls="gpanel-thoughts" title="Their decisions: the options they weighed (with the rules' scores), what they chose, who chose it, and the model's answer if it was asked">Thoughts</button>
+              <button role="tab" id="gtab-view" aria-selected="false" aria-controls="gpanel-view" title="How they see each population and each land mass and lake">How they see it</button>
+            </div>
+            <div id="gpanel-thoughts" role="tabpanel" aria-labelledby="gtab-thoughts">
+              <ul id="gardenerThoughts" class="thoughts"></ul>
+            </div>
+            <div id="gpanel-view" role="tabpanel" aria-labelledby="gtab-view" hidden>
+              <h2>Populations</h2>
+              <ul id="gardenerView" class="gardener-log"></ul>
+              <h2>Land and water</h2>
+              <ul id="gardenerPlaces" class="gardener-log"></ul>
+            </div>
           </section>
           <section class="card">
             <h2>World</h2>

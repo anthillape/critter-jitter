@@ -45,7 +45,32 @@ export interface GardenerPrompt {
 }
 
 /** Asks an outside brain to pick an option (1-based answer), or null if it can't. */
-export type Chooser = (p: GardenerPrompt) => Promise<number | null>;
+/** Asks an outside brain to pick an option: its pick (1-based, or null if it gave none) and its reply word for word. */
+export type Chooser = (p: GardenerPrompt) => Promise<{ pick: number | null; answer: string }>;
+
+/**
+ * One of a gardener's thoughts: a decision (the options they weighed, with
+ * the rules' scores, which they took and who chose it, and the model's
+ * reply if it was asked), or just something that happened to them.
+ */
+export interface Thought {
+  tick: number;
+  /** A look round in the middle of a task (only more pressing options count). */
+  midTask: boolean;
+  options: Array<{ text: string; utility: number }>;
+  /** The option the rules score best. */
+  best: number;
+  /** The option taken (-1 while waiting for the model, or if none was). */
+  chosen: number;
+  /** Who chose: "rules", "model", or the rules standing in for the model. */
+  by: string;
+  /** Waiting for the model to answer. */
+  pending: boolean;
+  /** The model's reply, word for word. */
+  answer?: string;
+  /** What happened, for anything that isn't a plain decision. */
+  note?: string;
+}
 
 /** How the gardener rates a population, from what they've seen of it. */
 export type Judgement = "gone" | "rare" | "ok" | "plentiful" | "too many";
@@ -146,7 +171,8 @@ export class Gardener {
   /** Their latest survey of the land masses and lakes. */
   view!: Survey;
   /** Recent decisions, newest last. */
-  log: Array<{ tick: number; text: string; by: string }> = [];
+  /** Recent thoughts (decisions and what happened), newest last. */
+  thoughts: Thought[] = [];
 
   constructor(private w: World, x: number, y: number, nutrients: number, readonly name = "Gardener") {
     this.x = x;
@@ -217,12 +243,12 @@ export class Gardener {
       const t = this.task;
       const chasing = "target" in t && !this.carried && !this.carcass;
       if (chasing && this.taskAge > 0.4 * p.gardenerGiveUp) {
-        this.log.push({ tick: this.w.tick, text: `The ${t.sys.species.name} got away; gave up the chase.`, by: "" });
+        this.note(`The ${t.sys.species.name} got away; gave up the chase.`);
         this.escaped.set(`${t.sys.species.name}#${t.target.id}`, this.w.tick + 3000);
         this.chased(t.sys, false);
         this.finish();
       } else if (this.taskAge > p.gardenerGiveUp) {
-        this.log.push({ tick: this.w.tick, text: "Took too long; gave up.", by: "" });
+        this.note("Took too long; gave up.");
         this.dropEverything();
         this.finish();
       }
@@ -439,7 +465,7 @@ export class Gardener {
     this.alive = false;
     this.task = null;
     this.status = "died of hunger";
-    this.log.push({ tick: this.w.tick, text: "Died of hunger.", by: "" });
+    this.note("Died of hunger.");
   }
 
   // ---------------------------------------------------------------------
@@ -457,7 +483,7 @@ export class Gardener {
       this.nav.refresh(this.w.tick);
       const route = this.nav.plan(this.x, this.y, this.hasBoat, this.boatX, this.boatY, gx, gy, this.speeds());
       if (!route) {
-        this.log.push({ tick: this.w.tick, text: "Couldn't find a way there; gave up.", by: "" });
+        this.note("Couldn't find a way there; gave up.");
         // Remember not to try for there again for a while.
         this.unreachable.set(this.nav.cellOf(gx, gy), this.w.tick + 1500);
         this.finish();
@@ -579,38 +605,64 @@ export class Gardener {
     };
     const opts = this.options().filter((o) => o.utility > min && !(midTask && same(o.task)));
     this.decideIn = this.w.p.gardenerDecideInterval;
-    if (!opts.length) return;
-    if (midTask) for (const o of opts) o.text = `Change of plan: ${o.text[0].toLowerCase()}${o.text.slice(1)}`;
-    // While the outside brain thinks, it carries on with what it was doing (or stands still).
-    let best = 0;
-    for (let k = 1; k < opts.length; k++) if (opts[k].utility > opts[best].utility) best = k;
-    if (!this.chooser) {
-      this.assign(opts[best], "rules");
+    if (!opts.length) {
+      if (midTask) this.note("Looked around: nothing more pressing than the current task.", true);
       return;
     }
-    this.pending = true;
-    const prompt = this.prompt(opts);
-    this.chooser(prompt).then(
-      (k) => {
-        this.pending = false;
+    if (midTask) for (const o of opts) o.text = `Change of plan: ${o.text[0].toLowerCase()}${o.text.slice(1)}`;
+    let best = 0;
+    for (let k = 1; k < opts.length; k++) if (opts[k].utility > opts[best].utility) best = k;
+    const thought: Thought = {
+      tick: this.w.tick, midTask, best, chosen: -1, by: "rules", pending: false,
+      options: opts.map((o) => ({ text: o.text, utility: o.utility })),
+    };
+    this.think(thought);
+    const take = (k: number, by: string) => {
+      thought.by = by;
+      if (this.assign(opts[k])) thought.chosen = k;
+      else thought.note = "By the time they chose, it was no longer possible.";
+    };
+    if (!this.chooser) return take(best, "rules");
+    // While the outside brain thinks, they carry on with what they were doing (or stand still).
+    this.pending = thought.pending = true;
+    this.chooser(this.prompt(opts)).then(
+      ({ pick, answer }) => {
+        this.pending = thought.pending = false;
+        thought.answer = answer;
         if (!this.alive) return;
-        if (k !== null && k >= 1 && k <= opts.length) this.assign(opts[k - 1], "model");
-        else this.assign(opts[best], "rules (the model gave no usable answer)");
+        if (pick !== null && pick >= 1 && pick <= opts.length) take(pick - 1, "model");
+        else take(best, "rules (the model gave no usable answer)");
       },
       () => {
-        this.pending = false;
-        if (this.alive) this.assign(opts[best], "rules (the model failed)");
+        this.pending = thought.pending = false;
+        if (this.alive) take(best, "rules (the model failed)");
       },
     );
   }
 
-  private assign(o: GardenerOption, by: string): void {
+  private think(t: Thought): void {
+    this.thoughts.push(t);
+    if (this.thoughts.length > 40) this.thoughts.shift();
+  }
+
+  /** Notes something that happened; `merge` folds it into an identical note just before it. */
+  private note(text: string, merge = false): void {
+    const last = this.thoughts[this.thoughts.length - 1];
+    if (merge && last && last.note === text && !last.options.length) {
+      last.tick = this.w.tick;
+      return;
+    }
+    this.think({ tick: this.w.tick, midTask: false, options: [], best: -1, chosen: -1, by: "", pending: false, note: text });
+  }
+
+  /** Takes on an option's task; false if it's no longer possible. */
+  private assign(o: GardenerOption): boolean {
     // A stale choice (its target has since died or been taken) is skipped.
     if ("target" in o.task && !o.task.target.alive) {
       this.decideIn = 0;
-      return;
+      return false;
     }
-    if (this.carried || this.carcass) return; // picked something up while the model thought
+    if (this.carried || this.carcass) return false; // picked something up while the model thought
     if (this.seeds.length) this.scatterSeeds(); // changing plans: sow what they carry where they stand
     this.task = o.task;
     this.current = o.utility;
@@ -618,8 +670,7 @@ export class Gardener {
     this.stage = 0;
     this.route = [];
     this.doing = o.text;
-    this.log.push({ tick: this.w.tick, text: o.text, by });
-    if (this.log.length > 30) this.log.shift();
+    return true;
   }
 
   /** Each species' critter system. */
