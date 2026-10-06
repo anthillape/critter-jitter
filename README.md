@@ -1,30 +1,73 @@
 # Critter Jitter
 
-A grid ecosystem simulation in HTML / CSS / TypeScript. The world is an
-800×600 canvas of 2×2-pixel squares (400×300 = 120,000 squares).
+A grid ecosystem simulation in HTML / CSS / TypeScript. The world is a grid
+of squares drawn 3×3 pixels each. It starts as a 200×120 world (600×360
+pixels), and its width and height can be changed on the Start tab. Stats and
+graphs sit in masonry-style cards under the map, and a tabbed sidebar (Start,
+World, Tools & weather, Settings, Help) fills the rest of the window.
+
+The map stays in place while the cards scroll on their own underneath it (the
+map shrinks to fit if the window is short). Click a card's title to collapse
+or expand it, or drag the title to move the card: the other cards make room
+as you drag, and it snaps into its new place when you let go. The order and
+collapsed cards are remembered in the browser.
 
 ```sh
 npm install
 npm run dev        # open the printed URL
 npm run build      # typecheck + production build into dist/
-npm run sim -- [seed] [ticks] [reportEvery]   # headless run for tuning
+npm run sim -- [seed] [ticks] [reportEvery] [width] [height]   # headless run for tuning
 ```
+
+## Starting a world
+
+The page opens paused on the **Start** tab, with a preview of the map. Every
+starting condition is there: seed, terrain (world width and height,
+landmass size, roughness), water
+(starting standing water, soil layers, starting soil wetness, starting cloud
+water), life (starting nutrients, number of grass seeds and algae, spread of
+water preferences) and starting genes. The preview and a summary (land/lake
+split, total water and where it is, total nutrients, starting life) update as
+you change them. Nothing runs until you press **Start**. Later, **Restart**
+on the World tab rebuilds the same world, and *Set up a new world…* returns
+to a paused preview on the Start tab.
+
+A new world starts **empty**: just land, water and nutrients. Seed it as you
+like with the spray tools (seeds, algae, fish, sharks, sheep, cats, rocs)
+and place gardeners with the *Gardener* tool, while paused or running. To
+start with life already in place, set the starting numbers on the Start
+tab, or press **Starter population** for a ready-made mix: 400 grass seeds,
+150 algae, 80 fish, 12 sharks, 40 sheep, 10 cats, 5 rocs and a gardener.
+**Reset starting conditions** goes back to an empty world. Headless runs
+(`npm run sim`) use the starter population.
+
+Founders start varied (*Starting gene randomness*, 50% by default). This
+applies to the starting plants and animals and to anything sprayed in
+without *Random genes*:
+- **Plants:** each gene is scaled by a random factor around its default
+  (at 50%, up to about twice or half). Water preference and colour have
+  their own spreads.
+- **Animals:** their founding genes push traits twice as far from the
+  species defaults as usual (at 50%).
+
+At 0, plants all start with the defaults and animals close to them.
 
 ## Time
 
 The simulation runs on a real-time clock at 60 ticks per second of game time
 (`TICKS_PER_SECOND`), times the chosen speed (½× to 8×). It doesn't run as
 fast as the machine can go. If the machine can't keep up, the world slows
-down rather than stuttering, and the panel shows the achieved speed with
-"can't keep up". All rates in `PARAMS` are per tick.
+down rather than stuttering, and the achieved speed (with "can't keep up")
+is shown next to the speed control. All rates in `PARAMS` are per tick.
 
 ## Layers
 
 1. **Ground**: every square has a height of 1–16 from seeded Perlin fBm noise,
    generated once per world seed and never changed. Brown, lighter on higher
    ground, darker the more saturated it is.
-2. **Water**: lakes start filled to a flat surface so squares at height ≤ 6
-   are under water. After that, water is dynamic (see *Water cycle*). A square
+2. **Water**: there is no special water height. The starting standing water
+   is poured into the lowest ground, filling it to one flat level, and after
+   that water is dynamic (see *Water cycle*). A square
    counts as water while its standing water is at least 0.3 deep. Deeper water
    is more opaque, and wetter ground is darker.
 3. **Flora**: at most one organism (or seed) per square.
@@ -34,37 +77,591 @@ down rather than stuttering, and the panel shows the achieved speed with
      germinate. A seed that lands in water gives its nutrients to that water. A
      seed that lands on an occupied square or off the map rots into the ground.
    - **Algae** (water only) works the same way but draws nutrients from the
-     water and buds live algae into a free adjacent water square. If no square
-     is free, it doesn't breed. Deeper water gets less light.
+     water, and breeds by releasing **spores** (drawn as faint pale-green
+     specks). A spore takes its nutrients and energy from the parent and
+     drifts slowly through the water, its direction gradually wandering,
+     bouncing off land and using no energy. Fish can't eat spores. Spores near
+     a shark get caught in its wake: their direction swings toward the way
+     the shark is heading. After its genetic spore time (default 5 s; the
+     algae's use of the gene grass uses for germination) a spore settles as
+     a new algae cell if the square it's on is free water; otherwise it
+     dies (like a seed landing on an occupied square) and its nutrients
+     return to the water. Deeper water gets less light.
+
+## Animals: fish, sharks, sheep and cats
+
+Fish are small, drawn as 3-pixel lines that wiggle while they move.
+Their colour comes from their hue, saturation and lightness genes, so
+families show up as colour groups.
+
+**Hue is inherited directly** (for every animal): founders take their hue
+from their genes, but a child's hue is the midpoint of its parents' hues
+around the colour wheel (so red-orange and red-purple make red, not green),
+nudged randomly by up to ±6° (*Hue mutation*, Settings → *Animal colours*).
+Lineages therefore keep a family colour that drifts slowly over the
+generations. Changing a species' *Colour hue* default only recolours
+founders.
+
+- **Fat is energy.** An animal has one energy store: its fat, up to a
+  genetic maximum (*Fat store max*; anything beyond that is lost). Everything
+  it eats goes into fat, and everything it does is paid from fat. Moving costs
+  ½·m·v², where mass is body size plus a little for its fat, so fat animals pay
+  a bit more to move. Staying alive costs fat per unit of mass. It starves
+  when its fat runs out. Metabolism also sheds a little
+  body nutrient into the water every tick, so fish must keep eating.
+- **Behaviour.**
+  - *Roaming*: with nothing in sight, a fish roams randomly at its genetic
+    roaming speed.
+  - *Hungry*: when fat drops below its hunger threshold, it looks for the
+    nearest algae within 7 squares every so often, swims to it at top speed,
+    and eats it in one go (the algae's nutrients, and its energy as fat).
+  - *Eating smaller fish*: when it looks for food, a fish may instead go
+    after a fish no more than half its size (by body mass). The more
+    different their colours, the likelier: never one of exactly its own hue,
+    and *Eating smaller fish* (30% by default) of the time for the opposite
+    hue. Fish hatch at 40% of their adult size and grow up, so it's mostly
+    big fish eating other families' fry. Fish also keep a wary eye out for
+    fish twice their size.
+  - *Looking for a mate*: once it's old and fat enough (both genetic) it
+    looks, less often, for another ready fish within 14 squares.
+  - Fish can't move on land and slowly starve there. They pass through
+    each other freely, and can sit on a square with grass.
+- **Eating and digesting.** Food goes into the stomach first, not straight
+  into fat. The stomach holds a limited amount of food (energy plus
+  nutrients), *Stomach size* × body mass, so an animal only eats what fits: a
+  predator leaves the rest of the carcass to rot, a fish nibbles algae down
+  rather than eating it whole, and a sheep stops grazing when full. Nobody
+  looks for food while nearly full. Each tick it digests its genetic
+  *Digestion speed* share of its stomach's capacity into fat and body
+  nutrients. Digesting costs fat: the share of the food used up is *Cost of
+  digesting* × digestion speed (10% at the defaults), so digesting twice as
+  fast loses twice the share, and four times as much per tick.
+- **Appetite.** An animal hunts or grazes when its fat is below its hunger
+  threshold, or, once it's free to breed, below the fat it needs to breed;
+  while pregnant it also eats for its young.
+- **Breeding.** Both fish must be ready. Any two can mate (no sexes),
+  except a fish and its own parent. They make up to their preferred litter
+  size (the parents' genetic average), as long as they can afford it. Each
+  parent gives each child its genetic share of its nutrients and fat.
+- **Gestation.** One parent, at random, carries the young. Its partner hands
+  over its share at mating; the carrier passes its own share of nutrients
+  across bit by bit (*Gestation speed* per unit of its body mass per tick,
+  with fat in proportion), so young that need more nutrients take longer.
+  The whole litter is born together when it's done. A pregnant animal
+  can't mate again, and both parents rest for a while afterwards. If the
+  carrier dies first, the unborn young's nutrients go into its body. The
+  species card counts pregnant animals and the inspector shows how far
+  along a pregnancy is.
+- **Death.** Fish die of old age (genetic lifespan), starvation, or
+  running out of body nutrients. Any remaining fat is lost, and the body
+  rots, returning its nutrients to the square gradually. Dead bodies stay
+  where they died, turn grey, and fade out as they decompose.
+- **Genome.** Fish have 15 traits (fat store max, minimum /
+  top / roaming speed, colour hue, breeding age, fat needed to breed, hunger
+  threshold, lifespan, share given to each child, litter size, mutation
+  size, body size, colour saturation / lightness). A fish has 23 genes, and
+  each gene nudges a third of the traits (5) up or down, so several genes
+  overlap on each trait. The genes act on top of editable defaults (Settings
+  → *Fish traits*). A child gets 11 random genes from each parent, each
+  mutated by the parents' mutation size (default 0.45, so populations adapt
+  within a few generations), plus one brand-new random gene, making 23 again.
+  Inherited genes are never clamped: they pass on exactly as the parent had
+  them, plus mutation. Only the expressed traits are kept within each
+  trait's range, so the extreme genes of Random-genes founders carry on in
+  their young.
+- **Wariness (prey).** Fish, sheep and rocs have a genetic *Wariness*: how
+  far (squares) they notice a hunter that could catch them where they are.
+  - **Who counts:** sharks or diving rocs for fish; cats, diving rocs, or
+    sharks while a sheep swims, for sheep; cats for a landed roc.
+  - **What they do:** every few ticks they look around, and on spotting one
+    they drop what they're doing and run straight away from it at their
+    top speed, for a little while after they last saw it. A landed roc
+    takes off instead, if it isn't too fat to fly.
+  - **The cost:** staying alert raises their living cost (*Cost of staying
+    alert*, default 1% per square of wariness), and running burns fat and
+    feeding time.
+
+  So predation now selects: warier, faster prey escape more often, but pay
+  for it.
+
+### Sharks
+
+Sharks hunt fish (and sheep caught swimming). They have the same lifecycle
+as fish (fat, hunger, mates, breeding, old age, rotting bodies) and the same
+kind of genome: 23 genes, each nudging a third of their traits. A hungry
+shark locks on to the nearest prey it can see (up to 20 squares away) and
+follows it until it catches it, loses sight of it, or the prey escapes (a
+sheep reaching land). They're fast, efficient swimmers: moving costs them
+far less per unit of mass than it costs fish. They have two extra traits:
+
+- **Long-range sensing**: every 20 s or so (*Ticks between long-range
+  looks*), a shark that is less than 35% full (*Too full to scan*) and has
+  fewer than 4 fish within sight (*Fish nearby to skip scanning*) looks all
+  round, in 32 straight lines across the water up to 100 squares (land blocks
+  its view), counts the fish along each, and heads off the way it saw the
+  most, for as long as it would take to get there.
+- **Boost likelihood**: once a shark has closed to within 5 squares of the
+  prey it's locked on to (*Boost range*), this is the chance it bursts into
+  a boost.
+- **Boost power**: the boost speed as a multiple of its top speed.
+
+While boosting, a shark burns several times its normal upkeep, on top of the
+higher ½·m·v² cost of moving faster, for a set number of ticks. A caught fish
+is eaten whole: the shark gets all its fat (its energy) and its nutrients. Sharks are bigger than fish and drawn
+shark-shaped (seen from above: tapered body, pectoral fins, and a forked
+tail that sweeps as they swim). Their colour is genetic too, defaulting to grey-blue.
+
+Baby sharks are born at 15% of their adult size and grow into it while they
+aren't hungry, paying fat for each unit of body mass they add. They
+can breed once nearly full-grown. Adult size is genetic (*Body size*,
+default 6, up to 20). A shark's current mass sets how much fat it burns
+moving (½·m·v²) and staying alive, so big sharks cost more to run. Sharks are drawn in proportion to their
+current size. Birth size, growth speed and growth cost are settings for each
+species; fish are born full-size by default.
+
+Sharks glide. They swim in strokes: a few sweeps of the tail push them a
+little faster than they want to go, then the tail goes still and they glide,
+slowing gently, until they've dropped a quarter below that speed and take the
+next stroke (at roaming speed, roughly a short stroke every 2 s). While
+chasing prey, and while boosting, the tail beats without a break. The tail sweeps slowly (about
+one full sweep per 0.7 s). Stroke length, tail beat speed, glide slowing
+and how far they glide before the next stroke are settings. Sharks turn
+gradually (a slow turn rate), keep a steady course while roaming and only
+change course now and then. They look ahead for land and turn away before reaching the shore, and
+curve toward prey, turning harder only in the last few squares. They're
+drawn centred on their position, so they rotate about their middle.
+Fish use the same steering with nimble settings, so they stay quick and
+twitchy. The turn rate, acceleration, how often and how far they change
+course, and how far ahead they look for land are all in Settings for each
+species.
+
+### Sheep
+
+Sheep live on land and graze grass. They have the same lifecycle and kind
+of genome as fish and sharks (23 genes, each nudging a third of their 16
+traits, including *Swimming ability*). They are drawn as rounded squares of fleece, 8 pixels
+(2.7 squares) across at the default size, with a black head at the front. Their colour
+genome has only a hue: sheep are always pastel shades.
+
+Sheep have solid bodies: they bump into each other rather than overlapping.
+Each tick, any two sheep whose bodies overlap are pushed apart, half each (a
+push that would shove one into water is skipped). A quadtree
+(`src/sim/quadtree.ts`) finds each sheep's neighbours, so big flocks stay
+cheap. Two sheep mate once their bodies touch, and a cat catches a sheep when
+it reaches the sheep's body.
+
+Sheep also like their space: unless it's looking for a mate, a sheep steers
+away from any sheep within 3 squares of touching it (*Personal space*), more
+strongly the closer they are (*Keeping apart*), so flocks spread out rather
+than huddling.
+
+- **Meandering.** A sheep walks slowly in a general direction, and its path
+  wanders to and fro within an arc around that direction. The arc is
+  genetic (*Meander arc*, 20–90°). The general direction changes now and
+  then.
+- **Grazing.** A hungry sheep (fat below its hunger threshold) that walks
+  onto grass stops and grazes. Each tick it takes a bite (*Bite size*, in
+  nutrients, with the same share of the plant's energy), so the grass shrinks
+  over several ticks. Once the plant is grazed below *Grazed down to*, the
+  sheep eats the rest and the plant is gone. A sheep keeps grazing a plant
+  it has started until the plant is gone or its fat store is full.
+- **Small, hungry and well stocked.** Sheep are small (body size 1.2) but
+  eat fast (big bites, a roomy stomach and quick digestion) and store a lot
+  of fat (up to 30), needing 15 before they'll breed. Each sheep eats a lot
+  of grass and carries a lot of energy and nutrients in its body, so a
+  predator that catches one is fed for a long time.
+- **Finding grass.** Every so often a hungry sheep looks over the grass
+  within its genetic *Grass sight* (10–30 squares), and turns its general
+  direction toward the grassiest of eight directions.
+- **Water.** When a sheep sees water ahead (or reaches the edge), it turns
+  right round, 170–190° to the left or right, and walks off that way.
+- **Swimming.** A sheep caught in water (by a flood, say) swims at half its
+  walking speed, always toward the nearest shore. Sharks can catch and eat
+  it while it's in the water. Swimming ability is genetic (0–1): better
+  swimmers spend less energy swimming (*Cost of swimming*, down to a
+  quarter at ability 1) but more walking (*Walking cost of swimming
+  ability*: up to twice the cost by default).
+- **Mates.** When ready to breed, it walks to the nearest other ready sheep.
+
+### Cats
+
+Cats hunt sheep on land. They're based on sheep: the same lifecycle,
+meandering walk (with its genetic *Meander arc*), turning right round at
+water, swimming for the shore when caught in water, and genetic *Swimming
+ability*. They are bigger (body size 4 against the sheep's 1.2) and longer,
+drawn as a long rounded body with a round head of the same colour and a
+short curly tail (two-thirds of the body length) whose curl drifts slowly and
+randomly, and their hue-only colour is always a dark shade.
+
+- **Drawn to herds.** Like sharks sensing fish, every 10 s or so a cat that
+  is less than half full and has fewer than 3 sheep within sight looks all
+  round, in 32 straight lines across land up to 60 squares (water blocks its
+  view), counts the sheep along each, and meanders off toward the biggest
+  herd it saw.
+- **Stalking.** A hungry cat locks on to the nearest sheep it can see (up
+  to 40 squares away) and walks slowly after it at its *Stalking speed*.
+- **Pouncing.** Once the sheep is within the cat's genetic *Pounce
+  distance* (default 5 squares), the cat pounces: a fast dash (*Pounce
+  speed*) in a fixed direction, toward where the sheep was. If it comes
+  within a square of the sheep on the way, it catches and eats it (all its
+  fat and nutrients). A missed
+  pounce ends after the distance to the sheep, and the cat must rest
+  (*Rest after pouncing*) before it can pounce again, though it keeps
+  stalking. Pouncing costs fat like any movement (½·m·v²), so it's
+  expensive.
+- **Resting after a meal.** After a catch a cat lies still to digest for its
+  genetic *Rest after a meal* (default 1,500 ticks). It doesn't hunt or
+  breed meanwhile, and burns only half its usual living cost (*Resting
+  cost*); its tail lies still.
+- **A body like a sheep's.** A cat stores about as much fat as a sheep (30
+  at most), and its stomach holds a whole sheep. So one sheep keeps it going
+  for a long while, and it can spend its time breeding rather than hunting.
+- Sheep in water are out of a cat's reach, and so are sheep that reach
+  water: a cat loses a sheep that isn't on land.
+
+- Cats also pounce on **rocs** that have landed (a roc in the air is out of
+  reach).
+
+### Rocs
+
+Rocs are huge birds that eat fish or sheep. They're long-lived (lifespan
+40,000 ticks), big (body size 8) and can carry a lot of fat (default 40).
+They're drawn from above as tawny birds: wings spread while flying, folded
+when landed. Every roc casts a dark, blurry shadow; the higher it flies, the
+bigger and fainter its shadow and the further it falls to the bottom left.
+
+- **Flying and landing.** A roc flies anywhere over the map, over land and
+  water alike, at its genetic *Flying speed*, cruising 4 height levels above
+  the ground (*Flying height*). It climbs after taking off and descends
+  before touching down (only over land). It lands only on land, where
+  it walks and meanders at its separate genetic *Walking speed*, and burns
+  half its upkeep (*Upkeep on the ground*). It never stands in water: if
+  it finds itself in water it takes off. Every 5 s (*Ticks between flight
+  decisions*) its genetic *Flying preference* (0–1) decides whether it takes
+  off (on land) or lands (over land). It also takes off at once to chase a
+  fish or to head for a crowd it sensed.
+- **Flapping.** Its wings flap (sweeping in and out) only while it turns or
+  speeds up; the rest of the time it glides.
+- **Keeping off the edges.** Within 20 squares of the edge of the map
+  (*Keeps away from the edge*), a flying roc steers back toward the middle,
+  more strongly the nearer it gets, so it turns away in an arc (unless it's
+  diving at prey).
+- **Hunting.** A hungry roc dives at the nearest fish (only while flying) or
+  sheep (flying or on foot) within 15 squares, diving at 1.5 times its
+  flying speed (*Dive speed*) and dropping lower the closer it gets. It can
+  only strike once it's down low, and only about 1 dive in 4 succeeds (*Dive
+  success*); after a miss it climbs away and waits 2 s (*Rest after a miss*)
+  before picking a new target. Catching a sheep on foot always succeeds. It has a big appetite: it keeps hunting until
+  it has built up a big reserve, 65% of its fat store (*Hunts until this
+  full*; its genetic hunger threshold applies if higher), and only breeds
+  once it's that full.
+- **Too fat to fly.** Past 70% of its fat store (*Too fat to fly*) it's too
+  heavy to fly: it lands at the first land, stays on the ground and ignores
+  fish, only walking after sheep.
+- **Drawn to big crowds.** Like sharks and cats it scans far and wide (up to
+  200 squares, seeing over everything from the air) and heads for the
+  biggest crowd of fish or sheep, but only a very large one (at least 25
+  seen; *Least seen worth the trip*).
+
+The default world (seed 1337) keeps fish, sharks, sheep, cats and rocs
+going for 15,000 ticks, but in some worlds cats and rocs together hunt the
+sheep out.
+
+Fish, sharks, sheep, cats and rocs run on the same code
+(`src/sim/critters.ts`). Each species has its own traits, settings
+(Settings → *Fish* / *Sharks* / *Sheep* / *Cats* / *Rocs*, and their trait
+defaults), diet and habitat.
+
+Nutrients stay conserved: starting fish and sharks gather theirs from
+the water and starting sheep, cats and rocs from the ground, and everything a critter eats, sheds or leaves behind is
+accounted for.
+
+## The gardener
+
+A person who roams the world trying to keep every species alive
+(`src/sim/gardener.ts`). They can see the whole map and every population.
+
+**What they know.** Every 100 ticks they survey the world
+(`src/sim/survey.ts`):
+- **Land and water:** they map its separate land masses and lakes
+  (contiguous areas, so a thin stream doesn't split a land mass). For each
+  they count its grass, seeds, algae, bare damp ground, and every animal
+  in it. The Gardener card lists them, as "land A (north-west)",
+  "lake 2 (east)" and so on.
+- **Populations:** for each species, and for grass and algae, they remember
+  the most they've seen (slowly forgetting old peaks), its usual number,
+  and its recent counts.
+- **Trajectory:** a straight line through the last 2,000 ticks of counts
+  gives each population's trend ("falling 30% per 1,000 ticks") and when
+  it would be gone at that rate.
+- **Their own rating:**
+  - *rare*: below a share of the remembered peak (*Worries below*, 40% by
+    default) or down to a handful;
+  - *plentiful*: at twice that share;
+  - *too many*: well over its usual number and short of food.
+- **Urgency and what can be spared:** together, rarity, a falling trend and
+  a near "gone in" give how urgently a species needs help. A species can
+  be spared (eaten or culled) only if it's plentiful and not falling.
+- **Who eats what:** fish eat algae, sheep eat grass, sharks eat fish and
+  swimming sheep, cats eat sheep and landed rocs, rocs eat fish and sheep.
+  With the counts, this tells them how much food each species has, and
+  how many hunters it faces, in each land mass or lake. They compare that
+  with what's usual for the species world-wide.
+- **Their own odds of catching an animal:** half from their speed against
+  its top speed (walking on land, rowing on water), half from how their
+  chases of its kind have gone.
+
+**What they consider.** Whenever they're free, the game works out a
+handful of concrete options from that knowledge, each in plain words:
+- **eat**: graze plants in a place with plenty for its grazers, or spear an
+  animal of a spare species (never a roc), from where its kind is most
+  crowded. They eat anything but spores.
+- **protect**: cull a hunter of a species in trouble, in the land mass or
+  lake where it hunts it. The more hunters per head of prey there, and the
+  more of the species lives there, the more pressing.
+- **relocate**: carry an animal out of a place that can't feed its kind
+  (or, for a species in trouble, where hunters outnumber it) to a place
+  that can, with no more hunters.
+- **reunite**: carry a lone animal (alone in its land mass or lake) to
+  others of its kind, or bring it a mate if it's somewhere good.
+- **colonise**: start a new group of a crowded or struggling species in an
+  empty land mass or lake with plenty of food and few hunters, so one
+  disaster can't end it.
+- **thin out** grazers that are stripping their plants where grass or
+  algae is struggling, or a species that has outgrown its food.
+- **sow**: collect seeds and carry them to bare, damp land with little
+  grass, especially where sheep go hungry.
+- **wander** and keep watch.
+
+Options further away score less, and chases score by their odds of
+catching the animal. Mid-task they look up now and then and change plans
+if something much more pressing has come up. Animals that get away, and
+places they couldn't reach, are left alone for a while.
+
+Rocs are sacred. The gardener never hunts, culls or carries one, though
+they'll cull cats to protect them.
+
+They pick one. By default the **built-in rules** score each option and
+take the best. On the Gardener card you can switch to a **tiny language
+model** instead: SmolLM2-135M-Instruct, an open model of about 100 MB,
+run in your browser by transformers.js (`src/brain.worker.ts`, on the GPU
+with WebGPU, else the CPU). It's downloaded from Hugging Face the first
+time and cached by the browser. It reads their fat, who eats what, each
+population with their own rating and its trend, the main land masses and
+lakes with what's in each, and the numbered options, and answers with a
+number.
+While it thinks they carry on, and if it doesn't answer usefully within
+30 seconds the rules decide.
+
+**Watching them think.** The Gardener card's *Thoughts* tab lists each
+gardener's recent decisions, newest first. Open one to see every option
+they weighed, with the rules' score as a bar, which they chose, who chose
+it (the rules, or the model), and the model's answer word for word. If the
+model picked something other than the rules' favourite, that one is
+tagged "rules' pick". Things that happened to them (a chase given up, a
+look round mid-task that found nothing more pressing) are listed in
+between. The *How they see it* tab shows their rating and trend for each
+population and what's in each land mass and lake.
+
+Getting around: they walk fast, row a boat over water, and carry the boat
+over land, slowly, when a route needs it. Each trip is planned as the
+fastest route over a coarse map in two layers, with and without the boat
+(`src/sim/navigate.ts`). A route can be "walk to the boat, carry it to the
+lake, row across, leave it on the far shore and walk on". They can swim,
+slowly and at a cost, when there's no better way. A boat left where the
+water rises washes up on the nearest shore.
+
+**The net.** For fish they use a net. They get within a spear's throw of
+a school, rowing or standing on the shore, and cast. The net lands that
+far ahead of them and catches every fish under it (radius *Net size*,
+3 squares by default). With the catch they either:
+- carry it in the net to another lake and let the fish go there, spread
+  out a little in the water, so a whole school moves at once; or
+- if they're hungry and fish are plentiful, eat it.
+
+Whenever their plans call for moving fish (out of a hungry lake, to a lone
+fish, or to start a new group), they net the thickest school in that lake
+rather than chase fish one by one. A cast that catches nothing is gathered
+in (*Net gathering time*) and tried again. Each cast is noted in their
+Thoughts ("Cast the net: caught 6 fish."). The clock for a task starts
+again once the catch is in, with time for the trip.
+
+Their spear reaches a dozen squares and hits three times in four. A cull
+leaves a body to rot. A kill to eat is walked to and eaten. Rocs are never speared.
+
+They burn fat living and moving (½·m·v², twice the mass while carrying the
+boat). They store a lot of fat, turn most of what they eat into fat, and
+starve if it runs out. When fat is low they drop what they're doing to
+eat. A task that drags on too long is given up.
+
+Their body's nutrients come from the ground where they start, and
+everything they eat, carry, shed or leave behind is accounted for, so
+nutrients stay conserved. Their abilities are under Settings →
+*Gardener*.
+
+**More than one.** *Gardeners* on the Settings tab (Life) sets how many
+start, from 0 (none) to 20, each with their own boat and cloak colour.
+They share one survey and one map of land and water each tick, so extra
+gardeners are cheap: on a slow machine, 10 gardeners added about 12% to
+the time a tick takes. Each decides for themselves, but they don't go
+after an animal another is already after, and a job near where another
+is heading scores half, so they spread out. The Gardener card has a
+little tab per gardener (in their cloak colour) to follow any of them. With the language model, they put their
+questions to it one at a time.
 
 ## Water cycle
 
-The total amount of water is constant (the panel shows it). It is split
+The total amount of water is constant apart from the tools (the panel shows it). It is split
 between three places:
 
-- **Standing water** (lakes, puddles, run-off) flows toward neighbours with a
-  lower water surface, so lakes level out and rain runs downhill.
-- **Soil water** (up to 1 per square) soaks in from standing water. It
-  spreads slowly between squares in any direction, which pulls water up and
-  away from lakes. It drains downhill faster, in proportion to the height
-  difference. Water over the soil's capacity seeps back out as standing
-  water.
+- **Standing water** flows downhill everywhere by the same rule: each
+  square sends water to lower neighbours (all eight, judged by ground plus
+  water level), favouring the steepest way (*Channelling*), and never more
+  than would level the two squares. Streams, ponds and lakes all come out of
+  that one rule; nothing is levelled or routed specially.
+- **Soil water** sits in a column of soil layers under every square (3 by
+  default, each holding up to 1). Standing water soaks into the top layer,
+  more slowly as it fills. Within a column, water seeps down slowly under
+  gravity, and capillary pressure pulls it back up toward a drier layer
+  above. Water that doesn't fit is pushed up the column, and out of the top
+  it comes back out as a spring. The deepest layer is groundwater: it flows
+  sideways toward lower ground by the difference in head. The ground is
+  drawn and plants feel only the top layer; the whole column counts towards
+  water totals.
+- **Evaporation** takes the same amount from every square each tick: from
+  standing water if there is any, otherwise from the top soil layer.
 - **Clouds**: standing water and soil water evaporate into one shared cloud
-  pool. Clouds are drawn as white translucent Perlin-noise shapes drifting
-  slowly across the map, and cover more of it the more water they hold. When
-  the clouds hold more than 20% of all water it starts raining where they
-  are, at a roughly steady rate. Rain is shared out by cloud thickness
-  squared, so it is heaviest under the thickest (most opaque) cloud. How much falls varies each time: usually
-  15–40% of the cloud water, but about one rain in twelve empties the clouds
-  completely. Rain tapers off as the clouds thin out. Clouds look greyer
-  while it rains.
+  pool. Clouds are drawn as white translucent shapes made from 3D Perlin
+  noise: the wind carries them across the map, and time runs along the third
+  axis so their shapes slowly change as they go. They cover more of the map
+  the more water they hold. Rain starts at random, more likely the fuller the
+  clouds are: never below 12% of all water, and at 20% there's a 1-in-600
+  chance per tick, rising with the square of how full they are. Rain falls
+  where the clouds are, shared out by cloud
+  thickness squared, so it's heaviest under the thickest (most opaque)
+  cloud. How much falls varies each time: usually 15–40% of the cloud
+  water, but about one rain in twelve empties the clouds completely. Rain
+  builds up gradually. It starts as a few drops and reaches its full rate
+  over *Rain build-up* ticks (900 by default). It tails off over the last
+  part of the water each event drops (*Rain tail-off*, 35%). If the clouds
+  thin out too much to keep it going, it fades out over half the build-up
+  time rather than stopping dead. Manual rain builds up and fades out the
+  same way. The grey of rain clouds and the sound of rain follow how hard
+  it's actually raining.
 
-The world starts with 17% of its water in the clouds, so lakes begin at the
-level-6 shoreline and don't shrink much to fill the sky.
+The world starts with 17% of its water in the clouds. The starting standing
+water (1.3 deep averaged over the world by default) fills the lowest ground,
+the soil under it starts full and the rest starts 40% wet.
 
 When water levels move, grass on a square that floods drowns and algae on a
 square that dries out is stranded. Either way, its nutrients go back to the
 square.
+
+## Wind
+
+The wind is its own system (`src/sim/wind.ts`). It isn't part of the water
+cycle: clouds read it to drift, and later systems can too. It blows from a
+prevailing direction, but its bearing and speed wander slowly and smoothly
+(Perlin noise over time). Speed varies by up to about ±50%. The bearing
+usually stays within a quarter turn or so of the prevailing wind but can
+swing to any direction. The panel shows where it's blowing from and its
+speed.
+
+## The map
+
+Drag the map's bottom-right corner to make it take up more or less of the
+screen. It keeps the same squares and shape, and the size is remembered.
+Double-click the corner to go back to automatic sizing (as wide as fits,
+leaving room for the cards).
+
+## Tools and weather controls
+
+- **Cursor**: *Select* (drag a rectangle for area stats), *Rain* (hold to
+  rain under the cursor, adding new water to the world), *Dryer* (hold to
+  remove standing water, then soil water, under the cursor), and the sprays
+  *Seeds*, *Algae*, *Fish*, *Sharks*, *Sheep*, *Cats* and *Rocs*, which drop things at random
+  points inside the brush circle. Seeds only take on empty land and algae
+  only in empty water, each taking its nutrients from the square it lands on.
+  Animals get random genomes. Fish and sharks land only in water, and sheep
+  and cats only on land, and they gather their body nutrients from the squares
+  around them. Anything that can't be
+  supplied is skipped, so nutrients stay conserved. Sprayed seeds and algae
+  get the starting genes, and sprayed animals random genes close to their
+  species' defaults. Tick **Random genes** (under the brush sliders) to
+  make every sprayed seed, algae cell or animal a wild experiment instead:
+  - **Plants:** every gene is drawn from anywhere within its limits.
+  - **Animals:** every trait is drawn from anywhere in its range (fat
+    store, speeds, lifespan, body size, litter size, colour and the rest).
+    Traits that scale are drawn evenly on a log scale, so tiny and huge are
+    equally likely. The animal's genes are set up to give those traits, so
+    its children inherit them in the usual way.
+
+  Most won't last long; the ones that do show what works. *Gardener* (click) puts a gardener, with their
+  boat, on the land you click (or the nearest land), their body's
+  nutrients taken from the ground around them. The *Destructor* (hold)
+  removes all life under the cursor at once: grass, seeds, algae, animals
+  and their bodies, and gardeners, not counted as deaths, with their
+  nutrients returned to the square. Keys S / R / D / X / G / A / F / K /
+  H / C / B / P switch between the tools.
+  *Rate* and *Size* set the brush strength (water per second at the
+  centre, or particles sprayed per second) and its radius. Rain and Dryer
+  fade toward the edge of the circle. The tools work while paused too.
+- **Manual rain**: switches off automatic rain. A button then starts and
+  stops rain from the clouds, until they run dry.
+
+Total water is conserved apart from what the Rain and Dryer tools add and
+remove.
+
+Two more cards chart, over time, **where the nutrients are** (the ground,
+the water, grass with its seeds, algae with its spores, and each animal
+species, counting their stomachs, unborn young and rotting bodies) and
+**where the energy is** (plants' stored energy and each species' fat,
+undigested food and energy passed to unborn young; the ground and water
+store none). Both use a log scale, since the ground holds tens of thousands
+of times what a few rocs do. Each species keeps one colour in both charts
+(a colour-blind-safe set, checked against the chart background), the
+environment is drawn in dashed neutral lines, the legend shows current
+values, and hovering shows every value at that moment.
+
+The **Water** card charts cloud water, free water (lakes, puddles and
+streams) and water in the ground over time. Shaded vertical bands mark when
+it was raining.
+
+## Sound
+
+The **Sound** button next to the speed control (or the M key) switches sound
+on and off. It starts off, because browsers only allow audio after a click.
+Every sound is synthesised in the browser with the Web Audio API (`src/sound.ts`);
+there are no audio files. Sounds are panned left or right by where on the map
+they happen.
+
+- **Rain**: a hiss of falling rain with pattering drops, fading in and out
+  with the rain (silent while paused).
+- **Fish**: a plop when one dies, and a reversed plop when two breed.
+- **Sharks**: a chomp when one catches prey, and the two-note *Jaws* theme
+  when two breed.
+- **Sheep**: a sad, falling baa when one dies (including being eaten), and a
+  high baa when two breed.
+- **Cats**: a roar when one catches a sheep, and a meow when two breed.
+
+Grass and algae make no sound. In a busy world each sound plays at most every
+so often (a plop every 70 ms, the Jaws theme every 6 s), so it doesn't turn
+into noise.
+
+Each sound can be switched on or off and has its own volume slider (Tools &
+weather → *Sounds*), with a ▶ button to hear it once. By default the rain is
+the loudest sound (100%) and the animal calls sit at 38–50%. *Reset sounds*
+restores the defaults. These choices are remembered in the browser.
+
+## Settings
+
+Every variable of the running simulation has a slider on the **Settings**
+tab, grouped into collapsible sections, with a plain-English name. Hover a
+name for a description. Changed settings are highlighted, and *Reset all to
+defaults* puts them back. They apply immediately. Starting conditions live
+on the Start tab. The slider table is in `src/settings.ts`, and the
+underlying values are in `src/sim/config.ts` (`PARAMS`, `TERRAIN`) and
+`src/sim/genes.ts`.
 
 ## Nutrients and energy
 
@@ -74,8 +671,16 @@ square.
 - Water squares exchange nutrients with neighbouring water quickly. Wet ground
   exchanges nutrients with its neighbours (and with the water) slowly, in
   proportion to its current saturation. Dry ground never moves nutrients.
-- **Energy** arrives in every square each tick (capped), the same everywhere.
-  Plants draw it from their square.
+- **Energy** (sunlight) arrives in every square each tick, the same
+  everywhere. The ground can't store it: only a plant or algae in the square
+  can use it that tick, up to its own uptake limit, and the rest is lost.
+- **Richer ground helps plants.** The more nutrients in a plant's soil (or an
+  algae cell's water), the better it does, with no upper limit: its upkeep
+  and the energy it spends per nutrient when growing are divided by
+  `1 + boost × nutrients ÷ reference`, and it grows that many times faster
+  (*Nutrient richness boost*, default 1; *Richness reference*, default 0.5).
+  So a square with 0.5 nutrients halves the costs and doubles growth, 1.0
+  divides them by three, and so on.
 - An organism dies when it can't pay its metabolism or reaches its genetic
   lifespan. All the nutrients it holds go back to its square.
 
@@ -85,7 +690,7 @@ Each organism carries `growth`, `breed`, `range` (grass), `germ` (grass),
 `mutation`, `lifespan`, `water pref` (grass) and `water tol` (grass). Every
 gene mutates on every birth: the child's value is the parent's scaled by a
 random factor in `[1 − m, 1 + m]`, where `m` is the parent's `mutation` gene
-(default 0.05). The mutation gene mutates the same way, so the mutation rate
+(default 0.15). The mutation gene mutates the same way, so the mutation rate
 evolves too.
 
 Grass's ability to use energy and nutrients (absorbing energy and growing) is
@@ -96,6 +701,15 @@ water preferences, so dry hills and soggy lake margins can both be colonised
 and then specialise. The "Grass water preference" view colours grass from
 yellow (dry-loving) to blue (wet-loving).
 
+**Colour** is a gene too (`colour`, 0–1). Grass ranges from light orange
+through yellow and green to turquoise; algae from dark green to burnt
+orange. It's inherited, drifting a small step either way in each
+generation. New seeds and algae get colours spread around the default
+(*Spread of starting plant colours*, the whole range by default), so the
+map starts mottled and families of colour spread and drift. In the normal
+view grass shows its colour, paler while young and deeper when full-grown,
+and algae tint the water with theirs.
+
 Other trade-offs: faster growth and a longer lifespan both raise metabolic
 cost, and a longer seed range raises seed cost.
 
@@ -104,12 +718,13 @@ Drag a rectangle on the map to get terrain, nutrient, population and gene
 statistics (mean ± sd, min–max) for that area. They update live. Click or
 press Esc to clear it.
 
-All tunables live in `src/sim/config.ts` (`PARAMS`) and `src/sim/genes.ts`
-(defaults and limits).
+All tunables can be changed live from the Settings panel.
 
 ## Code layout
 
 - `src/sim/`: pure simulation with no DOM (`terrain`, `world`, `genes`, `perlin`, `rng`)
 - `src/render.ts`: draws one pixel per square, which is then scaled ×2
 - `src/main.ts`: loop, controls, stats, inspector
+- `src/sim/gardener.ts`, `src/sim/navigate.ts`: the gardener and their route planner
+- `src/brain.worker.ts`: the optional language-model brain (a Web Worker)
 - `scripts/headless.ts`: runs the sim in Node for balancing

@@ -1,11 +1,15 @@
 import { CELL_COUNT, GRID_H, GRID_W, PARAMS, type Params } from "./config";
 import {
-  ALGAE_DEFAULTS, G_BREED, G_GERM, G_GROWTH, G_LIFESPAN, G_RANGE, G_WATER_PREF, G_WATER_TOL,
-  GENE_COUNT, GRASS_DEFAULTS, inheritGenes, setGenes,
+  ALGAE_DEFAULTS, G_BREED, G_GERM, G_GROWTH, G_HUE, G_LIFESPAN, G_RANGE, G_WATER_PREF, G_WATER_TOL,
+  ALGAE_UNUSED_GENES, GENE_COUNT, GRASS_DEFAULTS, inheritGenes, mutateInto, setGenes, spreadGenes, wildGenes,
 } from "./genes";
+import { SporeSystem } from "./spores";
 import { Hydrology } from "./hydrology";
+import { Wind } from "./wind";
+import { CAT, CritterSystem, FISH, ROC, SHARK, SHEEP, type CritterHost } from "./critters";
 import { mulberry32, type Rng } from "./rng";
 import { generateTerrain, type Terrain } from "./terrain";
+import { Gardener } from "./gardener";
 
 /** What occupies a square in the flora layer. Only one thing per square. */
 export const EMPTY = 0;
@@ -13,12 +17,19 @@ export const SEED = 1;
 export const GRASS = 2;
 export const ALGAE = 3;
 
-const NEIGHBOURS_X = [-1, 0, 1, -1, 1, -1, 0, 1];
-const NEIGHBOURS_Y = [-1, -1, -1, 0, 0, 1, 1, 1];
+/** A seed the gardener carries: its genes, nutrients and energy. */
+export interface SeedPack {
+  genes: Float32Array;
+  n: number;
+  e: number;
+}
+
 
 export interface Stats {
   tick: number;
   seeds: number;
+  /** Algae spores drifting in the water. */
+  spores: number;
   grass: number;
   algae: number;
   grassBirths: number;
@@ -32,7 +43,19 @@ export interface Stats {
   nutrientsGround: number;
   nutrientsWater: number;
   nutrientsFlora: number;
+  /** Nutrients and energy held by grass (with seeds) and by algae (with drifting spores). */
+  nutrientsGrass: number;
+  nutrientsAlgae: number;
+  energyGrass: number;
+  energyAlgae: number;
+  /** Nutrients in living animals (fish, sharks, sheep, cats) and their rotting bodies. */
+  nutrientsAnimals: number;
   nutrientsTotal: number;
+  fish: CritterCounts;
+  sharks: CritterCounts;
+  sheep: CritterCounts;
+  cats: CritterCounts;
+  rocs: CritterCounts;
   waterSurface: number;
   waterSoil: number;
   waterCloud: number;
@@ -42,17 +65,52 @@ export interface Stats {
   waterSquares: number;
 }
 
+export interface CritterCounts {
+  alive: number;
+  corpses: number;
+  births: number;
+  deaths: number;
+  starved: number;
+  oldAge: number;
+  eaten: number;
+  /** Killed or taken by the gardener. */
+  culled: number;
+}
+
+function counts(c: CritterSystem): CritterCounts {
+  return {
+    alive: c.critters.filter((x) => x.alive).length,
+    corpses: c.corpses.length,
+    births: c.births,
+    deaths: c.deaths,
+    starved: c.starved,
+    oldAge: c.oldAge,
+    eaten: c.eaten,
+    culled: c.culled,
+  };
+}
+
 export class World {
   readonly terrain: Terrain;
   readonly water: Hydrology;
+  readonly wind: Wind;
+  readonly fish: CritterSystem;
+  readonly sharks: CritterSystem;
+  readonly sheep: CritterSystem;
+  readonly cats: CritterSystem;
+  readonly rocs: CritterSystem;
+  /** Algae spores drifting in the water (how algae breed). */
+  readonly spores: SporeSystem;
+  /** The person looking after the world (null if there isn't one). */
+  gardeners: Gardener[] = [];
+  /** Gardeners ever placed (numbers them, so a number is never reused). */
+  private gardenersMade = 0;
   readonly p: Params;
   readonly rng: Rng;
   tick = 0;
 
   /** Nutrients in the ground (land squares) or dissolved in the water (water squares). */
   readonly nutrients = new Float64Array(CELL_COUNT);
-  /** Energy banked in each square, topped up every tick. */
-  readonly energy = new Float32Array(CELL_COUNT);
 
   // Flora layer (structure of arrays, indexed by square)
   readonly kind = new Uint8Array(CELL_COUNT);
@@ -75,8 +133,50 @@ export class World {
   constructor(seed: number, params: Params = PARAMS) {
     this.p = params;
     this.terrain = generateTerrain(seed);
-    this.water = new Hydrology(this.terrain, params);
+    this.wind = new Wind(seed, params);
+    this.water = new Hydrology(this.terrain, params, this.wind);
     this.rng = mulberry32(seed ^ 0x9e3779b9);
+    const host: CritterHost = {
+      p: this.p,
+      rng: this.rng,
+      kind: this.kind,
+      floraN: this.floraN,
+      floraE: this.floraE,
+      nutrients: this.nutrients,
+      isWater: (i) => this.water.isWater(i),
+      clearFlora: (i) => {
+        this.deaths[this.kind[i] === ALGAE ? 1 : 0]++;
+        this.kind[i] = EMPTY;
+        this.floraN[i] = 0;
+        this.floraE[i] = 0;
+        this.age[i] = 0;
+      },
+    };
+    this.fish = new CritterSystem(host, FISH);
+    this.sheep = new CritterSystem(host, SHEEP);
+    this.sharks = new CritterSystem(host, SHARK, [this.fish, this.sheep]);
+    this.rocs = new CritterSystem(host, ROC, [this.fish, this.sheep]);
+    this.cats = new CritterSystem(host, CAT, [this.sheep, this.rocs]);
+    // Big fish may eat small ones (see findSmallFish), so fish keep an eye out for big fish too.
+    this.fish.hunters.push(this.fish);
+    this.spores = new SporeSystem({
+      p: this.p,
+      rng: this.rng,
+      nutrients: this.nutrients,
+      wet: this.water.wet,
+      settle: (i, sp) => {
+        if (!this.water.isWater(i) || this.kind[i] !== EMPTY) return false;
+        this.kind[i] = ALGAE;
+        this.floraN[i] = sp.n;
+        this.floraE[i] = sp.e;
+        this.age[i] = 0;
+        this.bornTick[i] = this.tick;
+        this.genes.set(sp.genes, i * GENE_COUNT);
+        this.births[1]++;
+        return true;
+      },
+      sharks: () => this.sharks.critters,
+    });
     this.seedInitialState();
   }
 
@@ -88,39 +188,204 @@ export class World {
       this.nutrients[i] = water.isWater(i)
         ? this.p.waterNutrients
         : this.p.landNutrients * fertility[i] * (0.8 + 0.4 * rng());
-      this.energy[i] = this.p.energyCap * rng();
     }
     let placed = 0;
     for (let tries = 0; placed < this.p.initialSeeds && tries < 1e6; tries++) {
-      const i = Math.floor(rng() * CELL_COUNT);
-      if (water.isWater(i) || this.kind[i] !== EMPTY || this.nutrients[i] < this.p.seedN) continue;
-      this.nutrients[i] -= this.p.seedN;
-      this.kind[i] = SEED;
-      this.floraN[i] = this.p.seedN;
-      this.floraE[i] = this.p.seedE;
-      this.age[i] = 1 + Math.floor(rng() * GRASS_DEFAULTS[G_GERM]);
-      setGenes(this.genes, i, GRASS_DEFAULTS);
-      // Start with a spread of water preferences so every moisture niche has
-      // a chance from the outset; evolution then refines them.
-      this.genes[i * GENE_COUNT + G_WATER_PREF] = 0.1 + 0.85 * rng();
-      placed++;
+      if (this.addSeed(Math.floor(rng() * CELL_COUNT), rng)) placed++;
     }
     placed = 0;
     for (let tries = 0; placed < this.p.initialAlgae && tries < 1e6; tries++) {
-      const i = Math.floor(rng() * CELL_COUNT);
-      if (!water.isWater(i) || this.kind[i] !== EMPTY || this.nutrients[i] < this.p.algaeChildN) continue;
-      this.nutrients[i] -= this.p.algaeChildN;
-      this.kind[i] = ALGAE;
-      this.floraN[i] = this.p.algaeChildN;
-      this.floraE[i] = this.p.algaeChildE;
-      setGenes(this.genes, i, ALGAE_DEFAULTS);
-      placed++;
+      if (this.addAlgae(Math.floor(rng() * CELL_COUNT))) placed++;
     }
+    placed = 0;
+    for (let tries = 0; placed < this.p.initialFish && tries < 1e6; tries++) {
+      if (this.fish.spawnRandom(rng() * GRID_W, rng() * GRID_H)) placed++;
+    }
+    placed = 0;
+    for (let tries = 0; placed < this.p.initialSharks && tries < 1e6; tries++) {
+      if (this.sharks.spawnRandom(rng() * GRID_W, rng() * GRID_H)) placed++;
+    }
+    placed = 0;
+    for (let tries = 0; placed < this.p.initialSheep && tries < 1e6; tries++) {
+      if (this.sheep.spawnRandom(rng() * GRID_W, rng() * GRID_H)) placed++;
+    }
+    placed = 0;
+    for (let tries = 0; placed < this.p.initialCats && tries < 1e6; tries++) {
+      if (this.cats.spawnRandom(rng() * GRID_W, rng() * GRID_H)) placed++;
+    }
+    placed = 0;
+    for (let tries = 0; placed < this.p.initialRocs && tries < 1e6; tries++) {
+      if (this.rocs.spawnRandom(rng() * GRID_W, rng() * GRID_H)) placed++;
+    }
+    for (let k = 0; k < this.p.initialGardeners; k++) this.spawnGardener();
+  }
+
+  /**
+   * Puts a gardener on a random land square. Their body's nutrients come
+   * from the ground around them, so nutrients stay conserved.
+   */
+  spawnGardener(): void {
+    for (let tries = 0; tries < 10000; tries++) {
+      const x = Math.floor(this.rng() * GRID_W);
+      const y = Math.floor(this.rng() * GRID_H);
+      if (this.water.isWater(y * GRID_W + x)) continue;
+      this.addGardener(x, y);
+      return;
+    }
+  }
+
+  /**
+   * Puts a gardener (with their boat) on the land square at (x, y), or the
+   * nearest land within 12 squares if it's water. Their body's nutrients
+   * come from the ground around them, so nutrients stay conserved. Returns
+   * the new gardener, or null if there's no land nearby.
+   */
+  addGardener(px: number, py: number): Gardener | null {
+    let x = -1, y = -1;
+    for (let r = 0; r <= 12 && x < 0; r++) {
+      for (let sy = Math.floor(py) - r; sy <= Math.floor(py) + r && x < 0; sy++) {
+        for (let sx = Math.floor(px) - r; sx <= Math.floor(px) + r; sx++) {
+          if (sx < 0 || sy < 0 || sx >= GRID_W || sy >= GRID_H || this.water.isWater(sy * GRID_W + sx)) continue;
+          x = sx;
+          y = sy;
+          break;
+        }
+      }
+    }
+    if (x < 0) return null;
+    let want = 2;
+    for (let r = 0; r <= 12 && want > 0; r++) {
+      for (let sy = Math.max(0, y - r); sy <= Math.min(GRID_H - 1, y + r); sy++) {
+        for (let sx = Math.max(0, x - r); sx <= Math.min(GRID_W - 1, x + r); sx++) {
+          const i = sy * GRID_W + sx;
+          const take = Math.min(want, this.nutrients[i] * 0.5);
+          this.nutrients[i] -= take;
+          want -= take;
+        }
+      }
+    }
+    const g = new Gardener(this, x + 0.5, y + 0.5, 2 - want, ++this.gardenersMade);
+    this.gardeners.push(g);
+    return g;
+  }
+
+  /**
+   * The gardener eats the plant or seed on square i: returns its nutrients
+   * and energy and clears the square (not counted as a death). Never spores.
+   */
+  eatFlora(i: number): { n: number; e: number } | null {
+    if (this.kind[i] === EMPTY) return null;
+    const got = { n: this.floraN[i], e: this.floraE[i] };
+    this.kind[i] = EMPTY;
+    this.floraN[i] = 0;
+    this.floraE[i] = 0;
+    this.age[i] = 0;
+    return got;
+  }
+
+  /** The gardener picks up the seed on square i (with its genes). */
+  takeSeed(i: number): SeedPack | null {
+    if (this.kind[i] !== SEED) return null;
+    const pack = { genes: this.genes.slice(i * GENE_COUNT, (i + 1) * GENE_COUNT), n: this.floraN[i], e: this.floraE[i] };
+    this.kind[i] = EMPTY;
+    this.floraN[i] = 0;
+    this.floraE[i] = 0;
+    this.age[i] = 0;
+    return pack;
+  }
+
+  /** The gardener sows a seed on square i (empty land only). */
+  plantSeed(i: number, pack: SeedPack): boolean {
+    if (this.water.isWater(i) || this.kind[i] !== EMPTY) return false;
+    this.kind[i] = SEED;
+    this.floraN[i] = pack.n;
+    this.floraE[i] = pack.e;
+    this.genes.set(pack.genes, i * GENE_COUNT);
+    this.age[i] = 1 + Math.floor(this.rng() * pack.genes[G_GERM]);
+    this.bornTick[i] = this.tick;
+    return true;
+  }
+
+  /**
+   * Places a new grass seed with the starting genes (used at world creation
+   * and by the seed spray tool). Its nutrients come from the square's ground,
+   * so nutrients stay conserved. Returns false if the square is water,
+   * occupied, or too poor in nutrients.
+   */
+  addSeed(i: number, rng: Rng = this.rng, wild = false): boolean {
+    if (this.water.isWater(i) || this.kind[i] !== EMPTY || this.nutrients[i] < this.p.seedN) return false;
+    this.nutrients[i] -= this.p.seedN;
+    this.kind[i] = SEED;
+    this.floraN[i] = this.p.seedN;
+    this.floraE[i] = this.p.seedE;
+    this.bornTick[i] = this.tick;
+    if (wild) {
+      // Every gene anywhere in its range (the Random genes switch on the seed spray).
+      const g = wildGenes(rng, GRASS_DEFAULTS);
+      setGenes(this.genes, i, g);
+      this.age[i] = 1 + Math.floor(rng() * g[G_GERM]);
+      return true;
+    }
+    const g = spreadGenes(rng, GRASS_DEFAULTS, this.p.founderRandomness);
+    this.age[i] = 1 + Math.floor(rng() * g[G_GERM]);
+    setGenes(this.genes, i, g);
+    // Start with a spread of water preferences so every moisture niche has
+    // a chance from the outset; evolution then refines them.
+    const pref = GRASS_DEFAULTS[G_WATER_PREF] + (rng() - 0.5) * this.p.initialWaterPrefSpread;
+    this.genes[i * GENE_COUNT + G_WATER_PREF] = Math.max(0.01, Math.min(1, pref));
+    // And a spread of colours, which then drift as they're inherited.
+    this.genes[i * GENE_COUNT + G_HUE] = Math.max(0, Math.min(1, GRASS_DEFAULTS[G_HUE] + (rng() - 0.5) * this.p.initialHueSpread));
+    return true;
+  }
+
+  /**
+   * Places a new algae cell with the starting genes, taking its nutrients
+   * from the water. Returns false on land, occupied or nutrient-poor squares.
+   */
+  addAlgae(i: number, wild = false): boolean {
+    if (!this.water.isWater(i) || this.kind[i] !== EMPTY || this.nutrients[i] < this.p.algaeChildN) return false;
+    this.nutrients[i] -= this.p.algaeChildN;
+    this.kind[i] = ALGAE;
+    this.floraN[i] = this.p.algaeChildN;
+    this.floraE[i] = this.p.algaeChildE;
+    this.bornTick[i] = this.tick;
+    this.age[i] = 0;
+    setGenes(this.genes, i, wild ? wildGenes(this.rng, ALGAE_DEFAULTS, ALGAE_UNUSED_GENES) : spreadGenes(this.rng, ALGAE_DEFAULTS, this.p.founderRandomness));
+    if (!wild) this.genes[i * GENE_COUNT + G_HUE] = Math.max(0, Math.min(1, ALGAE_DEFAULTS[G_HUE] + (this.rng() - 0.5) * this.p.initialHueSpread));
+    return true;
+  }
+
+  /**
+   * Destructor tool: removes all life within `r` squares of (x, y): grass,
+   * seeds, algae, animals and their bodies. Nothing is counted as a death;
+   * every nutrient goes back to its square, so nutrients stay conserved.
+   */
+  destroyLife(x: number, y: number, r: number): void {
+    const r2 = r * r;
+    for (let sy = Math.max(0, Math.floor(y - r)); sy <= Math.min(GRID_H - 1, Math.ceil(y + r)); sy++) {
+      for (let sx = Math.max(0, Math.floor(x - r)); sx <= Math.min(GRID_W - 1, Math.ceil(x + r)); sx++) {
+        if ((sx - x) ** 2 + (sy - y) ** 2 > r2) continue;
+        const i = sy * GRID_W + sx;
+        if (this.kind[i] === EMPTY) continue;
+        this.nutrients[i] += this.floraN[i];
+        this.kind[i] = EMPTY;
+        this.floraN[i] = 0;
+        this.floraE[i] = 0;
+        this.age[i] = 0;
+      }
+    }
+    // Animals and spores by position (centred on the square, matching the brush).
+    for (const sys of [this.fish, this.sharks, this.sheep, this.cats, this.rocs]) sys.removeWithin(x + 0.5, y + 0.5, r);
+    this.spores.removeWithin(x + 0.5, y + 0.5, r);
+    // Gardeners too (everything they carry goes back to the ground with them).
+    const gone = this.gardeners.filter((g) => Math.hypot(g.x - x - 0.5, g.y - y - 0.5) <= r);
+    for (const g of gone) g.remove();
+    if (gone.length) this.gardeners = this.gardeners.filter((g) => !gone.includes(g));
   }
 
   step(): void {
     this.tick++;
-    this.addEnergy();
+    this.wind.step();
     this.water.step(this.tick);
     // Nutrients spread slowly; every other tick is plenty.
     if (this.tick & 1) this.diffuseNutrients();
@@ -130,16 +395,16 @@ export class World {
     } else {
       for (let i = CELL_COUNT - 1; i >= 0; i--) this.updateSquare(i);
     }
-  }
-
-  private addEnergy(): void {
-    const e = this.energy;
-    const add = this.p.energyPerTick;
-    const cap = this.p.energyCap;
-    for (let i = 0; i < CELL_COUNT; i++) {
-      const v = e[i] + add;
-      e[i] = v > cap ? cap : v;
-    }
+    this.spores.step();
+    this.fish.step();
+    this.sharks.step();
+    this.sheep.step();
+    this.cats.step();
+    this.rocs.step();
+    for (const g of this.gardeners) g.step();
+    this.fish.removeDead(); // fish eaten by sharks and rocs this tick
+    this.sheep.removeDead(); // sheep eaten by cats and rocs this tick
+    this.rocs.removeDead(); // rocs eaten by cats this tick // fish eaten by sharks this tick
   }
 
   /**
@@ -211,19 +476,19 @@ export class World {
     // soil saturation. Wide tolerance lowers the peak (generalist's cost).
     const tol = genes[g + G_WATER_TOL];
     const miss = (this.water.saturation(i) - genes[g + G_WATER_PREF]) / tol;
-    const eff = (1 - p.grassToleranceCost * tol) * Math.exp(-miss * miss);
+    const eff = Math.max(0, 1 - p.grassToleranceCost * tol) * Math.exp(-miss * miss);
     let e = this.floraE[i];
-    let take = Math.min(p.grassAbsorb * eff, p.grassMaxE - e, this.energy[i]);
-    if (take > 0) {
-      this.energy[i] -= take;
-      e += take;
-    }
+    // Sunlight can't be stored by the ground: a plant uses what arrives this
+    // tick (up to its own uptake limit) and the rest is lost.
+    const take = Math.min(p.grassAbsorb * eff, p.grassMaxE - e, p.energyPerTick);
+    if (take > 0) e += take;
 
-    // Metabolise. If the plant can't pay, it dies.
+    // Metabolise (cheaper the richer its soil). If the plant can't pay, it dies.
+    const rich = this.richness(i);
     const size = this.floraN[i] / p.grassMaxN;
-    const cost = p.grassMetaBase + p.grassMetaSize * size
+    const cost = (p.grassMetaBase + p.grassMetaSize * size
       + p.grassMetaGrowthGene * genes[g + G_GROWTH]
-      + p.grassMetaLifespan * genes[g + G_LIFESPAN];
+      + p.grassMetaLifespan * genes[g + G_LIFESPAN]) / rich;
     if (e < cost) {
       this.starved++;
       this.kill(i, 0);
@@ -236,15 +501,17 @@ export class World {
       return;
     }
 
-    // Grow: move nutrients from the ground into the plant, paid for with energy.
+    // Grow: move nutrients from the ground into the plant, paid for with
+    // energy. Richer soil makes it faster and cheaper.
     let n = this.floraN[i];
     if (n < p.grassMaxN) {
-      let dn = Math.min(genes[g + G_GROWTH] * eff, p.grassMaxN - n, this.nutrients[i]);
-      dn = Math.min(dn, e / p.growEnergyPerN);
+      const perN = p.growEnergyPerN / rich;
+      let dn = Math.min(genes[g + G_GROWTH] * eff * rich, p.grassMaxN - n, this.nutrients[i]);
+      dn = Math.min(dn, e / perN);
       if (dn > 0) {
         this.nutrients[i] -= dn;
         n += dn;
-        e -= dn * p.growEnergyPerN;
+        e -= dn * perN;
       }
     }
 
@@ -301,16 +568,15 @@ export class World {
     const depth = this.water.surface[i];
     const light = 1 - p.algaeDepthShade * Math.min(1, (depth - p.waterDepthMin) / 5.5);
     let e = this.floraE[i];
-    const take = Math.min(p.algaeAbsorb * light, p.algaeMaxE - e, this.energy[i]);
-    if (take > 0) {
-      this.energy[i] -= take;
-      e += take;
-    }
+    const take = Math.min(p.algaeAbsorb * light, p.algaeMaxE - e, p.energyPerTick);
+    if (take > 0) e += take;
 
+    // Metabolise (cheaper the richer its water).
+    const rich = this.richness(i);
     const size = this.floraN[i] / p.algaeMaxN;
-    const cost = p.algaeMetaBase + p.algaeMetaSize * size
+    const cost = (p.algaeMetaBase + p.algaeMetaSize * size
       + p.algaeMetaGrowthGene * genes[g + G_GROWTH]
-      + p.algaeMetaLifespan * genes[g + G_LIFESPAN];
+      + p.algaeMetaLifespan * genes[g + G_LIFESPAN]) / rich;
     if (e < cost) {
       this.starved++;
       this.kill(i, 1);
@@ -323,52 +589,47 @@ export class World {
       return;
     }
 
-    // Grow from nutrients dissolved in this water square.
+    // Grow from nutrients dissolved in this water square: faster and
+    // cheaper the richer the water.
     let n = this.floraN[i];
     if (n < p.algaeMaxN) {
-      let dn = Math.min(genes[g + G_GROWTH], p.algaeMaxN - n, this.nutrients[i]);
-      dn = Math.min(dn, e / p.growEnergyPerN);
+      const perN = p.growEnergyPerN / rich;
+      let dn = Math.min(genes[g + G_GROWTH] * rich, p.algaeMaxN - n, this.nutrients[i]);
+      dn = Math.min(dn, e / perN);
       if (dn > 0) {
         this.nutrients[i] -= dn;
         n += dn;
-        e -= dn * p.growEnergyPerN;
+        e -= dn * perN;
       }
     }
 
-    // Breed: bud a live algae cell into a free adjacent water square, if there is one.
-    if (n >= p.algaeMaxN * p.fullGrowth && this.rng() < genes[g + G_BREED]
+    // Breed: release a spore, which drifts off and later settles as a new
+    // cell (see spores.ts). Algae can release spores once half grown
+    // (algaeBreedSize), before fish find it worth eating, so grazed waters
+    // can recover.
+    if (n >= p.algaeMaxN * p.algaeBreedSize && this.rng() < genes[g + G_BREED]
       && e >= p.algaeChildE + p.algaeBreedReserve && this.nutrients[i] >= p.algaeChildN) {
-      const t = this.freeWaterNeighbour(i);
-      if (t >= 0) {
-        e -= p.algaeChildE;
-        this.nutrients[i] -= p.algaeChildN;
-        this.kind[t] = ALGAE;
-        this.floraN[t] = p.algaeChildN;
-        this.floraE[t] = p.algaeChildE;
-        this.age[t] = 0;
-        this.bornTick[t] = this.tick;
-        inheritGenes(genes, i, t, this.rng);
-        this.births[1]++;
-      }
+      e -= p.algaeChildE;
+      this.nutrients[i] -= p.algaeChildN;
+      const sporeGenes = new Float32Array(GENE_COUNT);
+      mutateInto(genes, g, sporeGenes, 0, this.rng);
+      this.spores.release((i % GRID_W) + 0.5, Math.floor(i / GRID_W) + 0.5, sporeGenes, p.algaeChildN, p.algaeChildE);
     }
 
     this.floraN[i] = n;
     this.floraE[i] = e;
   }
 
-  private freeWaterNeighbour(i: number): number {
-    const x = i % GRID_W;
-    const y = (i / GRID_W) | 0;
-    const start = (this.rng() * 8) | 0;
-    for (let k = 0; k < 8; k++) {
-      const d = (start + k) & 7;
-      const nx = x + NEIGHBOURS_X[d];
-      const ny = y + NEIGHBOURS_Y[d];
-      if (nx < 0 || ny < 0 || nx >= GRID_W || ny >= GRID_H) continue;
-      const t = ny * GRID_W + nx;
-      if (this.water.isWater(t) && this.kind[t] === EMPTY) return t;
-    }
-    return -1;
+  /**
+   * How much the nutrients in square i help a plant or algae there: 1 with
+   * none, rising in a straight line with no upper limit (1 + boost at
+   * nutrientBoostRef nutrients, 1 + 2·boost at twice that...). Upkeep and
+   * the energy cost of growing are divided by it; growth speed is
+   * multiplied by it.
+   */
+  private richness(i: number): number {
+    const p = this.p;
+    return 1 + p.nutrientBoost * Math.max(0, this.nutrients[i]) / p.nutrientBoostRef;
   }
 
   /** Death: all nutrients held return to the ground / water beneath. */
@@ -383,8 +644,11 @@ export class World {
 
   /** Scans the world for population / nutrient totals and resets event counters. */
   stats(): Stats {
+    const sw = this.fish;
+    const sh = this.sharks;
     let seeds = 0, grass = 0, algae = 0;
     let ground = 0, waterN = 0, flora = 0, waterSquares = 0;
+    let grassN = 0, algaeN = 0, grassE = 0, algaeE = 0;
     const water = this.water;
     for (let i = 0; i < CELL_COUNT; i++) {
       const k = this.kind[i];
@@ -396,10 +660,22 @@ export class World {
         waterSquares++;
       } else ground += this.nutrients[i];
       flora += this.floraN[i];
+      if (k === ALGAE) {
+        algaeN += this.floraN[i];
+        algaeE += this.floraE[i];
+      } else if (k !== EMPTY) {
+        grassN += this.floraN[i];
+        grassE += this.floraE[i];
+      }
     }
+    flora += this.spores.nutrientTotal(); // spores are algae on the move
+    algaeN += this.spores.nutrientTotal();
+    algaeE += this.spores.energyTotal();
+    const animals = sw.nutrientTotal() + sh.nutrientTotal() + this.sheep.nutrientTotal() + this.cats.nutrientTotal() + this.rocs.nutrientTotal() + this.gardeners.reduce((a, g) => a + g.nutrientTotal(), 0);
     const s: Stats = {
       tick: this.tick,
-      seeds, grass, algae,
+      seeds, grass, algae, spores: this.spores.spores.length,
+      nutrientsGrass: grassN, nutrientsAlgae: algaeN, energyGrass: grassE, energyAlgae: algaeE,
       grassBirths: this.births[0],
       grassDeaths: this.deaths[0],
       algaeBirths: this.births[1],
@@ -409,7 +685,13 @@ export class World {
       nutrientsGround: ground,
       nutrientsWater: waterN,
       nutrientsFlora: flora,
-      nutrientsTotal: ground + waterN + flora,
+      nutrientsAnimals: animals,
+      nutrientsTotal: ground + waterN + flora + animals,
+      fish: counts(sw),
+      sharks: counts(sh),
+      sheep: counts(this.sheep),
+      cats: counts(this.cats),
+      rocs: counts(this.rocs),
       habitatLost: this.habitatLost,
       ...(() => {
         const m = water.measure();
@@ -423,12 +705,13 @@ export class World {
     this.starved = 0;
     this.oldAge = 0;
     this.habitatLost = 0;
+    for (const c of [sw, sh, this.sheep, this.cats, this.rocs]) c.births = c.deaths = c.starved = c.oldAge = c.eaten = c.culled = 0;
     return s;
   }
 
   /**
    * Aggregates everything inside the inclusive rectangle (x0,y0)-(x1,y1):
-   * terrain, nutrients, energy, and per-kind organism stats with gene spread.
+   * terrain, water, nutrients and per-kind organism stats with gene spread.
    */
   regionStats(x0: number, y0: number, x1: number, y1: number): RegionStats {
     const { height } = this.terrain;
@@ -436,7 +719,7 @@ export class World {
     const r: RegionStats = {
       squares: 0, land: 0, water: 0,
       meanHeight: 0, meanLandMoisture: 0, meanWaterDepth: 0, waterVolume: 0, meanCloud: 0,
-      groundNutrients: 0, waterNutrients: 0, floraNutrients: 0, meanEnergy: 0,
+      groundNutrients: 0, waterNutrients: 0, floraNutrients: 0,
       grass: emptyGroup(), seeds: emptyGroup(), algae: emptyGroup(),
     };
     const sq = new Array<number>(GENE_COUNT);
@@ -447,8 +730,7 @@ export class World {
         const i = y * GRID_W + x;
         r.squares++;
         r.meanHeight += height[i];
-        r.meanEnergy += this.energy[i];
-        r.waterVolume += water.surface[i] + water.soil[i];
+        r.waterVolume += water.surface[i] + water.soilColumn(i);
         r.meanCloud += water.cloudAt(x, y);
         if (water.isWater(i)) {
           r.water++;
@@ -480,7 +762,6 @@ export class World {
       }
     }
     r.meanHeight /= r.squares || 1;
-    r.meanEnergy /= r.squares || 1;
     r.meanLandMoisture /= r.land || 1;
     r.meanWaterDepth /= r.water || 1;
     r.meanCloud /= r.squares || 1;
@@ -530,7 +811,6 @@ export interface RegionStats {
   groundNutrients: number;
   waterNutrients: number;
   floraNutrients: number;
-  meanEnergy: number;
   grass: GroupStats;
   seeds: GroupStats;
   algae: GroupStats;

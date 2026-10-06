@@ -4,16 +4,17 @@ import type { Rng } from "./rng";
 export const G_GROWTH = 0; // nutrients taken up per tick while growing
 export const G_BREED = 1; // chance per tick of breeding once fully grown
 export const G_RANGE = 2; // max seed throw distance in squares (grass only)
-export const G_GERM = 3; // ticks a seed waits before germinating (grass only)
+export const G_GERM = 3; // grass: ticks a seed waits before germinating; algae: ticks a spore drifts before settling
 export const G_MUTATION = 4; // max fractional change applied to every gene in a child
 export const G_LIFESPAN = 5; // age (ticks) at which the organism dies
 export const G_WATER_PREF = 6; // soil saturation (0..1) the plant works best at (grass only)
 export const G_WATER_TOL = 7; // how far from its preference it still copes (grass only)
-export const GENE_COUNT = 8;
+export const G_HUE = 8; // colour, 0..1 (grass: light orange through yellow and green to turquoise; algae: dark green to burnt orange)
+export const GENE_COUNT = 9;
 
-export const GENE_NAMES = ["growth", "breed", "range", "germ", "mutation", "lifespan", "water pref", "water tol"];
+export const GENE_NAMES = ["growth", "breed", "range", "germ / spore", "mutation", "lifespan", "water pref", "water tol", "colour"];
 /** Genes that have no effect on algae. */
-export const ALGAE_UNUSED_GENES: ReadonlySet<number> = new Set([G_RANGE, G_GERM, G_WATER_PREF, G_WATER_TOL]);
+export const ALGAE_UNUSED_GENES: ReadonlySet<number> = new Set([G_RANGE, G_WATER_PREF, G_WATER_TOL]);
 
 /** [min, max] clamp for each gene so evolution can't produce nonsense values. */
 export const GENE_LIMITS: ReadonlyArray<readonly [number, number]> = [
@@ -25,10 +26,12 @@ export const GENE_LIMITS: ReadonlyArray<readonly [number, number]> = [
   [100, 30000],
   [0.01, 1],
   [0.05, 1],
+  [0, 1],
 ];
 
-export const GRASS_DEFAULTS = [0.008, 0.01, 8, 80, 0.05, 3000, 0.5, 0.35];
-export const ALGAE_DEFAULTS = [0.006, 0.02, 1, 1, 0.05, 2000, 1, 1];
+/** Starting genes for new worlds (editable in the settings panel). */
+export const GRASS_DEFAULTS = [0.008, 0.01, 8, 80, 0.15, 3000, 0.525, 0.35, 0.45];
+export const ALGAE_DEFAULTS = [0.006, 0.008, 1, 300, 0.15, 2000, 1, 1, 0.3];
 
 /**
  * Copies genes from parent slot `src` to child slot `dst`. Every gene mutates
@@ -36,14 +39,48 @@ export const ALGAE_DEFAULTS = [0.006, 0.02, 1, 1, 0.05, 2000, 1, 1];
  * is the parent's mutation gene (which mutates the same way).
  */
 export function inheritGenes(genes: Float32Array, src: number, dst: number, rng: Rng): void {
-  const s = src * GENE_COUNT;
-  const d = dst * GENE_COUNT;
-  const m = genes[s + G_MUTATION];
+  mutateInto(genes, src * GENE_COUNT, genes, dst * GENE_COUNT, rng);
+}
+
+/** Copies one genome (GENE_COUNT floats at `s` in `from`) into `to` at `d`, mutating every gene. */
+export function mutateInto(from: Float32Array, s: number, to: Float32Array, d: number, rng: Rng): void {
+  const m = from[s + G_MUTATION];
   for (let g = 0; g < GENE_COUNT; g++) {
     const [lo, hi] = GENE_LIMITS[g];
-    const v = genes[s + g] * (1 + (rng() * 2 - 1) * m);
-    genes[d + g] = v < lo ? lo : v > hi ? hi : v;
+    // Colour drifts by a small step either way (a scaled step would get stuck near 0).
+    const v = g === G_HUE ? from[s + g] + (rng() * 2 - 1) * m * 0.3 : from[s + g] * (1 + (rng() * 2 - 1) * m);
+    to[d + g] = v < lo ? lo : v > hi ? hi : v;
   }
+}
+
+/**
+ * A plant genome with every gene drawn from anywhere in its limits: evenly
+ * for water preference and tolerance, evenly on a log scale for the rest
+ * (their ranges span orders of magnitude). Genes listed in `keep` keep
+ * their value from `base` (e.g. algae's unused ones).
+ */
+export function wildGenes(rng: Rng, base: readonly number[], keep: ReadonlySet<number> = new Set()): number[] {
+  return base.map((b, g) => {
+    if (keep.has(g)) return b;
+    const [lo, hi] = GENE_LIMITS[g];
+    if (g === G_WATER_PREF || g === G_WATER_TOL || g === G_HUE) return lo + rng() * (hi - lo);
+    return lo * Math.exp(rng() * Math.log(hi / lo));
+  });
+}
+
+/**
+ * Starting genes for a founder plant, spread around `base`: each gene is
+ * scaled by a random factor up to e^(±1.5 × randomness) (so at 0.5, up to
+ * about 2x either way), kept within its limits. Water preference and colour
+ * are left at `base` (they have their own starting spreads).
+ */
+export function spreadGenes(rng: Rng, base: readonly number[], randomness: number): number[] {
+  return base.map((b, g) => {
+    if (g === G_WATER_PREF || g === G_HUE || randomness <= 0) return b;
+    const [lo, hi] = GENE_LIMITS[g];
+    const v = b * Math.exp((rng() * 2 - 1) * 1.5 * randomness);
+    return v < lo ? lo : v > hi ? hi : v;
+  });
 }
 
 export function setGenes(genes: Float32Array, dst: number, values: readonly number[]): void {
