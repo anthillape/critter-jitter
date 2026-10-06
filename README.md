@@ -37,7 +37,7 @@ like with the spray tools (seeds, algae, fish, sharks, sheep, cats, rocs)
 and place gardeners with the *Gardener* tool, while paused or running. To
 start with life already in place, set the starting numbers on the Start
 tab, or press **Starter population** for a ready-made mix: 400 grass seeds,
-150 algae, 80 fish, 12 sharks, 40 sheep, 20 cats, 10 rocs and a gardener.
+150 algae, 80 fish, 12 sharks, 40 sheep, 10 cats, 5 rocs and a gardener.
 **Reset starting conditions** goes back to an empty world. Headless runs
 (`npm run sim`) use the starter population.
 
@@ -256,7 +256,7 @@ than huddling.
   it has started until the plant is gone or its fat store is full.
 - **Small, hungry and well stocked.** Sheep are small (body size 1.2) but
   eat fast (big bites, a roomy stomach and quick digestion) and store a lot
-  of fat (up to 30), needing 20 before they'll breed. Each sheep eats a lot
+  of fat (up to 30), needing 15 before they'll breed. Each sheep eats a lot
   of grass and carries a lot of energy and nutrients in its body, so a
   predator that catches one is fed for a long time.
 - **Finding grass.** Every so often a hungry sheep looks over the grass

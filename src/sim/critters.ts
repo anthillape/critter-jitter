@@ -154,7 +154,7 @@ export const SHEEP: SpeciesDef = {
     roamSpeed: { def: 0.012, tip: "Walking speed while meandering (including looking for grass), in squares per tick. Kept between the minimum and top speeds." },
     hue: { def: 0, spread: 180, tip: "Hue of its (always pastel) fleece, in degrees. Founders take it from their genes; lambs inherit the midpoint of their parents' hues, slightly mutated." },
     breedAge: { def: 2000 },
-    breedFat: { def: 20 },
+    breedFat: { def: 15 },
     hungerFat: { def: 12, tip: "When fat falls below this, it grazes any grass it walks over, and now and then heads for the grassiest direction it can see." },
     lifespan: { def: 12000 },
     litterSize: { def: 1.3 },

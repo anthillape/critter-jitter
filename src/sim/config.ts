@@ -374,7 +374,7 @@ export const STARTER_POPULATION: Partial<Params> = {
   initialFish: 80,
   initialSharks: 12,
   initialSheep: 40,
-  initialCats: 20,
-  initialRocs: 10,
+  initialCats: 10,
+  initialRocs: 5,
   initialGardeners: 1,
 };
