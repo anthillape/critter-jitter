@@ -1,7 +1,7 @@
 import { CELL_COUNT, GRID_H, GRID_W, PARAMS, type Params } from "./config";
 import {
   ALGAE_DEFAULTS, G_BREED, G_GERM, G_GROWTH, G_HUE, G_LIFESPAN, G_RANGE, G_WATER_PREF, G_WATER_TOL,
-  ALGAE_UNUSED_GENES, GENE_COUNT, GRASS_DEFAULTS, inheritGenes, mutateInto, setGenes, wildGenes,
+  ALGAE_UNUSED_GENES, GENE_COUNT, GRASS_DEFAULTS, inheritGenes, mutateInto, setGenes, spreadGenes, wildGenes,
 } from "./genes";
 import { SporeSystem } from "./spores";
 import { Hydrology } from "./hydrology";
@@ -326,8 +326,9 @@ export class World {
       this.age[i] = 1 + Math.floor(rng() * g[G_GERM]);
       return true;
     }
-    this.age[i] = 1 + Math.floor(rng() * GRASS_DEFAULTS[G_GERM]);
-    setGenes(this.genes, i, GRASS_DEFAULTS);
+    const g = spreadGenes(rng, GRASS_DEFAULTS, this.p.founderRandomness);
+    this.age[i] = 1 + Math.floor(rng() * g[G_GERM]);
+    setGenes(this.genes, i, g);
     // Start with a spread of water preferences so every moisture niche has
     // a chance from the outset; evolution then refines them.
     const pref = GRASS_DEFAULTS[G_WATER_PREF] + (rng() - 0.5) * this.p.initialWaterPrefSpread;
@@ -349,7 +350,7 @@ export class World {
     this.floraE[i] = this.p.algaeChildE;
     this.bornTick[i] = this.tick;
     this.age[i] = 0;
-    setGenes(this.genes, i, wild ? wildGenes(this.rng, ALGAE_DEFAULTS, ALGAE_UNUSED_GENES) : ALGAE_DEFAULTS);
+    setGenes(this.genes, i, wild ? wildGenes(this.rng, ALGAE_DEFAULTS, ALGAE_UNUSED_GENES) : spreadGenes(this.rng, ALGAE_DEFAULTS, this.p.founderRandomness));
     if (!wild) this.genes[i * GENE_COUNT + G_HUE] = Math.max(0, Math.min(1, ALGAE_DEFAULTS[G_HUE] + (this.rng() - 0.5) * this.p.initialHueSpread));
     return true;
   }

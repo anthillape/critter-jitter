@@ -570,7 +570,9 @@ export class CritterSystem {
     if (x < 0 || y < 0 || x >= GRID_W || y >= GRID_H || !this.home(i)) return false;
     if (!this.gatherNutrients(Math.floor(x), Math.floor(y), n)) return false;
     const genes: Gene[] = [];
-    for (let g = 0; g < GENE_COUNT_CRITTER; g++) genes.push(randomGene(h.rng, this.sp("GeneStrength"), this.species.traits.length));
+    // Founders' genes push harder than usual (Starting gene randomness), so they start more varied.
+    const strength = this.sp("GeneStrength") * (1 + 2 * h.p.founderRandomness);
+    for (let g = 0; g < GENE_COUNT_CRITTER; g++) genes.push(randomGene(h.rng, strength, this.species.traits.length));
     if (wild) makeWild(genes, this.species.traits, h.rng);
     const c = this.add(x, y, genes, [0, 0], n, 0);
     c.fat = Math.min(this.sp("StartFat"), this.fatCap(c));

@@ -361,6 +361,7 @@ export const PARAMS = {
   initialGardeners: 0, // how many gardeners start in the world
   startingSurfaceWater: 1.3, // standing water at the start, as an average depth over the whole world
   initialSoilWetness: 0.4, // how full the soil starts (0..1); full under the starting lakes
+  founderRandomness: 0.5, // how varied the genes of starting (and sprayed) plants and animals are: 0 = all the defaults, 1 = very varied
   initialHueSpread: 1, // starting (and sprayed) grass and algae colours are spread over this range around the default colour
   initialWaterPrefSpread: 0.85, // starting seeds' water preference is spread over this range around the default
 };

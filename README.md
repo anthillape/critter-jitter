@@ -41,6 +41,17 @@ tab, or press **Starter population** for a ready-made mix: 400 grass seeds,
 **Reset starting conditions** goes back to an empty world. Headless runs
 (`npm run sim`) use the starter population.
 
+Founders start varied (*Starting gene randomness*, 50% by default). This
+applies to the starting plants and animals and to anything sprayed in
+without *Random genes*:
+- **Plants:** each gene is scaled by a random factor around its default
+  (at 50%, up to about twice or half). Water preference and colour have
+  their own spreads.
+- **Animals:** their founding genes push traits twice as far from the
+  species defaults as usual (at 50%).
+
+At 0, plants all start with the defaults and animals close to them.
+
 ## Time
 
 The simulation runs on a real-time clock at 60 ticks per second of game time

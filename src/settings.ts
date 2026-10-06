@@ -863,6 +863,11 @@ export const SETTINGS: Setting[] = [
     tip: "Fat (their energy) the gardener begins with.",
     min: 1, max: 500, log: true, newWorld: true,
   }),
+  param("founderRandomness", {
+    group: "Life", label: "Starting gene randomness",
+    tip: "How varied the genes of founders are: the starting plants and animals, and those sprayed in (without Random genes). Plants: each gene is scaled by a random factor around its default (at 50%, up to about 2x either way). Animals: their founding genes push traits further from the species defaults (at 50%, twice as far as usual). 0 = plants all start with the defaults and animals close to them.",
+    min: 0, max: 1, fmt: pct,
+  }),
   param("initialHueSpread", {
     group: "Life", label: "Spread of starting plant colours",
     tip: "New grass seeds and algae (at the start, and from the sprays) get colours spread over this range around the default colour (0..1 of each plant's colour range). The colour is inherited, drifting a little in each generation.",

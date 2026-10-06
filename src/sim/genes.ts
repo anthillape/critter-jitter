@@ -68,6 +68,21 @@ export function wildGenes(rng: Rng, base: readonly number[], keep: ReadonlySet<n
   });
 }
 
+/**
+ * Starting genes for a founder plant, spread around `base`: each gene is
+ * scaled by a random factor up to e^(±1.5 × randomness) (so at 0.5, up to
+ * about 2x either way), kept within its limits. Water preference and colour
+ * are left at `base` (they have their own starting spreads).
+ */
+export function spreadGenes(rng: Rng, base: readonly number[], randomness: number): number[] {
+  return base.map((b, g) => {
+    if (g === G_WATER_PREF || g === G_HUE || randomness <= 0) return b;
+    const [lo, hi] = GENE_LIMITS[g];
+    const v = b * Math.exp((rng() * 2 - 1) * 1.5 * randomness);
+    return v < lo ? lo : v > hi ? hi : v;
+  });
+}
+
 export function setGenes(genes: Float32Array, dst: number, values: readonly number[]): void {
   genes.set(values, dst * GENE_COUNT);
 }
